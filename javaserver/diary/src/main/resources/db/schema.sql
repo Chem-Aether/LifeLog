@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS diary_entry (
+  diary_id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  entry_date DATE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_diary_user_date ON diary_entry (user_id, entry_date DESC);

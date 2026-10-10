@@ -1,0 +1,28 @@
+server:
+  port: ${TRAVEL_PORT:8084}
+jwt:
+  secret: ${JWT_SECRET:lifelog-local-dev-secret-change-before-deploy}
+  auth:
+    enabled: true
+spring:
+  application:
+    name: travel
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 110MB
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${TRAVEL_DB_URL:jdbc:postgresql://localhost:5432/travel}
+    username: ${TRAVEL_DB_USERNAME:postgres}
+    password: ${TRAVEL_DB_PASSWORD:123456}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+mapserver:
+  base-url: ${MAP_BASE_URL:http://127.0.0.1:8765}
+spiderserver:
+  base-url: ${SPIDER_BASE_URL:http://127.0.0.1:8082}
+springdoc:
+  packages-to-scan: com.lifelog.travel

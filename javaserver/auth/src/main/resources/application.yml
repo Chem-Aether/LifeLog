@@ -1,0 +1,19 @@
+server:
+  port: ${AUTH_PORT:8081}
+spring:
+  application:
+    name: auth
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5432/auth}
+    username: ${AUTH_DB_USERNAME:postgres}
+    password: ${AUTH_DB_PASSWORD:123456}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+jwt:
+  secret: ${JWT_SECRET:lifelog-local-dev-secret-change-before-deploy}
+  expire: ${JWT_EXPIRE:86400}
+springdoc:
+  packages-to-scan: com.lifelog.auth

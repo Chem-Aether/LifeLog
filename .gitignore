@@ -1,0 +1,28 @@
+# 忽略根目录下可能产生的日志文件
+*.log
+nohup.out
+
+# 忽略根目录下的临时文件
+*.tmp
+*~
+
+IDED 配置
+.idea
+.vscode
+
+# 操作系统相关
+# 忽略所有目录下的 .DS_Store 及其变体
+**/.DS_Store
+**/.DS_Store?
+
+# 忽略所有目录下的 Thumbs.db 及其变体
+**/Thumbs.db
+**/Thumbs.db?
+
+.npm-cache/
+node_modules/
+dist/
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/

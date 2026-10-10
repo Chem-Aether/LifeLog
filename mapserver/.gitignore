@@ -1,0 +1,12 @@
+# 数据
+**.pmtiles
+**.osm.pbf
+.venv/
+.npm-cache/
+data/
+
+# python缓存
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.pip-cache/

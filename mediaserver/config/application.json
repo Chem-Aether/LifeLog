@@ -1,0 +1,21 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8780,
+    "public_base_url": "http://127.0.0.1:8780",
+    "cors_origins": ["http://localhost:5173", "http://127.0.0.1:5173"]
+  },
+  "storage": {
+    "data_dir": "data",
+    "database": "media.sqlite3",
+    "categories": {
+      "travel": "files/travel",
+      "diary": "files/diary",
+      "bill": "files/bill",
+      "shared": "files/shared"
+    }
+  },
+  "limits": {
+    "max_upload_bytes": 20971520
+  }
+}

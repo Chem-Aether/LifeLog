@@ -1,0 +1,20 @@
+server:
+  port: ${BILL_PORT:8083}
+jwt:
+  secret: ${JWT_SECRET:lifelog-local-dev-secret-change-before-deploy}
+  auth:
+    enabled: true
+spring:
+  application:
+    name: bill
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${BILL_DB_URL:jdbc:postgresql://localhost:5432/bill}
+    username: ${BILL_DB_USERNAME:postgres}
+    password: ${BILL_DB_PASSWORD:123456}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+springdoc:
+  packages-to-scan: com.lifelog.bill

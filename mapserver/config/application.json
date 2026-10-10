@@ -1,0 +1,39 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "cors": {
+      "origins": ["*"],
+      "methods": ["GET", "POST", "HEAD", "OPTIONS"],
+      "headers": ["*"]
+    }
+  },
+  "storage": {
+    "data_dir": "data",
+    "railway_network": "data/china_railway_network.gpkg",
+    "admin_boundaries": "data/china_admin_boundaries.gpkg",
+    "airports": "data/airports.gpkg",
+    "poi": "data/poi.gpkg"
+  },
+  "tiles": {
+    "cache_size": 512,
+    "min_zoom": 0,
+    "max_zoom": 18,
+    "sources": [
+      {
+        "id": "china",
+        "file": "china.pmtiles",
+        "priority": 100,
+        "serve_min_zoom": 7,
+        "bounds": [73.5, 18.0, 135.1, 53.6]
+      },
+      {
+        "id": "world",
+        "file": "world.pmtiles",
+        "priority": 10,
+        "serve_min_zoom": 0,
+        "bounds": [-180.0, -85.051129, 180.0, 85.051129]
+      }
+    ]
+  }
+}
