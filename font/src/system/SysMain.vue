@@ -17,12 +17,18 @@
         <RouterLink class="nav-link" to="/bill/home" active-class="is-active">
           <el-icon><Coin /></el-icon><span>账单管理</span>
         </RouterLink>
+        <RouterLink class="nav-link" to="/diary" active-class="is-active">
+          <el-icon><Notebook /></el-icon><span>日记</span>
+        </RouterLink>
       </nav>
 
       <div class="sidebar-bottom">
         <div class="user-card">
           <el-avatar :size="36" class="user-avatar">{{ initials }}</el-avatar>
-          <div class="user-copy"><strong>{{ username }}</strong><span>个人空间</span></div>
+          <RouterLink class="user-copy" to="/account"><strong>{{ username }}</strong><span>账户管理</span></RouterLink>
+          <el-button text circle aria-label="账户管理" title="账户管理" @click="router.push('/account')">
+            <el-icon><User /></el-icon>
+          </el-button>
           <el-button text circle aria-label="退出登录" title="退出登录" @click="logout">
             <el-icon><SwitchButton /></el-icon>
           </el-button>
@@ -33,7 +39,15 @@
     <main class="main-area">
       <header class="topbar">
         <div class="breadcrumb"><span>LifeLog</span><el-icon><ArrowRight /></el-icon><strong>总览</strong></div>
-        <time class="today-label" :datetime="todayIso"><el-icon><Calendar /></el-icon>{{ todayLabel }}</time>
+        <div class="topbar-actions">
+          <time class="today-label" :datetime="todayIso"><el-icon><Calendar /></el-icon>{{ todayLabel }}</time>
+          <el-button text circle aria-label="账户管理" title="账户管理" @click="router.push('/account')">
+            <el-icon><User /></el-icon>
+          </el-button>
+          <el-button text circle aria-label="退出登录" title="退出登录" @click="logout">
+            <el-icon><SwitchButton /></el-icon>
+          </el-button>
+        </div>
       </header>
 
       <div class="page-content">
@@ -49,7 +63,7 @@
         <section class="module-section" aria-labelledby="module-heading">
           <div class="section-heading">
             <div><h2 id="module-heading">记录空间</h2><p>选择一个模块继续</p></div>
-            <span class="module-count">02 个模块</span>
+            <span class="module-count">03 个模块</span>
           </div>
 
           <div class="module-grid">
@@ -78,6 +92,19 @@
               </div>
               <div class="module-tags"><span>账单</span><span>账户</span><span>统计</span></div>
             </RouterLink>
+
+            <RouterLink class="module-card diary-card" to="/diary">
+              <div class="module-card-top">
+                <span class="module-icon"><el-icon><Notebook /></el-icon></span>
+                <span class="module-arrow" aria-hidden="true"><el-icon><TopRight /></el-icon></span>
+              </div>
+              <div class="module-copy">
+                <span class="module-overline">JOURNAL</span>
+                <h3>日记</h3>
+                <p>用文字、照片和心情记录生活片段。</p>
+              </div>
+              <div class="module-tags"><span>图文</span><span>心情</span><span>地点</span></div>
+            </RouterLink>
           </div>
         </section>
 
@@ -101,6 +128,11 @@
               <span><strong>旅行足迹</strong><small>管理地点与到访记录</small></span>
               <el-icon class="quick-arrow"><ArrowRight /></el-icon>
             </RouterLink>
+            <RouterLink to="/diary" class="quick-link">
+              <span class="quick-icon diary-quick"><el-icon><Notebook /></el-icon></span>
+              <span><strong>写日记</strong><small>记录今天的文字与照片</small></span>
+              <el-icon class="quick-arrow"><ArrowRight /></el-icon>
+            </RouterLink>
           </div>
         </section>
 
@@ -113,6 +145,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 import {
   ArrowRight,
   Calendar,
@@ -121,9 +154,11 @@ import {
   HomeFilled,
   Location,
   MapLocation,
+  Notebook,
   SwitchButton,
   Tickets,
   TopRight,
+  User,
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -137,8 +172,17 @@ const todayLabel = new Intl.DateTimeFormat('zh-CN', {
 const hour = now.getHours()
 const greeting = hour < 11 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
 
-function logout() {
-  router.push('/exit')
+async function logout() {
+  try {
+    await ElMessageBox.confirm('确定退出当前账户吗？', '退出登录', {
+      type: 'warning',
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+    })
+    localStorage.removeItem('token')
+    localStorage.removeItem('username')
+    router.push('/login')
+  } catch { /* cancelled */ }
 }
 </script>
 
@@ -157,7 +201,7 @@ function logout() {
 .sidebar-bottom { margin-top: auto; padding-top: 13px; border-top: 1px solid #edf0f1; }
 .user-card { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 5px 2px; }
 .user-avatar { flex: 0 0 auto; color: #176d6b; background: #dcefed; font-weight: 700; }
-.user-copy { flex: 1; min-width: 0; }
+.user-copy { flex: 1; min-width: 0; text-decoration: none; }
 .user-copy strong, .user-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-copy strong { color: #364b52; font-size: 12px; }
 .user-copy span { margin-top: 3px; color: #91a0a5; font-size: 11px; }
@@ -169,6 +213,8 @@ function logout() {
 .breadcrumb strong { color: #435960; font-weight: 600; }
 .today-label { display: inline-flex; align-items: center; gap: 8px; color: #778a90; font-size: 12px; }
 .today-label .el-icon { color: #198b88; font-size: 15px; }
+.topbar-actions { display: flex; align-items: center; gap: 7px; }
+.topbar-actions :deep(.el-button) { color: #778a90; }
 .page-content { width: min(1080px, 100%); margin: 0 auto; padding: 43px 38px 25px; }
 .welcome-row { min-height: 130px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-bottom: 31px; border-bottom: 1px solid #e2e9eb; }
 .section-eyebrow { color: #198b88; font-size: 12px; font-weight: 650; }
@@ -182,13 +228,14 @@ function logout() {
 .section-heading h2 { margin: 0; color: #293f46; font-size: 16px; font-weight: 650; }
 .section-heading p { margin: 5px 0 0; color: #87969b; font-size: 12px; }
 .module-count { color: #8b999e; font-size: 11px; }
-.module-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.module-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .module-card { min-height: 228px; display: flex; flex-direction: column; padding: 22px; border: 1px solid #e0e8e9; border-radius: 7px; color: inherit; background: #fff; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .module-card:hover { transform: translateY(-2px); border-color: #b9d8d4; box-shadow: 0 9px 24px rgba(35, 78, 82, .08); }
 .module-card-top { display: flex; justify-content: space-between; align-items: center; }
 .module-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 7px; font-size: 20px; }
 .travel-card .module-icon { color: #187d79; background: #e3f2ef; }
 .bill-card .module-icon { color: #b9792a; background: #fbefdc; }
+.diary-card .module-icon { color: #bd7552; background: #f7eee7; }
 .module-arrow { color: #8ba0a4; font-size: 17px; transition: color .18s ease, transform .18s ease; }
 .module-card:hover .module-arrow { color: #198b88; transform: translate(2px, -2px); }
 .module-copy { margin-top: auto; padding-top: 18px; }
@@ -199,7 +246,7 @@ function logout() {
 .module-tags span { padding: 4px 8px; border: 1px solid #e7ecec; border-radius: 4px; color: #74868b; font-size: 10px; }
 .quick-section { padding-top: 32px; }
 .compact-heading { margin-bottom: 10px; }
-.quick-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid #e0e8e9; border-bottom: 1px solid #e0e8e9; }
+.quick-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid #e0e8e9; border-bottom: 1px solid #e0e8e9; }
 .quick-link { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) 18px; align-items: center; gap: 10px; padding: 14px 12px; color: inherit; text-decoration: none; transition: background-color .18s ease; }
 .quick-link + .quick-link { border-left: 1px solid #e0e8e9; }
 .quick-link:hover { background: #fff; }
@@ -207,6 +254,7 @@ function logout() {
 .bill-quick { color: #b9792a; background: #fbefdc; }
 .stats-quick { color: #657db3; background: #e9edf8; }
 .travel-quick { color: #187d79; background: #e3f2ef; }
+.diary-quick { color: #bd7552; background: #f7eee7; }
 .quick-link strong, .quick-link small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quick-link strong { color: #40545a; font-size: 12px; font-weight: 600; }
 .quick-link small { margin-top: 4px; color: #909da1; font-size: 10px; }
@@ -218,6 +266,7 @@ function logout() {
   .sidebar { padding-inline: 12px; }
   .topbar { padding-inline: 24px; }
   .page-content { padding: 34px 24px 22px; }
+  .module-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quick-links { grid-template-columns: 1fr; }
   .quick-link + .quick-link { border-left: 0; border-top: 1px solid #e0e8e9; }
 }

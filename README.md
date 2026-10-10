@@ -8,7 +8,7 @@ LifeLog 是个人使用的生活记录系统，包含旅行足迹、账单、日
 | `javaserver/auth/` | 登录、注册、验证码和 JWT 签发 | 8081 |
 | `javaserver/bill/` | 账户、分类、流水和账单统计 | 8083 |
 | `javaserver/travel/` | 铁路、航班、足迹和旅行数据导入导出 | 8084 |
-| `javaserver/diary/` | 日记服务入口；当前仅有状态接口 | 8085 |
+| `javaserver/diary/` | 图文日记、标签与年度概览 | 8085 |
 | `mapserver/` | 离线地图、行政区、机场、POI、铁路空间数据和地理接口 | 8765 |
 | `spyderserver/` | 在线查询 12306 车次经停信息 | 8082 |
 | `mediaserver/` | 图片上传、访问和删除 | 8780 |

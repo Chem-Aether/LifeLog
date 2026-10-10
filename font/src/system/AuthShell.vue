@@ -13,19 +13,6 @@
           <p>行程、账单与生活记录，在这里慢慢汇成自己的时间线。</p>
         </div>
 
-        <div class="brand-highlights" aria-label="LifeLog 记录模块">
-          <div class="highlight-row">
-            <span class="highlight-icon travel-icon"><el-icon><Position /></el-icon></span>
-            <span>旅行足迹</span>
-            <small>地点 · 行程</small>
-          </div>
-          <div class="highlight-row">
-            <span class="highlight-icon bill-icon"><el-icon><Coin /></el-icon></span>
-            <span>账单流水</span>
-            <small>账户 · 收支</small>
-          </div>
-        </div>
-
         <div class="brand-footer">
           <span>LifeLog</span>
           <span>记录真实生活</span>

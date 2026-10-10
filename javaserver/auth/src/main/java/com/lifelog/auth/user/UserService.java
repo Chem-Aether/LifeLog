@@ -59,4 +59,32 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         userMapper.insert(user);
         return user;
     }
+
+    public User getProfile(String account) {
+        User user = userMapper.selectByAccount(account);
+        if (user == null) throw new RuntimeException("账号不存在");
+        user.setPassword(null);
+        return user;
+    }
+
+    public User updateProfile(String account, String userName) {
+        User user = userMapper.selectByAccount(account);
+        if (user == null) throw new RuntimeException("账号不存在");
+        String normalizedName = userName == null ? "" : userName.trim();
+        if (normalizedName.length() > 50) throw new RuntimeException("昵称不能超过 50 个字符");
+        userMapper.updateProfile(user.getUserId(), normalizedName);
+        user.setUserName(normalizedName);
+        user.setPassword(null);
+        return user;
+    }
+
+    public void changePassword(String account, String currentPassword, String newPassword) {
+        if (currentPassword == null || currentPassword.isBlank()) throw new RuntimeException("请输入当前密码");
+        if (newPassword == null || newPassword.isBlank()) throw new RuntimeException("请输入新密码");
+        if (newPassword.length() < 8) throw new RuntimeException("新密码至少需要 8 位");
+        if (currentPassword.equals(newPassword)) throw new RuntimeException("新密码不能与当前密码相同");
+
+        User user = login(account, currentPassword);
+        userMapper.updatePassword(user.getUserId(), PASSWORD_ENCODER.encode(newPassword));
+    }
 }

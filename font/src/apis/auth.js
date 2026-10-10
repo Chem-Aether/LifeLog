@@ -27,3 +27,26 @@ export const register = (data) => {
         data,
     });
 };
+
+export const getCurrentUser = () => {
+    return request({
+        url: '/user/me',
+        method: 'get',
+    });
+};
+
+export const updateCurrentUser = (data) => {
+    return request({
+        url: '/user/me',
+        method: 'put',
+        data,
+    });
+};
+
+export const updatePassword = (data) => {
+    return request({
+        url: '/user/me/password',
+        method: 'put',
+        data,
+    });
+};

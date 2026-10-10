@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.auth0.jwt.exceptions.JWTVerificationException;
 
 @RestController
 @RequestMapping("/user")
@@ -79,6 +80,51 @@ public class UserController {
                     Result.error(e.getMessage()),
                     HttpStatus.BAD_REQUEST
             );
+        }
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "当前用户信息")
+    public ResponseEntity<Result> me(@RequestHeader(value = "token", required = false) String token) {
+        try {
+            return ResponseEntity.ok(Result.success(userService.getProfile(accountFromToken(token))));
+        } catch (RuntimeException e) {
+            return new ResponseEntity<>(Result.error(e.getMessage()), HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "更新当前用户资料")
+    public ResponseEntity<Result> updateProfile(@RequestHeader(value = "token", required = false) String token,
+                                                @RequestBody ProfileUpdateRequest request) {
+        try {
+            if (request == null) throw new RuntimeException("请求数据不能为空");
+            User user = userService.updateProfile(accountFromToken(token), request.getUserName());
+            return ResponseEntity.ok(Result.success("资料已更新", user));
+        } catch (RuntimeException e) {
+            return new ResponseEntity<>(Result.error(e.getMessage()), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @PutMapping("/me/password")
+    @Operation(summary = "修改当前用户密码")
+    public ResponseEntity<Result> changePassword(@RequestHeader(value = "token", required = false) String token,
+                                                 @RequestBody PasswordChangeRequest request) {
+        try {
+            if (request == null) throw new RuntimeException("请求数据不能为空");
+            userService.changePassword(accountFromToken(token), request.getCurrentPassword(), request.getNewPassword());
+            return ResponseEntity.ok(Result.success("密码已更新，请重新登录"));
+        } catch (RuntimeException e) {
+            return new ResponseEntity<>(Result.error(e.getMessage()), HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private String accountFromToken(String token) {
+        if (token == null || token.isBlank()) throw new RuntimeException("请先登录");
+        try {
+            return jwtUtil.getAccount(token);
+        } catch (JWTVerificationException exception) {
+            throw new RuntimeException("登录已过期，请重新登录");
         }
     }
 
