@@ -1,5 +1,9 @@
 <template>
-  <div v-loading="loading || saving || deleting" class="footprint-page">
+  <div v-if="isEditing" v-loading="saving || uploadingCover" class="travel-edit-page">
+    <header class="edit-header"><div><el-button text @click="requestClose">返回足迹管理</el-button><h1>{{ form.footprintId ? '编辑足迹' : '新增足迹' }}</h1></div><div class="edit-actions"><el-button :disabled="saving || uploadingCover" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" :disabled="uploadingCover" @click="save">保存并点亮</el-button></div></header>
+    <section class="edit-panel"><el-form label-width="90px"><el-form-item label="地图选点"><FootprintMapPicker :longitude="form.longitude" :latitude="form.latitude" @pick="handleMapPick" @clear="clearMapPoint" /></el-form-item><el-form-item label="当前地区"><div class="region-result"><span>{{ selectedRegionName || '选点后自动识别' }}</span></div></el-form-item><div class="field-grid"><el-form-item label="记录性质" required><el-radio-group v-model="form.visitType"><el-radio-button value="travel">旅行地点</el-radio-button><el-radio-button value="transit">途经城市</el-radio-button></el-radio-group></el-form-item><el-form-item label="地点名称" required><el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" /></el-form-item><el-form-item label="到访日期"><el-date-picker v-model="form.visitDate" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable placeholder="选择日期" style="width:100%" /></el-form-item></div><el-form-item label="旅行心得"><el-input v-model="form.note" type="textarea" :rows="4" placeholder="记录这次旅行的见闻、感受或特别回忆" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="旅行封面"><div class="cover-editor"><img v-if="coverPreviewUrl" :src="coverPreviewUrl" alt="足迹封面预览" /><el-upload :auto-upload="false" :show-file-list="false" :disabled="uploadingCover" accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif" :on-change="handleCoverChange"><el-button :loading="uploadingCover">{{ form.mediaId ? '更换封面' : '上传封面' }}</el-button></el-upload><el-button v-if="form.mediaId" link type="danger" :disabled="uploadingCover" @click="form.mediaId = ''">移除封面</el-button></div></el-form-item></el-form></section>
+  </div>
+  <div v-else v-loading="loading || saving || deleting" class="footprint-page">
     <div class="page-header">
       <div>
         <h1>足迹与点亮地区</h1>
@@ -81,86 +85,12 @@
       />
     </div>
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="form.footprintId ? '编辑足迹' : '新增足迹'"
-      width="min(920px, 94vw)"
-      destroy-on-close
-      :close-on-click-modal="false"
-      :close-on-press-escape="!saving"
-    >
-      <el-form label-width="90px">
-        <el-form-item label="地图选点">
-          <FootprintMapPicker
-            :longitude="form.longitude"
-            :latitude="form.latitude"
-            @pick="handleMapPick"
-            @clear="clearMapPoint"
-          />
-        </el-form-item>
-        <el-form-item label="当前地区">
-          <div class="region-result">
-            <span>{{ selectedRegionName || '选点后自动识别' }}</span>
-          </div>
-        </el-form-item>
-        <div class="field-grid">
-          <el-form-item label="记录性质" required>
-            <el-radio-group v-model="form.visitType">
-              <el-radio-button value="travel">旅行地点</el-radio-button>
-              <el-radio-button value="transit">途经城市</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item label="地点名称" required>
-            <el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" />
-          </el-form-item>
-          <el-form-item label="到访日期">
-            <el-date-picker
-              v-model="form.visitDate"
-              type="date"
-              format="YYYY/M/D"
-              value-format="YYYY-MM-DD"
-              editable
-              placeholder="选择日期"
-              style="width: 100%"
-            />
-          </el-form-item>
-        </div>
-        <el-form-item label="旅行心得">
-          <el-input
-            v-model="form.note"
-            type="textarea"
-            :rows="4"
-            placeholder="记录这次旅行的见闻、感受或特别回忆"
-            maxlength="1000"
-            show-word-limit
-          />
-        </el-form-item>
-        <el-form-item label="旅行封面">
-          <div class="cover-editor">
-            <img v-if="coverPreviewUrl" :src="coverPreviewUrl" alt="足迹封面预览" />
-            <el-upload
-              :auto-upload="false"
-              :show-file-list="false"
-              :disabled="uploadingCover"
-              accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
-              :on-change="handleCoverChange"
-            >
-              <el-button :loading="uploadingCover">{{ form.mediaId ? '更换封面' : '上传封面' }}</el-button>
-            </el-upload>
-            <el-button v-if="form.mediaId" link type="danger" :disabled="uploadingCover" @click="form.mediaId = ''">移除封面</el-button>
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button :disabled="saving || uploadingCover" @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" :disabled="uploadingCover" @click="save">保存并点亮</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { addFootprint, deleteFootprint, deleteFootprints, getFootprints, updateFootprint } from '@/modules/travel/apis/travel.js'
 import { mediaUrl, uploadTravelMedia } from '@/modules/travel/apis/media.js'
@@ -169,6 +99,10 @@ import TravelDataTools from '@/modules/travel/components/TravelDataTools.vue'
 import TravelRecordExportButton from '@/modules/travel/components/TravelRecordExportButton.vue'
 
 const rows = ref([])
+const route = useRoute()
+const router = useRouter()
+const isEditing = computed(() => route.name === 'TravelFootprintEdit')
+let skipLeaveGuard = false
 const loading = ref(false)
 const saving = ref(false)
 const uploadingCover = ref(false)
@@ -182,7 +116,6 @@ const visitTypeFilter = ref('all')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const sortState = reactive({ prop: 'visitDate', order: 'descending' })
-const dialogVisible = ref(false)
 const selectedRegionName = ref('')
 const editSnapshot = ref(null)
 const form = reactive({
@@ -238,7 +171,23 @@ watch(() => sortedRows.value.length, total => {
   if (currentPage.value > lastPage) currentPage.value = lastPage
 })
 
-onMounted(loadRows)
+onMounted(async () => {
+  await loadRows()
+  if (!isEditing.value) return
+  const row = route.params.id ? rows.value.find(item => String(item.footprintId) === String(route.params.id)) : null
+  if (route.params.id && !row) { ElMessage.error('足迹记录不存在'); router.replace('/travel/admin/footprint'); return }
+  if (row) openEditData(row)
+  else { resetForm(); editSnapshot.value = snapshotForm() }
+})
+
+watch(() => route.fullPath, async () => {
+  if (!isEditing.value) return
+  await loadRows()
+  const row = route.params.id ? rows.value.find(item => String(item.footprintId) === String(route.params.id)) : null
+  if (route.params.id && !row) { ElMessage.error('足迹记录不存在'); router.replace('/travel/admin/footprint'); return }
+  if (row) openEditData(row)
+  else { resetForm(); editSnapshot.value = snapshotForm() }
+})
 
 async function loadRows() {
   const sequence = ++loadSequence
@@ -288,11 +237,14 @@ function resetForm() {
 }
 
 function openCreate() {
-  resetForm()
-  dialogVisible.value = true
+  router.push({ name: 'TravelFootprintEdit' })
 }
 
 function openEdit(row) {
+  router.push({ name: 'TravelFootprintEdit', params: { id: row.footprintId } })
+}
+
+function openEditData(row) {
   Object.assign(form, {
     footprintId: row.footprintId,
     placeName: row.placeName,
@@ -313,8 +265,23 @@ function openEdit(row) {
     mediaId: form.mediaId || null
   })
   selectedRegionName.value = row.regionName || ''
-  dialogVisible.value = true
 }
+
+function hasUnsavedChanges() {
+  return isEditing.value && editSnapshot.value !== snapshotForm()
+}
+function snapshotForm() { return JSON.stringify({ placeName: form.placeName.trim(), visitType: form.visitType, visitDate: form.visitDate || null, longitude: form.longitude, latitude: form.latitude, note: form.note.trim() || null, mediaId: form.mediaId || null }) }
+async function requestClose() {
+  if (saving.value || uploadingCover.value) return
+  if (hasUnsavedChanges()) { try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) } catch { return } }
+  skipLeaveGuard = true
+  await router.push('/travel/admin/footprint')
+}
+onBeforeRouteLeave(async () => {
+  if (skipLeaveGuard) { skipLeaveGuard = false; return true }
+  if (!hasUnsavedChanges() || saving.value || uploadingCover.value) return true
+  try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }); return true } catch { return false }
+})
 
 async function handleMapPick(point) {
   form.longitude = point.longitude
@@ -359,7 +326,8 @@ async function save() {
     mediaId: form.mediaId || null
   }
   if (form.footprintId && editSnapshot.value === JSON.stringify(payload)) {
-    dialogVisible.value = false
+    skipLeaveGuard = true
+    await router.push('/travel/admin/footprint')
     ElMessage.info('没有修改内容')
     return
   }
@@ -370,7 +338,8 @@ async function save() {
       await addFootprint(payload)
       currentPage.value = 1
     }
-    dialogVisible.value = false
+    skipLeaveGuard = true
+    await router.push('/travel/admin/footprint')
     ElMessage.success('保存成功，地图点亮数据已更新')
     await loadRows()
   } catch (error) {
@@ -419,6 +388,11 @@ async function deleteSelected() {
 </script>
 
 <style scoped>
+.travel-edit-page { display:flex; flex-direction:column; gap:16px; min-height:100%; color:#1d3035; }
+.edit-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 0 14px; border-bottom:1px solid #e5ebec; }
+.edit-header h1 { margin:6px 0 0; font-size:22px; font-weight:700; }
+.edit-actions { display:flex; align-items:center; gap:8px; }
+.edit-panel { padding:20px; background:#fff; border:1px solid #e5ebec; border-radius:7px; }
 .footprint-page { width: 100%; margin: 0 auto; }
 .page-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
 .query-card { border-color: #d9e3e4; }

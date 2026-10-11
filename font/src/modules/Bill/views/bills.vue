@@ -1,5 +1,14 @@
 <template>
   <main class="bill-page">
+    <template v-if="isEditing">
+      <header class="edit-page-header"><div><el-button text @click="requestClose">返回账单</el-button><h1>{{ editingId ? '编辑账单' : '新增账单' }}</h1></div><div><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></div></header>
+      <section class="edit-page-panel"><el-form label-width="96px" class="edit-form">
+        <el-form-item label="资金方向" required><el-radio-group v-model="draft.direction" @change="changeDirection"><el-radio-button value="expense">支出</el-radio-button><el-radio-button value="income">收入</el-radio-button><el-radio-button value="transfer">转账</el-radio-button></el-radio-group></el-form-item>
+        <div class="account-flow" :class="draft.direction"><el-form-item v-if="draft.direction !== 'income'" label="出账账户" required><el-select v-model="draft.fromAccountId" clearable filterable placeholder="选择自己的账户" class="full-width"><el-option v-for="a in accounts" :key="a.id" :label="a.name" :value="a.id" /></el-select></el-form-item><el-form-item v-if="draft.direction !== 'expense'" label="入账账户" required><el-select v-model="draft.toAccountId" clearable filterable placeholder="选择自己的账户" class="full-width"><el-option v-for="a in accounts" :key="a.id" :label="a.name" :value="a.id" /></el-select></el-form-item></div>
+        <el-form-item label="交易对象"><el-input v-model="draft.counterparty" placeholder="商户、付款方或收款方，可选" maxlength="200" /></el-form-item><el-form-item label="金额" required><el-input-number v-model="draft.amount" :min="0.01" :precision="2" :step="1" controls-position="right" class="full-width" /></el-form-item><el-form-item label="交易时间" required><el-date-picker v-model="draft.occurredAt" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" format="YYYY/M/D HH:mm" class="full-width" /></el-form-item><el-form-item label="分类"><CategoryTreePicker v-model="draft.categoryId" :categories="categories" placeholder="选择一级或二级分类" /></el-form-item><el-form-item label="摘要"><el-input v-model="draft.description" placeholder="例如：午餐、工资、账户充值" maxlength="500" /></el-form-item><el-form-item label="备注"><el-input v-model="draft.remark" type="textarea" :rows="3" maxlength="2000" /></el-form-item>
+      </el-form></section>
+    </template>
+    <template v-else>
     <header class="page-header">
       <div><h1>账单</h1><p>按账户流向记录收入、支出与内部转账</p></div>
       <div class="header-actions">
@@ -17,9 +26,7 @@
       <el-select v-model="filters.accountId" clearable filterable placeholder="全部账户" class="filter-control">
         <el-option v-for="account in accounts" :key="account.id" :label="account.name" :value="account.id" />
       </el-select>
-      <el-cascader v-model="filters.categoryId" :options="categoryOptions" :props="categoryPickerProps" clearable filterable placeholder="全部类别" class="filter-control category-filter">
-        <template #default="{ data }"><span class="category-option"><CategoryIcon :value="data.icon" />{{ data.label }}</span></template>
-      </el-cascader>
+      <CategoryTreePicker v-model="filters.categoryId" :categories="categories" placeholder="全部类别" popover-width="320" class="filter-control category-filter" />
       <el-date-picker v-model="filters.range" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" class="date-filter" />
       <el-input v-model="filters.keyword" clearable placeholder="搜索对方、摘要或备注" class="keyword-filter" @keyup.enter="loadRecords" />
       <el-button type="primary" :loading="loading" @click="loadRecords">查询</el-button>
@@ -33,35 +40,6 @@
         <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" :total="records.length" layout="total, sizes, prev, pager, next, jumper" background />
       </div>
     </section>
-
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑账单' : '新增账单'" width="min(620px, 94vw)" destroy-on-close :close-on-click-modal="false">
-      <el-form label-width="96px" class="edit-form">
-        <el-form-item label="资金方向" required>
-          <el-radio-group v-model="draft.direction" @change="changeDirection">
-            <el-radio-button value="expense">支出</el-radio-button><el-radio-button value="income">收入</el-radio-button><el-radio-button value="transfer">转账</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <div class="account-flow" :class="draft.direction">
-          <el-form-item v-if="draft.direction !== 'income'" label="出账账户" required>
-            <el-select v-model="draft.fromAccountId" clearable filterable placeholder="选择自己的账户" class="full-width">
-              <el-option v-for="a in accounts" :key="a.id" :label="a.name" :value="a.id" />
-            </el-select>
-          </el-form-item>
-          <el-form-item v-if="draft.direction !== 'expense'" label="入账账户" required>
-            <el-select v-model="draft.toAccountId" clearable filterable placeholder="选择自己的账户" class="full-width">
-              <el-option v-for="a in accounts" :key="a.id" :label="a.name" :value="a.id" />
-            </el-select>
-          </el-form-item>
-        </div>
-        <el-form-item label="交易对象"><el-input v-model="draft.counterparty" placeholder="商户、付款方或收款方，可选" maxlength="200" /></el-form-item>
-        <el-form-item label="金额" required><el-input-number v-model="draft.amount" :min="0.01" :precision="2" :step="1" controls-position="right" class="full-width" /></el-form-item>
-        <el-form-item label="交易时间" required><el-date-picker v-model="draft.occurredAt" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" format="YYYY/M/D HH:mm" class="full-width" /></el-form-item>
-        <el-form-item label="分类"><el-cascader v-model="draft.categoryId" :options="categoryOptions" :props="categoryPickerProps" clearable filterable placeholder="选择分类（可选一级或二级）" class="full-width"><template #default="{ data }"><span class="category-option"><CategoryIcon :value="data.icon" />{{ data.label }}</span></template></el-cascader></el-form-item>
-        <el-form-item label="摘要"><el-input v-model="draft.description" placeholder="例如：午餐、工资、账户充值" maxlength="500" /></el-form-item>
-        <el-form-item label="备注"><el-input v-model="draft.remark" type="textarea" :rows="3" maxlength="2000" /></el-form-item>
-      </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></template>
-    </el-dialog>
 
     <el-dialog v-model="importVisible" title="导入账单 CSV" width="min(620px, 94vw)" :close-on-click-modal="false" @closed="clearImport">
       <div class="import-content">
@@ -85,33 +63,27 @@
       <template #footer><el-button @click="importVisible = false">取消</el-button><el-button type="primary" :disabled="!importRecords.length || importErrors.length" :loading="importing" @click="submitImport">确认导入</el-button></template>
     </el-dialog>
 
+    </template>
   </main>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createBillRecord, deleteBillRecord, exportBillRecords, getAccounts, getBillCategories, getBillRecords, importBillRecords as sendBillImport, updateBillRecord } from '@/modules/Bill/apis/bill.js'
 import BillRecordTable from '../components/BillRecordTable.vue'
-import CategoryIcon from '../components/CategoryIcon.vue'
+import CategoryTreePicker from '../components/CategoryTreePicker.vue'
 import { createBillCsvTemplate, parseBillCsv } from '../utils/billCsv.js'
 
 const records = ref([])
 const router = useRouter()
 const route = useRoute()
+const isEditing = computed(() => route.name === 'BillRecordEdit')
 const accounts = ref([])
 const categories = ref([])
-const categoryOptions = computed(() => categories.value.filter(item => item.parentId == null).map(parent => ({
-  value: parent.id,
-  label: parent.name,
-  icon: parent.icon,
-  children: categories.value.filter(item => item.parentId === parent.id).map(item => ({ value: item.id, label: item.name, icon: item.icon })),
-})))
-const categoryPickerProps = { emitPath: false, checkStrictly: true }
 const loading = ref(false)
 const saving = ref(false)
-const dialogVisible = ref(false)
 const importVisible = ref(false)
 const importing = ref(false)
 const importFileName = ref('')
@@ -123,6 +95,8 @@ const pageSize = ref(20)
 const sortState = reactive({ prop: '', order: '' })
 const filters = reactive({ direction: '', accountId: null, categoryId: null, range: [], keyword: '' })
 const draft = reactive(emptyDraft())
+const editSnapshot = ref('')
+let skipLeaveGuard = false
 const sortedRecords = computed(() => {
   if (!sortState.prop || !sortState.order) return records.value
   const sign = sortState.order === 'ascending' ? 1 : -1
@@ -235,11 +209,12 @@ function changeDirection() {
   draft.toAccountId = null
 }
 function openCreate() {
-  editingId.value = null
-  Object.assign(draft, emptyDraft())
-  dialogVisible.value = true
+  router.push({ name: 'BillRecordEdit' })
 }
 function openEdit(row) {
+  router.push({ name: 'BillRecordEdit', params: { id: row.id } })
+}
+function populateDraft(row) {
   editingId.value = row.id
   Object.assign(draft, {
     direction: row.direction,
@@ -252,8 +227,23 @@ function openEdit(row) {
     categoryId: row.categoryId || null,
     remark: row.remark || '',
   })
-  dialogVisible.value = true
 }
+function hasUnsavedChanges() { return isEditing.value && JSON.stringify(draft) !== editSnapshot.value }
+async function requestClose() {
+  if (saving.value) return
+  if (hasUnsavedChanges()) {
+    try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) }
+    catch { return }
+  }
+  skipLeaveGuard = true
+  await router.push('/bill/query')
+}
+onBeforeRouteLeave(async () => {
+  if (skipLeaveGuard) { skipLeaveGuard = false; return true }
+  if (!hasUnsavedChanges() || saving.value) return true
+  try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }); return true }
+  catch { return false }
+})
 async function save() {
   const needsFrom = draft.direction !== 'income'
   const needsTo = draft.direction !== 'expense'
@@ -275,7 +265,8 @@ async function save() {
     if (editingId.value) await updateBillRecord(editingId.value, payload)
     else await createBillRecord(payload)
     ElMessage.success('账单已保存')
-    dialogVisible.value = false
+    skipLeaveGuard = true
+    await router.push('/bill/query')
     await loadRecords()
   } catch (error) { ElMessage.error(error?.response?.data?.msg || '账单保存失败') }
   finally { saving.value = false }
@@ -296,10 +287,20 @@ onMounted(async () => {
     filters.range = [String(route.query.startTime).slice(0, 10), String(route.query.endTime).slice(0, 10)]
   }
   await Promise.all([loadAccounts(), loadCategories(), loadRecords()])
+  if (isEditing.value) {
+    const row = route.params.id ? records.value.find(item => String(item.id) === String(route.params.id)) : null
+    if (route.params.id && !row) { ElMessage.error('账单不存在'); router.replace('/bill/query'); return }
+    if (row) populateDraft(row)
+    else { editingId.value = null; Object.assign(draft, emptyDraft()) }
+    editSnapshot.value = JSON.stringify(draft)
+  }
 })
 </script>
 
 <style scoped>
+.edit-page-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:14px; border-bottom:1px solid #e4e9ee; }
+.edit-page-header h1 { margin:6px 0 0; color:#293b49; font-size:22px; }
+.edit-page-panel { max-width:760px; padding:20px; background:#fff; border:1px solid #e4e9ee; border-radius:7px; }
 .bill-page { display: flex; flex-direction: column; gap: 16px; color: #293b49; }
 .page-header { display: flex; align-items: center; justify-content: space-between; }
 .header-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }

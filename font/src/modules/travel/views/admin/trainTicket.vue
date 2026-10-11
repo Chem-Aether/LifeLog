@@ -1,5 +1,31 @@
 <template>
-  <div v-loading="saving || deleting || routeSampling" class="train-manage-page">
+  <div v-if="isEditing" v-loading="saving || routeSampling" class="travel-edit-page">
+    <header class="edit-header"><div><el-button text @click="requestClose">返回铁路记录</el-button><h1>{{ editItem?.trainId ? '编辑铁路行程' : '新增铁路行程' }}</h1></div><div class="edit-actions"><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button></div></header>
+    <section class="edit-panel">
+      <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form">
+        <div class="grid-form">
+          <el-form-item label="车次"><el-input v-model="editItem.trainNo" @input="matchTrainType(editItem, $event)" /></el-form-item>
+          <el-form-item label="列车类型"><el-select v-model="editItem.trainType" filterable allow-create default-first-option clearable placeholder="选择或输入列车类型"><el-option v-for="trainType in trainTypes" :key="trainType.label" :label="trainType.label" :value="trainType.label" /></el-select></el-form-item>
+          <el-form-item label="车型"><el-input v-model="editItem.trainModel" /></el-form-item>
+          <el-form-item label="始发站"><el-autocomplete v-model="editItem.originStationName" :fetch-suggestions="queryStation" /></el-form-item>
+          <el-form-item label="发站"><el-autocomplete v-model="editItem.startStationName" :fetch-suggestions="queryStation" @select="s => applyStation(editItem, s, 'start')" /></el-form-item>
+          <el-form-item label="发车时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
+          <el-form-item label="终点站"><el-autocomplete v-model="editItem.terminalStationName" :fetch-suggestions="queryStation" /></el-form-item>
+          <el-form-item label="到站"><el-autocomplete v-model="editItem.endStationName" :fetch-suggestions="queryStation" @select="s => applyStation(editItem, s, 'end')" /></el-form-item>
+          <el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
+          <el-form-item label="车厢号"><el-input v-model="editItem.carriageNo" /></el-form-item><el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item>
+          <el-form-item label="座位等级"><el-select v-model="editItem.seatType" filterable allow-create default-first-option clearable placeholder="选择或输入座位等级" @change="rememberSeatType"><el-option v-for="seatType in seatTypeOptions" :key="seatType" :label="seatType" :value="seatType" /></el-select></el-form-item>
+          <el-form-item label="里程(km)"><el-input-number v-model="editItem.mileageKm" :min="0" :precision="2" /></el-form-item><el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
+        </div>
+        <el-divider content-position="left">途经站与轨迹</el-divider>
+        <draggable v-model="editItem.waypoints" item-key="sequence" @end="waypointsChanged(editItem.waypoints, editItem)" handle=".drag-handle" class="waypoint-list"><template #item="{ element, index }"><div class="waypoint-row"><span class="drag-handle">☰</span><span class="waypoint-order">{{ index + 1 }}</span><el-autocomplete v-model="element.stationName" :fetch-suggestions="queryStation" @select="s => applyWaypoint(editItem, element, s)" /><el-button link type="danger" @click="delStation(editItem, element)">移除</el-button></div></template></draggable>
+        <div class="add-waypoint"><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
+        <div class="route-actions"><el-input v-model="editItem.routeSource" placeholder="轨迹来源" /><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'auto')">按车次获取</el-button><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'manual')">按途经站生成</el-button><el-button v-if="editItem.routeGeoJson" type="primary" plain @click="editSavedRoute">编辑轨迹区间</el-button><el-button v-if="editItem.routeGeoJson" type="danger" link @click="clearRoute(editItem)">移除轨迹</el-button><el-tag v-if="editItem.routeGeoJson" type="success">轨迹已载入</el-tag></div>
+      </el-form>
+    </section>
+    <TrainRoutePreview v-model="routePreviewVisible" :route-geo-json="pendingRoute.routeGeoJson" :stations="pendingRoute.stations" @confirm="applyRouteSelection" />
+  </div>
+  <div v-else v-loading="saving || deleting || routeSampling" class="train-manage-page">
     <div class="page-title">铁路出行记录管理</div>
 
     <!-- 查询 -->
@@ -100,42 +126,6 @@
       </el-table>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editItem?.trainId ? '编辑铁路行程' : '新增铁路行程'" width="min(980px, 94vw)" destroy-on-close class="record-dialog" @closed="cancelEdit">
-      <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form">
-        <div class="grid-form">
-          <el-form-item label="车次"><el-input v-model="editItem.trainNo" @input="matchTrainType(editItem, $event)" /></el-form-item>
-          <el-form-item label="列车类型">
-            <el-select v-model="editItem.trainType" filterable allow-create default-first-option clearable placeholder="选择或输入列车类型">
-              <el-option v-for="trainType in trainTypes" :key="trainType.label" :label="trainType.label" :value="trainType.label" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="车型"><el-input v-model="editItem.trainModel" /></el-form-item>
-          <el-form-item label="始发站"><el-autocomplete v-model="editItem.originStationName" :fetch-suggestions="queryStation" /></el-form-item>
-          <el-form-item label="发站"><el-autocomplete v-model="editItem.startStationName" :fetch-suggestions="queryStation" @select="s => applyStation(editItem, s, 'start')" /></el-form-item>
-          <el-form-item label="发车时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
-          <el-form-item label="终点站"><el-autocomplete v-model="editItem.terminalStationName" :fetch-suggestions="queryStation" /></el-form-item>
-          <el-form-item label="到站"><el-autocomplete v-model="editItem.endStationName" :fetch-suggestions="queryStation" @select="s => applyStation(editItem, s, 'end')" /></el-form-item>
-          <el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
-          <el-form-item label="车厢号"><el-input v-model="editItem.carriageNo" /></el-form-item>
-          <el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item>
-          <el-form-item label="座位等级">
-            <el-select v-model="editItem.seatType" filterable allow-create default-first-option clearable placeholder="选择或输入座位等级" @change="rememberSeatType">
-              <el-option v-for="seatType in seatTypeOptions" :key="seatType" :label="seatType" :value="seatType" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="里程(km)"><el-input-number v-model="editItem.mileageKm" :min="0" :precision="2" /></el-form-item>
-          <el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
-        </div>
-        <el-divider content-position="left">途经站与轨迹</el-divider>
-        <draggable v-model="editItem.waypoints" item-key="sequence" @end="waypointsChanged(editItem.waypoints, editItem)" handle=".drag-handle" class="waypoint-list">
-          <template #item="{ element, index }"><div class="waypoint-row"><span class="drag-handle">☰</span><span class="waypoint-order">{{ index + 1 }}</span><el-autocomplete v-model="element.stationName" :fetch-suggestions="queryStation" @select="s => applyWaypoint(editItem, element, s)" /><el-button link type="danger" @click="delStation(editItem, element)">移除</el-button></div></template>
-        </draggable>
-        <div class="add-waypoint"><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
-        <div class="route-actions"><el-input v-model="editItem.routeSource" placeholder="轨迹来源" /><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'auto')">按车次获取</el-button><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'manual')">按途经站生成</el-button><el-button v-if="editItem.routeGeoJson" type="primary" plain @click="editSavedRoute">编辑轨迹区间</el-button><el-button v-if="editItem.routeGeoJson" type="danger" link @click="clearRoute(editItem)">移除轨迹</el-button><el-tag v-if="editItem.routeGeoJson" type="success">轨迹已载入</el-tag></div>
-      </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button></template>
-    </el-dialog>
-
     <div class="pagination-bar">
       <el-pagination
         :disabled="editIndex !== -1 || saving || deleting || loading"
@@ -159,7 +149,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import draggable from 'vuedraggable'
 import TrainRoutePreview from '@/modules/travel/components/TrainRoutePreview.vue'
@@ -177,6 +168,9 @@ import { useResourceSearch } from '@/modules/travel/composables/useResourceSearc
 import { defaultSeatTypes, trainTypes } from '@/modules/travel/stores/trainOptions.js'
 
 const { queryTrainStation: queryStation } = useResourceSearch()
+const route = useRoute()
+const router = useRouter()
+const isEditing = computed(() => route.name === 'TravelTrainTicketEdit')
 const loading = ref(true)
 const saving = ref(false)
 const deleting = ref(false)
@@ -216,13 +210,13 @@ const pageInfo = ref({ total: 0 })
 const currentPage = ref(1)
 const pageSize = ref(10)
 const editIndex = ref(-1)
-const dialogVisible = ref(false)
 const editItem = ref(null)
 const tempStationName = ref('')
 const tempStationSuggestion = ref(null)
 const routePreviewVisible = ref(false)
 const pendingRoute = reactive({ item: null, routeGeoJson: '', stations: [] })
 const routeSampling = ref(false)
+let skipLeaveGuard = false
 
 // 备份编辑前的数据，用于取消编辑时回滚
 const editBackup = ref(null)
@@ -236,7 +230,24 @@ const queryForm = reactive({
 })
 
 onMounted(async () => {
+  if (isEditing.value) {
+    currentPage.value = Math.max(1, Number(route.query.page) || 1)
+    await loadData()
+    const row = route.params.id ? trainList.value.find(item => String(item.trainId) === String(route.params.id)) : null
+    if (route.params.id && !row) { ElMessage.error('铁路记录不存在'); router.replace('/travel/admin/trainTicket'); return }
+    beginEdit(row, row ? trainList.value.indexOf(row) : 0)
+    return
+  }
   await loadData()
+})
+
+watch(() => route.fullPath, async () => {
+  if (!isEditing.value) { cancelEdit(); return }
+  currentPage.value = Math.max(1, Number(route.query.page) || 1)
+  await loadData()
+  const row = route.params.id ? trainList.value.find(item => String(item.trainId) === String(route.params.id)) : null
+  if (route.params.id && !row) { ElMessage.error('铁路记录不存在'); router.replace('/travel/admin/trainTicket'); return }
+  beginEdit(row, row ? trainList.value.indexOf(row) : 0)
 })
 
 const loadData = async () => {
@@ -281,12 +292,31 @@ const pageData = computed(() => trainList.value)
 
 const handleEdit = (item, idx) => {
   if (editIndex.value !== -1 || saving.value) return
-  editIndex.value = idx
-  editBackup.value = JSON.parse(JSON.stringify(item))
-  editItem.value = JSON.parse(JSON.stringify(item))
-  editItem.value.waypoints ||= []
-  dialogVisible.value = true
+  router.push({ name: 'TravelTrainTicketEdit', params: { id: item.trainId }, query: { page: currentPage.value } })
 }
+const beginEdit = (item, idx) => {
+  editIndex.value = idx
+  const source = item ? JSON.parse(JSON.stringify(item)) : { trainId: null, trainNo: '', trainType: '', trainModel: '', startStationName: '', endStationName: '', originStationName: '', terminalStationName: '', departureTime: '', arrivalTime: '', carriageNo: '', seatNo: '', seatType: '二等座', mileageKm: null, waypoints: [], routeGeoJson: null, routeSource: '', note: '' }
+  editBackup.value = JSON.parse(JSON.stringify(source))
+  editItem.value = source
+  editItem.value.waypoints ||= []
+}
+const hasUnsavedChanges = () => JSON.stringify(editItem.value) !== JSON.stringify(editBackup.value)
+const requestClose = async () => {
+  if (saving.value) return
+  if (hasUnsavedChanges()) {
+    try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) }
+    catch { return }
+  }
+  skipLeaveGuard = true
+  await router.push('/travel/admin/trainTicket')
+}
+onBeforeRouteLeave(async () => {
+  if (skipLeaveGuard) { skipLeaveGuard = false; return true }
+  if (!isEditing.value || saving.value || !hasUnsavedChanges()) return true
+  try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }); return true }
+  catch { return false }
+})
 const cancelEdit = () => {
   editIndex.value = -1
   editBackup.value = null
@@ -324,7 +354,8 @@ const saveEdit = async () => {
     if (now === old) {
       editIndex.value = -1
       editBackup.value = null
-      dialogVisible.value = false
+      skipLeaveGuard = true
+      router.push('/travel/admin/trainTicket')
       ElMessage.info(item.trainId ? '没有修改内容' : '空白记录已取消')
       return
     }
@@ -341,7 +372,8 @@ const saveEdit = async () => {
     editIndex.value = -1
     editBackup.value = null
     editItem.value = null
-    dialogVisible.value = false
+    skipLeaveGuard = true
+    router.push('/travel/admin/trainTicket')
     ElMessage.success('保存成功')
     if (!item.trainId) currentPage.value = 1
     await loadData()
@@ -359,34 +391,7 @@ const saveEdit = async () => {
 
 const handleAdd = async () => {
   if (editIndex.value !== -1 || saving.value) return
-  if (currentPage.value !== 1) {
-    currentPage.value = 1
-    await loadData()
-  }
-  const newItem = {
-    trainId: null,
-    trainNo: '',
-    trainType: '',
-    trainModel: '',
-    startStationName: '',
-    endStationName: '',
-    originStationName: '',
-    terminalStationName: '',
-    departureTime: '',
-    arrivalTime: '',
-    carriageNo: '',
-    seatNo: '',
-    seatType: '二等座',
-    mileageKm: null,
-    waypoints: [],
-    routeGeoJson: null,
-    routeSource: '',
-    note: ''
-  }
-  editIndex.value = 0
-  editBackup.value = JSON.parse(JSON.stringify(newItem))
-  editItem.value = newItem
-  dialogVisible.value = true
+  router.push({ name: 'TravelTrainTicketEdit' })
 }
 
 const renumber = (list) => {
@@ -567,6 +572,11 @@ const handlePageSizeChange = () => {
 </script>
 
 <style scoped>
+.travel-edit-page { display:flex; flex-direction:column; gap:16px; min-height:100%; color:#1d3035; }
+.edit-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 0 14px; border-bottom:1px solid #e5ebec; }
+.edit-header h1 { margin:6px 0 0; font-size:22px; font-weight:700; }
+.edit-actions { display:flex; align-items:center; gap:8px; }
+.edit-panel { padding:20px; background:#fff; border:1px solid #e5ebec; border-radius:7px; }
 .train-manage-page { width: 100%; margin: 0 auto; }
 .page-title { margin-bottom: 18px; color: #1d3035; font-size: 24px; font-weight: 720; line-height: 1.25; }
 .query-card { margin-bottom: 16px; }

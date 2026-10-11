@@ -2,7 +2,7 @@
   <main class="detail-page" v-loading="accountLoading">
     <header class="page-header">
       <div><el-button text class="back-button" @click="router.push('/bill/account')"><el-icon><ArrowLeft /></el-icon>账户列表</el-button><h1>{{ account?.name || '账户详情' }}</h1></div>
-      <el-button v-if="account" @click="openEdit"><el-icon><Edit /></el-icon>编辑账户</el-button>
+      <el-button v-if="account" @click="router.push(`/bill/account/edit/${account.id}`)"><el-icon><Edit /></el-icon>编辑账户</el-button>
     </header>
 
     <section v-if="account" class="account-summary">
@@ -19,23 +19,15 @@
     </section>
     <el-empty v-else-if="!accountLoading" description="账户不存在或已删除"><el-button @click="router.push('/bill/account')">返回账户列表</el-button></el-empty>
 
-    <el-dialog v-model="dialogVisible" title="编辑账户" width="min(460px, 94vw)" destroy-on-close>
-      <el-form label-width="100px">
-        <el-form-item label="账户名称" required><el-input v-model="form.name" maxlength="100" /></el-form-item>
-        <el-form-item label="银行卡号"><el-input v-model="form.code" type="password" show-password maxlength="40" placeholder="输入完整卡号或尾号，可选" /></el-form-item>
-        <el-form-item label="期初余额"><el-input-number v-model="form.openingBalance" :precision="2" :step="100" controls-position="right" style="width:100%" /></el-form-item>
-      </el-form>
-      <template #footer><el-button @click="dialogVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></template>
-    </el-dialog>
   </main>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Edit } from '@element-plus/icons-vue'
-import { getAccounts, getAccountRecords, updateAccount } from '@/modules/Bill/apis/bill.js'
+import { getAccounts, getAccountRecords } from '@/modules/Bill/apis/bill.js'
 import BillRecordTable from '../components/BillRecordTable.vue'
 import { accountNumberLabel } from '../utils/accountNumber.js'
 
@@ -50,9 +42,6 @@ const sortBy = ref('occurredAt')
 const sortOrder = ref('desc')
 const accountLoading = ref(false)
 const recordsLoading = ref(false)
-const dialogVisible = ref(false)
-const saving = ref(false)
-const form = reactive({ name: '', code: '', openingBalance: 0 })
 const money = value => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const formatDate = value => value ? String(value).replace('T', ' ').slice(0, 16) : '-'
 const directionName = direction => ({ income: '收入', expense: '支出', transfer: '内部转账' })[direction] || '未知'
@@ -83,22 +72,6 @@ function handleSort({ prop, order }) {
   page.value = 1
   loadRecords()
 }
-function openEdit() {
-  Object.assign(form, { name: account.value.name, code: account.value.code || '', openingBalance: Number(account.value.openingBalance || 0) })
-  dialogVisible.value = true
-}
-async function save() {
-  if (!form.name.trim()) return ElMessage.warning('请输入账户名称')
-  saving.value = true
-  try {
-    await updateAccount(account.value.id, { ...form, name: form.name.trim(), code: form.code.trim() })
-    dialogVisible.value = false
-    ElMessage.success('账户信息已更新')
-    await loadAccount()
-  } catch (error) { ElMessage.error(error?.response?.data?.msg || '账户更新失败') }
-  finally { saving.value = false }
-}
-
 onMounted(async () => {
   await loadAccount()
   await loadRecords()

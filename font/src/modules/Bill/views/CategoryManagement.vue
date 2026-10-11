@@ -1,5 +1,14 @@
 <template>
   <main class="category-page">
+    <template v-if="isEditing">
+      <header class="edit-page-header"><div><el-button text @click="requestClose">返回分类管理</el-button><h1>{{ editingId ? '编辑分类' : '新增分类' }}</h1></div><div><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="saveCategory">{{ editingId ? '保存修改' : '保存' }}</el-button></div></header>
+      <section class="edit-page-panel"><el-form label-width="96px" class="category-form">
+        <template v-if="!editingId"><el-form-item label="分类层级" required><el-radio-group v-model="form.level" @change="onLevelChange"><el-radio-button value="root">一级分类</el-radio-button><el-radio-button value="child">二级分类</el-radio-button></el-radio-group></el-form-item><el-form-item v-if="form.level === 'child'" label="所属一级" required><el-select v-model="form.parentId" placeholder="选择所属一级分类" class="full-width"><el-option v-for="parent in rootCategories" :key="parent.id" :label="parent.name" :value="parent.id" /></el-select></el-form-item></template>
+        <el-form-item label="分类名称" required><el-input v-model="form.name" maxlength="100" placeholder="输入分类名称" @keyup.enter="saveCategory" /></el-form-item>
+        <el-form-item label="图标内容" required><div class="icon-editor"><el-input v-model="form.icon" type="textarea" :rows="3" maxlength="32000" show-word-limit placeholder="直接输入 Emoji，或粘贴 SVG 文本" /><div class="icon-editor-tools"><el-upload accept=".svg,image/svg+xml" :auto-upload="false" :show-file-list="false" :on-change="loadSvgFile"><el-button>上传 SVG 文本</el-button></el-upload><span>上传内容会直接填入并保存到 icon 字段</span></div><div class="icon-preview"><span>预览</span><CategoryIcon :value="form.icon" /></div><div class="emoji-picker" aria-label="Emoji 快捷选择"><button v-for="emoji in categoryIconOptions" :key="emoji" type="button" :class="['icon-option', { selected: form.icon === emoji }]" :aria-label="`选择${emoji}`" :title="emoji" @click="form.icon = emoji">{{ emoji }}</button></div></div></el-form-item>
+      </el-form></section>
+    </template>
+    <template v-else>
     <header class="page-header">
       <div><h1>分类管理</h1><p>维护分类名称、层级和图标，一级和二级分类均可用于记账</p></div>
       <el-button type="primary" @click="openCreate">新增分类</el-button>
@@ -18,45 +27,28 @@
         <el-table-column label="操作" width="140" align="right" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="openEdit(row)">编辑</el-button><el-button link type="danger" @click="removeCategory(row)">删除</el-button></template></el-table-column>
       </el-table>
     </section>
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑分类' : '新增分类'" width="min(500px, 94vw)" destroy-on-close :close-on-click-modal="false">
-      <el-form label-width="96px" class="category-form">
-        <template v-if="!editingId">
-          <el-form-item label="分类层级" required><el-radio-group v-model="form.level" @change="onLevelChange"><el-radio-button value="root">一级分类</el-radio-button><el-radio-button value="child">二级分类</el-radio-button></el-radio-group></el-form-item>
-          <el-form-item v-if="form.level === 'child'" label="所属一级" required><el-select v-model="form.parentId" placeholder="选择所属一级分类" class="full-width"><el-option v-for="parent in rootCategories" :key="parent.id" :label="parent.name" :value="parent.id" /></el-select></el-form-item>
-        </template>
-        <el-form-item label="分类名称" required><el-input v-model="form.name" maxlength="100" placeholder="输入分类名称" @keyup.enter="saveCategory" /></el-form-item>
-        <el-form-item label="图标内容" required>
-          <div class="icon-editor">
-            <el-input v-model="form.icon" type="textarea" :rows="3" maxlength="32000" show-word-limit placeholder="直接输入 Emoji，或粘贴 SVG 文本" />
-            <div class="icon-editor-tools">
-              <el-upload accept=".svg,image/svg+xml" :auto-upload="false" :show-file-list="false" :on-change="loadSvgFile"><el-button>上传 SVG 文本</el-button></el-upload>
-              <span>上传内容会直接填入并保存到 icon 字段</span>
-            </div>
-            <div class="icon-preview"><span>预览</span><CategoryIcon :value="form.icon" /></div>
-            <div class="emoji-picker" aria-label="Emoji 快捷选择">
-              <button v-for="emoji in categoryIconOptions" :key="emoji" type="button" :class="['icon-option', { selected: form.icon === emoji }]" :aria-label="`选择${emoji}`" :title="emoji" @click="form.icon = emoji">{{ emoji }}</button>
-            </div>
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveCategory">{{ editingId ? '保存修改' : '保存' }}</el-button></template>
-    </el-dialog>
+    </template>
   </main>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createBillCategory, deleteBillCategory, getBillCategories, updateBillCategory } from '@/modules/Bill/apis/bill.js'
 import CategoryIcon from '../components/CategoryIcon.vue'
 import { categoryIconOptions } from '@/modules/Bill/config/categoryIcons.js'
 
 const categories = ref([])
+const route = useRoute()
+const router = useRouter()
+const isEditing = computed(() => route.name === 'BillCategoryEdit')
 const loading = ref(false)
 const saving = ref(false)
-const dialogVisible = ref(false)
 const editingId = ref(null)
 const form = reactive({ level: 'child', parentId: null, name: '', icon: '🏷️' })
+const editSnapshot = ref('')
+let skipLeaveGuard = false
 const rootCategories = computed(() => categories.value.filter(category => category.parentId == null))
 const rootCount = computed(() => rootCategories.value.length)
 const categoryTree = computed(() => rootCategories.value.map(parent => ({
@@ -72,16 +64,28 @@ async function loadCategories() {
 }
 
 function openCreate() {
-  editingId.value = null
-  Object.assign(form, { level: 'child', parentId: rootCategories.value[0]?.id ?? null, name: '', icon: '🏷️' })
-  dialogVisible.value = true
+  router.push({ name: 'BillCategoryEdit' })
 }
 
 function openEdit(category) {
+  router.push({ name: 'BillCategoryEdit', params: { id: category.id } })
+}
+function populateForm(category) {
   editingId.value = category.id
   Object.assign(form, { level: category.parentId == null ? 'root' : 'child', parentId: category.parentId, name: category.name, icon: category.icon || '🏷️' })
-  dialogVisible.value = true
 }
+function hasUnsavedChanges() { return isEditing.value && JSON.stringify(form) !== editSnapshot.value }
+async function requestClose() {
+  if (saving.value) return
+  if (hasUnsavedChanges()) { try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) } catch { return } }
+  skipLeaveGuard = true
+  await router.push('/bill/categories')
+}
+onBeforeRouteLeave(async () => {
+  if (skipLeaveGuard) { skipLeaveGuard = false; return true }
+  if (!hasUnsavedChanges() || saving.value) return true
+  try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }); return true } catch { return false }
+})
 
 function onLevelChange(level) {
   if (level === 'root') form.parentId = null
@@ -106,7 +110,8 @@ async function saveCategory() {
     if (editingId.value) await updateBillCategory(editingId.value, { name, icon: form.icon })
     else await createBillCategory({ name, parentId: form.level === 'child' ? form.parentId : null, icon: form.icon })
     await loadCategories()
-    dialogVisible.value = false
+    skipLeaveGuard = true
+    await router.push('/bill/categories')
     ElMessage.success(editingId.value ? '分类已更新' : '分类已添加')
   } catch (error) { ElMessage.error(error?.response?.data?.msg || (editingId.value ? '分类更新失败' : '分类添加失败')) }
   finally { saving.value = false }
@@ -123,10 +128,22 @@ async function removeCategory(category) {
   }
 }
 
-onMounted(loadCategories)
+onMounted(async () => {
+  await loadCategories()
+  if (isEditing.value) {
+    const category = categories.value.find(item => String(item.id) === String(route.params.id))
+    if (route.params.id && !category) { ElMessage.error('分类不存在'); router.replace('/bill/categories'); return }
+    if (category) populateForm(category)
+    else { editingId.value = null; Object.assign(form, { level: 'child', parentId: rootCategories.value[0]?.id ?? null, name: '', icon: '🏷️' }) }
+    editSnapshot.value = JSON.stringify(form)
+  }
+})
 </script>
 
 <style scoped>
+.edit-page-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:14px; border-bottom:1px solid #e4e9ee; }
+.edit-page-header h1 { margin:6px 0 0; font-size:22px; }
+.edit-page-panel { max-width:760px; padding:20px; background:#fff; border:1px solid #e4e9ee; border-radius:7px; }
 .category-page { display:flex; flex-direction:column; gap:16px; color:#293b49; }
 .page-header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .page-header h1 { margin:0; font-size:24px; }

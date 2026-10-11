@@ -60,28 +60,27 @@
         </el-table-column>
       </el-table>
 
-      <div v-else-if="!isManage" class="feed-columns">
+      <div v-else-if="!isManage" class="feed-list">
         <article v-for="entry in entries" :key="entry.id" class="feed-card">
           <header class="feed-card-head">
-            <span class="feed-date"><strong>{{ dayOf(entry.entryDate) }}</strong><small>{{ monthOf(entry.entryDate) }}</small></span>
-            <div class="feed-title-wrap">
-              <button class="entry-title" @click="openDetail(entry)">{{ entry.title }}</button>
-              <div class="entry-meta">
-                <span>{{ formatDate(entry.entryDate) }}</span><span v-if="entry.mood">{{ entry.mood }}</span>
-                <span v-if="entry.location"><el-icon><LocationInformation /></el-icon>{{ entry.location }}</span>
-              </div>
-            </div>
+            <span class="author-avatar"><el-icon><Notebook /></el-icon></span>
+            <div class="author-copy"><strong>我的日记</strong><div class="entry-meta"><span>{{ formatDate(entry.entryDate) }}</span><span v-if="entry.mood" class="mood-label">{{ entry.mood }}</span><span v-if="entry.location"><el-icon><LocationInformation /></el-icon>{{ entry.location }}</span></div></div>
             <el-dropdown trigger="click" @command="command => command === 'edit' ? goToEditor(entry) : removeEntry(entry)">
               <el-button text circle :icon="MoreFilled" aria-label="日记操作" />
               <template #dropdown><el-dropdown-menu><el-dropdown-item command="edit">编辑</el-dropdown-item><el-dropdown-item command="delete" class="delete-item">删除</el-dropdown-item></el-dropdown-menu></template>
             </el-dropdown>
           </header>
-          <p v-if="entry.content" class="feed-content">{{ entry.content }}</p>
-          <div v-if="entry.mediaIds?.length" class="feed-gallery" :class="{ single: entry.mediaIds.length === 1, triple: entry.mediaIds.length === 3 }">
-            <el-image v-for="(mediaId, index) in entry.mediaIds.slice(0, 4)" :key="mediaId" :src="diaryMediaUrl(mediaId)" :preview-src-list="entry.mediaIds.map(diaryMediaUrl)" :initial-index="index" fit="cover" loading="lazy" />
-            <button v-if="entry.mediaIds.length > 4" class="photo-overflow" @click="openDetail(entry)">+{{ entry.mediaIds.length - 4 }}</button>
+          <button class="entry-title" @click="openDetail(entry)">{{ entry.title }}</button>
+          <div v-if="entry.content" class="feed-content" :class="{ expanded: expandedEntries.has(entry.id) }">{{ entry.content }}</div>
+          <button v-if="entry.content?.length > 180" class="content-toggle" @click="toggleContent(entry.id)">{{ expandedEntries.has(entry.id) ? '收起' : '全文' }}</button>
+          <div v-if="entry.mediaIds?.length" class="feed-gallery" :class="galleryClass(entry)">
+            <div v-for="(mediaId, index) in entry.mediaIds.slice(0, 9)" :key="mediaId" class="photo-cell">
+              <el-image :src="diaryMediaUrl(mediaId)" :preview-src-list="entry.mediaIds.map(diaryMediaUrl)" :initial-index="index" fit="cover" loading="lazy" />
+              <button v-if="index === 8 && entry.mediaIds.length > 9" class="photo-overflow" @click="openDetail(entry)">+{{ entry.mediaIds.length - 9 }}</button>
+            </div>
           </div>
           <div v-if="entry.tags?.length" class="entry-tags"><span v-for="tag in entry.tags" :key="tag"># {{ tag }}</span></div>
+          <footer class="feed-card-footer"><span v-if="entry.mediaIds?.length" class="photo-count"><el-icon><Picture /></el-icon>{{ entry.mediaIds.length }} 张照片</span><span v-else></span><el-button text :icon="ChatLineSquare" @click="openDetail(entry)">查看日记</el-button></footer>
         </article>
       </div>
 
@@ -117,7 +116,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Delete, Edit, LocationInformation, MoreFilled, Notebook, Plus, Search } from '@element-plus/icons-vue'
+import { Calendar, ChatLineSquare, Delete, Edit, LocationInformation, MoreFilled, Notebook, Picture, Plus, Search } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   deleteDiaryEntry, diaryMediaUrl, getDiaryEntries, getDiarySummary, getDiaryYears,
@@ -138,6 +137,7 @@ const summary = ref({ entries: 0, daysWritten: 0, thisMonth: 0 })
 const loading = ref(false)
 const detailVisible = ref(false)
 const detailEntry = ref(null)
+const expandedEntries = ref(new Set())
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 
 function dateText(value) {
@@ -146,8 +146,16 @@ function dateText(value) {
   return new Date(parts[0], parts[1] - 1, parts[2])
 }
 
-function dayOf(value) { return String(value || '').slice(8, 10) }
-function monthOf(value) { return `${String(value || '').slice(5, 7)} 月` }
+function galleryClass(entry) {
+  const count = Math.min(entry.mediaIds?.length || 0, 9)
+  return count === 1 ? 'single' : count === 2 ? 'double' : ''
+}
+function toggleContent(id) {
+  const next = new Set(expandedEntries.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedEntries.value = next
+}
 function formatDate(value) {
   const date = dateText(value)
   return date ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(date) : ''
@@ -242,17 +250,20 @@ onMounted(async () => {
 .table-title { display:block; max-width:100%; overflow:hidden; padding:0; border:0; background:none; color:#30474e; font:inherit; font-size:13px; font-weight:650; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
 .table-title:hover { color:#258b88; }.table-excerpt { display:-webkit-box; overflow:hidden; max-width:560px; margin:5px 0 0; color:#87959a; font-size:11px; line-height:1.5; -webkit-box-orient:vertical; -webkit-line-clamp:1; }
 .table-tags { display:block; overflow:hidden; color:#64847f; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
-.feed-columns { column-count:2; column-gap:15px; }.feed-card { display:inline-block; width:100%; margin:0 0 15px; padding:16px; break-inside:avoid; border:1px solid #e2e9e9; border-radius:7px; background:#fff; box-shadow:0 2px 8px rgba(36,60,65,.035); }
-.feed-card-head { display:grid; grid-template-columns:42px minmax(0,1fr) 30px; align-items:start; gap:10px; }.feed-date { display:flex; width:40px; height:45px; flex-direction:column; align-items:center; justify-content:center; border:1px solid #dbeae7; border-radius:6px; background:#f1f8f7; color:#258b88; }.feed-date strong { font-size:17px; line-height:1; }.feed-date small { margin-top:4px; color:#7c9995; font-size:9px; }
-.feed-title-wrap { min-width:0; padding-top:2px; }.feed-title-wrap .entry-title { display:block; width:100%; overflow-wrap:anywhere; font-size:14px; line-height:1.5; }.feed-title-wrap .entry-meta { gap:8px; margin-top:4px; font-size:10px; }.feed-card-head > .el-dropdown :deep(.el-button) { width:28px; height:28px; color:#8b999e; }
-.feed-content { margin:13px 0 0; color:#4d6268; font-size:12px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; }.feed-gallery { position:relative; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin-top:12px; overflow:hidden; border-radius:5px; }.feed-gallery :deep(.el-image) { width:100%; height:116px; background:#f1f4f4; }.feed-gallery.single :deep(.el-image) { height:235px; }.feed-gallery.triple :deep(.el-image:first-child) { grid-column:span 2; height:166px; }.feed-gallery.triple :deep(.el-image:not(:first-child)) { height:95px; }
-.photo-overflow { position:absolute; right:0; bottom:0; display:grid; width:calc(50% - 3px); height:116px; place-items:center; border:0; background:rgba(20,35,40,.56); color:#fff; font-size:20px; cursor:pointer; }
+.feed-list { display:grid; width:min(760px,100%); gap:13px; margin:0 auto; }
+.feed-card { min-width:0; padding:18px 20px 10px; border:1px solid #e3e9ec; border-radius:8px; background:#fff; box-shadow:0 3px 12px rgba(36,60,65,.045); }
+.feed-card-head { display:flex; align-items:center; gap:11px; }.author-avatar { display:grid; width:42px; height:42px; flex:0 0 auto; place-items:center; border:1px solid #d7e8e4; border-radius:50%; background:#eaf4f1; color:#258b88; font-size:19px; }.author-copy { min-width:0; flex:1; }.author-copy > strong { color:#334b51; font-size:13px; font-weight:680; }.author-copy .entry-meta { gap:8px; margin-top:4px; font-size:10px; }.author-copy .mood-label { color:#b66e50; }.feed-card-head > .el-dropdown :deep(.el-button) { width:30px; height:30px; color:#87969b; }
+.feed-card > .entry-title { display:block; max-width:100%; margin:14px 0 0; color:#30474e; font-size:17px; line-height:1.5; }.feed-card > .entry-title:hover { color:#258b88; }
+.feed-content { display:-webkit-box; overflow:hidden; margin:7px 0 0; color:#4d6268; font-size:13px; line-height:1.85; white-space:pre-wrap; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:6; }.feed-content.expanded { display:block; }
+.content-toggle { margin:4px 0 0; padding:0; border:0; background:none; color:#258b88; font-size:11px; font-weight:600; cursor:pointer; }
+.feed-gallery { display:grid; width:min(100%,480px); grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin-top:12px; }.photo-cell { position:relative; min-width:0; aspect-ratio:1; overflow:hidden; background:#f0f3f3; }.photo-cell :deep(.el-image) { display:block; width:100%; height:100%; }.photo-cell :deep(img) { transition:transform .22s ease; }.photo-cell:hover :deep(img) { transform:scale(1.035); }.feed-gallery.single { grid-template-columns:minmax(0,1fr); width:min(100%,420px); }.feed-gallery.single .photo-cell { aspect-ratio:4/3; }.feed-gallery.double { grid-template-columns:repeat(2,minmax(0,1fr)); width:min(100%,440px); }.photo-overflow { position:absolute; inset:0; display:grid; width:100%; height:100%; place-items:center; border:0; background:rgba(20,35,40,.52); color:#fff; font-size:24px; font-weight:600; cursor:pointer; }
 .feed-card .entry-tags { margin-top:11px; }.feed-card .entry-tags span { border-color:#e5edeb; background:#f7faf9; }
+.feed-card-footer { display:flex; align-items:center; justify-content:space-between; min-height:42px; margin-top:9px; border-top:1px solid #edf1f2; }.feed-card-footer :deep(.el-button) { color:#71838a; font-size:11px; }.feed-card-footer :deep(.el-button:hover) { color:#258b88; background:#eff7f6; }.photo-count { display:flex; align-items:center; gap:5px; color:#8a999e; font-size:10px; }
 @media(max-width:760px) {
   .page-header { margin-bottom:15px; }.page-header h1 { font-size:23px; }.summary-row { gap:12px; min-height:82px; padding:12px; }.summary-note { display:none; }.summary-stat { min-width:0; }.summary-divider { margin:0; }.filter-row { flex-wrap:wrap; gap:8px; }.filter-row .el-input { width:100%; }.filter-row .el-select { flex:1; min-width:120px; }.result-count { margin-left:auto; }
-  .entry-title { font-size:14px; }.pagination-row { padding-left:3px; }.detail-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .entry-title { font-size:14px; }.pagination-row { padding-left:3px; }.detail-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); }.feed-card { padding:15px 14px 8px; }.feed-gallery { width:100%; gap:4px; }.feed-gallery.single { width:min(100%,360px); }
 }
-@media(max-width:900px) { .feed-columns { column-count:1; }.summary-row { gap:12px; } }
+@media(max-width:900px) { .summary-row { gap:12px; } }
 @media(max-width:460px) {
   .summary-mark { width:36px; height:36px; }.summary-copy strong { font-size:19px; }.summary-stat strong { font-size:12px; }.summary-divider { display:none; }.entry-meta { gap:8px; }
 }

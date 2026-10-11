@@ -1,5 +1,14 @@
 <template>
-  <div v-loading="loading || saving || deleting" class="flight-manage-page">
+  <div v-if="isEditing" v-loading="saving" class="travel-edit-page">
+    <header class="edit-header"><div><el-button text @click="requestClose">返回航班记录</el-button><h1>{{ editItem?.flightId ? '编辑机票记录' : '新增机票记录' }}</h1></div><div class="edit-actions"><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button></div></header>
+    <section class="edit-panel">
+      <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form"><div class="grid-form">
+        <el-form-item label="航班号"><el-input v-model="editItem.flightNo" /></el-form-item><el-form-item label="航空公司"><el-input v-model="editItem.airline" /></el-form-item><el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item><el-form-item label="机号"><el-input v-model="editItem.aircraftRegistration" /></el-form-item><el-form-item label="机型"><el-input v-model="editItem.aircraftType" /></el-form-item><el-form-item label="飞行距离(km)"><el-input-number v-model="editItem.distanceKm" :min="0" :precision="1" /></el-form-item>
+        <el-form-item label="经停机场"><el-autocomplete v-model="editItem.stopoverDisplay" :fetch-suggestions="queryAirport" placeholder="无则不填" @select="s => handleAirportSelect(s, 'formStopover')" /></el-form-item><el-form-item label="起飞机场"><el-autocomplete v-model="editItem.departureAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formDeparture')" /></el-form-item><el-form-item label="起飞机场航站楼"><el-input v-model="editItem.departureTerminal" /></el-form-item><el-form-item label="登机方式"><el-select v-model="editItem.boardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item><el-form-item label="起飞时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item><el-form-item label="到达机场"><el-autocomplete v-model="editItem.arrivalAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formArrival')" /></el-form-item><el-form-item label="到达机场航站楼"><el-input v-model="editItem.arrivalTerminal" /></el-form-item><el-form-item label="下机方式"><el-select v-model="editItem.deboardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item><el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item><el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
+      </div></el-form>
+    </section>
+  </div>
+  <div v-else v-loading="loading || saving || deleting" class="flight-manage-page">
     <div class="page-title">航空出行记录管理</div>
 
     <!-- 🔍 查询条件栏 -->
@@ -90,30 +99,6 @@
       </el-table>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editItem?.flightId ? '编辑机票记录' : '新增机票记录'" width="min(900px, 94vw)" destroy-on-close class="record-dialog" @closed="cancelEdit">
-      <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form">
-        <div class="grid-form">
-          <el-form-item label="航班号"><el-input v-model="editItem.flightNo" /></el-form-item>
-          <el-form-item label="航空公司"><el-input v-model="editItem.airline" /></el-form-item>
-          <el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item>
-          <el-form-item label="机号"><el-input v-model="editItem.aircraftRegistration" /></el-form-item>
-          <el-form-item label="机型"><el-input v-model="editItem.aircraftType" /></el-form-item>
-          <el-form-item label="飞行距离(km)"><el-input-number v-model="editItem.distanceKm" :min="0" :precision="1" /></el-form-item>
-          <el-form-item label="经停机场"><el-autocomplete v-model="editItem.stopoverDisplay" :fetch-suggestions="queryAirport" placeholder="无则不填" @select="s => handleAirportSelect(s, 'formStopover')" /></el-form-item>
-          <el-form-item label="起飞机场"><el-autocomplete v-model="editItem.departureAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formDeparture')" /></el-form-item>
-          <el-form-item label="起飞机场航站楼"><el-input v-model="editItem.departureTerminal" /></el-form-item>
-          <el-form-item label="登机方式"><el-select v-model="editItem.boardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item>
-          <el-form-item label="起飞时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
-          <el-form-item label="到达机场"><el-autocomplete v-model="editItem.arrivalAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formArrival')" /></el-form-item>
-          <el-form-item label="到达机场航站楼"><el-input v-model="editItem.arrivalTerminal" /></el-form-item>
-          <el-form-item label="下机方式"><el-select v-model="editItem.deboardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item>
-          <el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
-          <el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
-        </div>
-      </el-form>
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button></template>
-    </el-dialog>
-
     <!-- 分页 -->
     <div class="pagination-bar">
     <el-pagination
@@ -132,7 +117,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getFlightList, deleteFlightTicketById, deleteFlightTickets, insertFlightTicket, updateFlightTicketById } from '@/modules/travel/apis/flightTickets.js'
 import { useResourceSearch } from '@/modules/travel/composables/useResourceSearch.js'
@@ -140,6 +126,10 @@ import TravelDataTools from '@/modules/travel/components/TravelDataTools.vue'
 import TravelRecordExportButton from '@/modules/travel/components/TravelRecordExportButton.vue'
 
 const { queryAirport } = useResourceSearch()
+const route = useRoute()
+const router = useRouter()
+const isEditing = computed(() => route.name === 'TravelFlightTicketEdit')
+let skipLeaveGuard = false
 const formatTableDateTime = (_row, _column, value) => value ? String(value).replace('T', ' ').slice(0, 16) : '-'
 const formatAirport = (row, side) => {
   const name = row[`${side}AirportName`]
@@ -198,14 +188,30 @@ const deleting = ref(false)
 let loadSequence = 0
 const selectedRows = ref([])
 const tableRef = ref(null)
-const dialogVisible = ref(false)
 const editItem = ref(null)
 
 // 后端分页信息（total/size/current/records...）
 const pageInfo = ref({ total: 0 })
 
 onMounted(async () => {
+  if (isEditing.value) {
+    currentPage.value = Math.max(1, Number(route.query.page) || 1)
+    await loadData()
+    const row = route.params.id ? flightList.value.find(item => String(item.flightId) === String(route.params.id)) : null
+    if (route.params.id && !row) { ElMessage.error('航班记录不存在'); router.replace('/travel/admin/flightTicket'); return }
+    beginEdit(row, row ? flightList.value.indexOf(row) : 0)
+    return
+  }
   await loadData()
+})
+
+watch(() => route.fullPath, async () => {
+  if (!isEditing.value) { cancelEdit(); return }
+  currentPage.value = Math.max(1, Number(route.query.page) || 1)
+  await loadData()
+  const row = route.params.id ? flightList.value.find(item => String(item.flightId) === String(route.params.id)) : null
+  if (route.params.id && !row) { ElMessage.error('航班记录不存在'); router.replace('/travel/admin/flightTicket'); return }
+  beginEdit(row, row ? flightList.value.indexOf(row) : 0)
 })
 
 // 用 ICAO 回填显示文本（列表加载/刷新时）
@@ -296,10 +302,13 @@ const editBackup = ref(null)
 // 进入编辑
 const handleEdit = (item, idx) => {
   if (editIndex.value !== -1 || saving.value) return
+  router.push({ name: 'TravelFlightTicketEdit', params: { id: item.flightId }, query: { page: currentPage.value } })
+}
+const beginEdit = (item, idx) => {
   editIndex.value = idx
-  editBackup.value = JSON.parse(JSON.stringify(item))
-  editItem.value = JSON.parse(JSON.stringify(item))
-  dialogVisible.value = true
+  const source = item ? JSON.parse(JSON.stringify(item)) : { flightNo: '', aircraftRegistration: '', aircraftType: '', airline: '', departureAirportName: '', departureAirportNameDisplay: '', departureTerminal: '', boardingMethod: '', departureIcao: '', departureTime: '', distanceKm: 0, arrivalAirportName: '', arrivalAirportNameDisplay: '', arrivalTerminal: '', deboardingMethod: '', arrivalIcao: '', arrivalTime: '', stopovers: [], seatNo: '', note: '', stopoverDisplay: '' }
+  editBackup.value = JSON.parse(JSON.stringify(source))
+  editItem.value = source
 }
 
 // 取消
@@ -308,6 +317,22 @@ const cancelEdit = () => {
   editBackup.value = null
   editItem.value = null
 }
+const hasUnsavedChanges = () => JSON.stringify(editItem.value) !== JSON.stringify(editBackup.value)
+const requestClose = async () => {
+  if (saving.value) return
+  if (hasUnsavedChanges()) {
+    try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) }
+    catch { return }
+  }
+  skipLeaveGuard = true
+  await router.push('/travel/admin/flightTicket')
+}
+onBeforeRouteLeave(async () => {
+  if (skipLeaveGuard) { skipLeaveGuard = false; return true }
+  if (!isEditing.value || saving.value || !hasUnsavedChanges()) return true
+  try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }); return true }
+  catch { return false }
+})
 
 // 保存
 const saveEdit = async () => {
@@ -330,7 +355,8 @@ const saveEdit = async () => {
     if (now === old) {
       editIndex.value = -1
       editBackup.value = null
-      dialogVisible.value = false
+      skipLeaveGuard = true
+      router.push('/travel/admin/flightTicket')
       ElMessage.info(item.flightId ? '没有修改内容' : '空白记录已取消')
       return
     }
@@ -354,7 +380,8 @@ const saveEdit = async () => {
     editIndex.value = -1
     editBackup.value = null
     editItem.value = null
-    dialogVisible.value = false
+    skipLeaveGuard = true
+    router.push('/travel/admin/flightTicket')
 
     if (!item.flightId) currentPage.value = 1
     await loadData()
@@ -368,22 +395,7 @@ const saveEdit = async () => {
 // 新增 = 推入空数据
 const handleAdd = async () => {
   if (editIndex.value !== -1 || saving.value) return
-  if (currentPage.value !== 1) {
-    currentPage.value = 1
-    await loadData()
-  }
-  const newItem = {
-    flightNo: '', aircraftRegistration: '', aircraftType: '', airline: '',
-    departureAirportName: '', departureAirportNameDisplay: '', departureTerminal: '', boardingMethod: '', departureIcao: '',
-    departureTime: '', distanceKm: 0,
-  arrivalAirportName: '', arrivalAirportNameDisplay: '', arrivalTerminal: '', deboardingMethod: '', arrivalIcao: '',
-    arrivalTime: '', stopovers: [], seatNo: '', note: '',
-  }
-  newItem.stopoverDisplay = ''
-  editIndex.value = 0
-  editBackup.value = JSON.parse(JSON.stringify(newItem))
-  editItem.value = newItem
-  dialogVisible.value = true
+  router.push({ name: 'TravelFlightTicketEdit' })
 }
 
 // ===================== 删除 =====================
@@ -445,6 +457,11 @@ const deleteSelected = async () => {
 </script>
 
 <style scoped>
+.travel-edit-page { display:flex; flex-direction:column; gap:16px; min-height:100%; color:#1d3035; }
+.edit-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 0 14px; border-bottom:1px solid #e5ebec; }
+.edit-header h1 { margin:6px 0 0; font-size:22px; font-weight:700; }
+.edit-actions { display:flex; align-items:center; gap:8px; }
+.edit-panel { padding:20px; background:#fff; border:1px solid #e5ebec; border-radius:7px; }
 .flight-manage-page {
   width: 100%;
   margin: 0 auto;

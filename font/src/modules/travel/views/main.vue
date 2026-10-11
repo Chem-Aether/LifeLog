@@ -1,26 +1,28 @@
 <template>
   <div class="travel-admin">
     <header class="mobile-header">
-      <button class="menu-toggle" aria-label="打开导航" @click="navOpen = true"><i></i><i></i><i></i></button>
+      <button class="menu-toggle" :aria-label="navOpen ? '关闭导航' : '打开导航'" @click="navOpen = !navOpen"><el-icon><Close v-if="navOpen" /><Menu v-else /></el-icon></button>
       <div><strong>旅行管理</strong><span>{{ currentSection }}</span></div>
-      <router-link to="/travel">地图</router-link>
+      <router-link to="/home" aria-label="返回系统主页" title="返回系统主页"><el-icon><HomeFilled /></el-icon></router-link>
     </header>
     <div v-if="navOpen" class="nav-backdrop" @click="navOpen = false"></div>
     <aside class="admin-nav" :class="{ open: navOpen }">
       <div class="brand-block">
-        <div class="brand-mark">旅</div>
-        <div><strong>TRAVEL LOG</strong><span>个人旅行档案</span></div>
-        <button class="nav-close" aria-label="关闭导航" @click="navOpen = false">×</button>
+        <div class="brand-mark"><el-icon><MapLocation /></el-icon></div>
+        <div><strong>旅行管理</strong><span>TRAVEL LOG</span></div>
+        <button class="nav-close" aria-label="关闭导航" @click="navOpen = false"><el-icon><Close /></el-icon></button>
       </div>
       <nav aria-label="旅行管理导航">
+        <p>旅行浏览</p>
+        <router-link to="/travel/map"><el-icon><MapLocation /></el-icon><span>旅行地图<small>路线与地点总览</small></span></router-link>
         <p>数据管理</p>
-        <router-link to="/travel/admin/trainTicket"><b>铁</b><span>铁路行程<small>车票与途经站</small></span></router-link>
-        <router-link to="/travel/admin/flightTicket"><b>航</b><span>航空行程<small>航班与里程记录</small></span></router-link>
-        <router-link to="/travel/admin/footprint"><b>迹</b><span>旅行足迹<small>地点与探索记录</small></span></router-link>
+        <router-link to="/travel/admin/trainTicket"><el-icon><Tickets /></el-icon><span>铁路行程<small>车票与途经站</small></span></router-link>
+        <router-link to="/travel/admin/flightTicket"><el-icon><Position /></el-icon><span>航空行程<small>航班与里程记录</small></span></router-link>
+        <router-link to="/travel/admin/footprint"><el-icon><LocationInformation /></el-icon><span>旅行足迹<small>地点与探索记录</small></span></router-link>
       </nav>
       <div class="nav-footer">
-        <button class="export-button" :disabled="exporting" @click="exportAll"><span>{{ exporting ? '正在生成...' : '导出全部数据' }}</span><b>↓</b></button>
-        <div class="nav-links"><router-link to="/home">返回首页</router-link><router-link to="/travel">查看地图</router-link></div>
+        <button class="export-button" :disabled="exporting" @click="exportAll"><el-icon><Download /></el-icon><span>{{ exporting ? '正在生成...' : '导出全部数据' }}</span></button>
+        <div class="nav-links"><router-link to="/home"><el-icon><HomeFilled /></el-icon><span>返回系统主页</span></router-link></div>
       </div>
     </aside>
     <main class="admin-content"><div class="content-frame"><router-view /></div></main>
@@ -31,6 +33,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Close, Download, HomeFilled, LocationInformation, MapLocation, Menu, Position, Tickets } from '@element-plus/icons-vue'
 import { exportTravelData } from '@/modules/travel/apis/travel.js'
 
 const route = useRoute()
@@ -60,16 +63,16 @@ async function exportAll() {
 </script>
 
 <style scoped>
-.travel-admin { --ink:#1d3035; --muted:#65777c; --line:#d9e3e4; --paper:#fff; --accent:#087f8c; --accent-strong:#066d77; --accent-soft:#e9f5f4; --danger:#b5474a; --el-color-primary:#087f8c; --el-color-primary-light-3:#4fa5ab; --el-color-primary-light-5:#80bdc0; --el-color-primary-light-7:#b4d8d9; --el-color-primary-light-8:#d0e7e7; --el-color-primary-light-9:#e9f5f4; --el-color-primary-dark-2:#066d77; --el-color-danger:#b5474a; --el-color-danger-light-9:#fff2f2; min-height:100vh; background:#f0f4f4; color:var(--ink); }
-.admin-nav { position:fixed; z-index:30; inset:0 auto 0 0; display:flex; width:250px; flex-direction:column; box-sizing:border-box; padding:24px 16px 18px; background:#142329; color:#eaf3f3; box-shadow:12px 0 32px rgba(20,35,41,.12); }
-.brand-block { display:flex; align-items:center; gap:12px; padding:0 8px 28px; }.brand-mark { display:grid; width:40px; height:40px; flex:0 0 auto; place-items:center; border-radius:6px; background:#e2583e; color:#fff; font-weight:800; }
-.brand-block strong,.brand-block span { display:block; letter-spacing:0; }.brand-block strong { font-size:14px; }.brand-block span { margin-top:3px; color:#89a1a7; font-size:11px; }.nav-close { display:none; margin-left:auto; border:0; background:transparent; color:#a9bdc1; font-size:25px; }
-nav p { margin:0 10px 9px; color:#708a90; font-size:10px; font-weight:700; } nav a { display:flex; align-items:center; gap:12px; min-height:58px; margin-bottom:5px; padding:0 11px; border-radius:6px; color:#b8c9cc; text-decoration:none; transition:background-color .18s,color .18s; }
-nav a:hover { background:rgba(255,255,255,.055); color:#fff; } nav a.router-link-active { background:#edf6f5; color:#18343a; } nav a>b { display:grid; width:29px; height:29px; flex:0 0 auto; place-items:center; border:1px solid currentColor; border-radius:50%; font-size:11px; }
-nav a span,nav a small { display:block; } nav a span { font-size:13px; font-weight:650; } nav a small { margin-top:3px; color:#708a90; font-size:10px; font-weight:400; }
-.nav-footer { margin-top:auto; }.export-button { display:flex; width:100%; height:42px; align-items:center; justify-content:space-between; padding:0 14px; border:1px solid #3b565c; border-radius:5px; background:transparent; color:#d7e5e7; cursor:pointer; }.export-button:hover { border-color:#68b9bd; background:rgba(104,185,189,.08); }.export-button:disabled { opacity:.55; }
-.nav-links { display:flex; justify-content:space-between; padding:18px 4px 0; }.nav-links a { color:#789097; font-size:11px; text-decoration:none; }.nav-links a:hover { color:#fff; }
-.admin-content { min-height:100vh; margin-left:250px; box-sizing:border-box; padding:34px clamp(24px,4vw,64px); }.content-frame { width:min(1400px,100%); margin:0 auto; }.mobile-header,.nav-backdrop { display:none; }
+.travel-admin { --ink:#293b49; --muted:#7c8b95; --line:#e3e9ec; --paper:#fff; --accent:#258b88; --accent-strong:#1f7775; --accent-soft:#e9f4f2; --danger:#b5474a; --el-color-primary:#258b88; --el-color-primary-light-3:#62aaa7; --el-color-primary-light-5:#8dc3c0; --el-color-primary-light-7:#badbd9; --el-color-primary-light-8:#d2e8e6; --el-color-primary-light-9:#e9f4f2; --el-color-primary-dark-2:#176d6b; --el-color-danger:#b5474a; --el-color-danger-light-9:#fff2f2; min-height:100vh; background:#f3f5f8; color:var(--ink); }
+.admin-nav { position:fixed; z-index:30; inset:0 auto 0 0; display:flex; width:220px; flex-direction:column; box-sizing:border-box; padding:20px 12px; border-right:1px solid var(--line); background:#fff; color:var(--ink); }
+.brand-block { display:flex; align-items:center; gap:11px; padding:6px 10px 28px; }.brand-mark { display:grid; width:36px; height:36px; flex:0 0 auto; place-items:center; border-radius:7px; background:#258b88; color:#fff; font-size:17px; }
+.brand-block strong,.brand-block span { display:block; letter-spacing:0; }.brand-block strong { font-size:15px; }.brand-block span { margin-top:3px; color:#8b999f; font-size:9px; letter-spacing:.8px; }.nav-close { display:none; margin-left:auto; border:0; background:transparent; color:#71818b; font-size:17px; }
+nav p { margin:0 10px 8px; color:#9aa6aa; font-size:10px; font-weight:650; } nav a { display:flex; align-items:center; gap:10px; min-height:43px; margin:3px 0; padding:0 11px; border-radius:6px; color:#667780; font-size:13px; text-decoration:none; transition:background-color .16s,color .16s; }
+nav a:hover { background:#f3f7f7; color:#287d7a; } nav a.router-link-active { background:#e9f4f2; color:#197d79; font-weight:620; } nav a>.el-icon { flex:0 0 auto; font-size:16px; }
+nav a span,nav a small { display:block; } nav a span { font-size:13px; font-weight:inherit; } nav a small { margin-top:3px; color:#98a4a9; font-size:10px; font-weight:400; }
+.nav-footer { margin-top:auto; }.export-button { display:flex; width:100%; height:40px; align-items:center; justify-content:center; gap:8px; padding:0 12px; border:1px solid #d7e4e5; border-radius:6px; background:#fff; color:#53676f; font-size:13px; cursor:pointer; }.export-button:hover { border-color:#a9cecc; background:#f2f8f7; color:#258b88; }.export-button:disabled { opacity:.55; }
+.nav-links { display:flex; padding:14px 10px 0; }.nav-links a { display:flex; align-items:center; gap:8px; color:#71818b; font-size:12px; text-decoration:none; }.nav-links a:hover { color:#258b88; }
+.admin-content { min-height:100vh; margin-left:220px; box-sizing:border-box; padding:26px clamp(20px,3vw,44px); }.content-frame { width:min(1400px,100%); margin:0 auto; }.mobile-header,.nav-backdrop { display:none; }
 .content-frame :deep(.page-title),.content-frame :deep(h1) { position:relative; margin:0 0 20px; padding:0 0 14px 15px; border-bottom:1px solid var(--line); color:var(--ink); font-size:24px; font-weight:720; line-height:1.25; }
 .content-frame :deep(.page-title::before),.content-frame :deep(h1::before) { position:absolute; top:1px; bottom:15px; left:0; width:4px; border-radius:4px; background:var(--accent); content:""; }
 .content-frame :deep(.page-header) { align-items:center; margin-bottom:18px; }
@@ -113,8 +116,8 @@ nav a span,nav a small { display:block; } nav a span { font-size:13px; font-weig
 .content-frame :deep(.train-card .card-header),.content-frame :deep(.flight-card .card-header) { min-height:38px; }
 .content-frame :deep(.train-card.editing),.content-frame :deep(.flight-card.editing) { border-color:var(--accent); }
 @media (max-width:760px) {
-  .mobile-header { position:fixed; z-index:20; inset:0 0 auto; display:grid; height:58px; grid-template-columns:42px 1fr 42px; align-items:center; padding:0 12px; border-bottom:1px solid #dbe5e6; background:rgba(250,252,252,.94); backdrop-filter:blur(14px); }.mobile-header div strong,.mobile-header div span { display:block; }.mobile-header div strong { font-size:14px; }.mobile-header div span { margin-top:1px; color:#7a8d92; font-size:10px; }.mobile-header>a { color:#087f8c; font-size:12px; text-align:right; text-decoration:none; }
-  .menu-toggle { display:flex; width:34px; height:34px; flex-direction:column; justify-content:center; gap:4px; padding:0 7px; border:0; background:transparent; }.menu-toggle i { height:2px; background:#263a40; }.admin-nav { width:min(286px,86vw); transform:translateX(-105%); transition:transform .22s ease; }.admin-nav.open { transform:translateX(0); }.nav-close { display:block; }.nav-backdrop { position:fixed; z-index:25; inset:0; display:block; background:rgba(7,17,22,.48); backdrop-filter:blur(2px); }
+  .mobile-header { position:fixed; z-index:20; inset:0 0 auto; display:grid; height:58px; grid-template-columns:42px 1fr 42px; align-items:center; padding:0 12px; border-bottom:1px solid #dbe5e6; background:rgba(250,252,252,.94); backdrop-filter:blur(14px); }.mobile-header div strong,.mobile-header div span { display:block; }.mobile-header div strong { font-size:14px; }.mobile-header div span { margin-top:1px; color:#7a8d92; font-size:10px; }.mobile-header>a { display:grid; width:36px; height:36px; place-items:center; justify-self:end; border-radius:5px; color:#087f8c; font-size:19px; text-decoration:none; }.mobile-header>a:hover { background:#e9f5f4; }
+  .travel-admin .mobile-header .menu-toggle { display:grid; width:36px; height:36px; place-items:center; padding:0; border:0; border-radius:5px; background:transparent; color:#53676f!important; cursor:pointer; }.travel-admin .mobile-header .menu-toggle:hover { background:#f0f5f5; color:#258b88!important; }.travel-admin .mobile-header .menu-toggle .el-icon { color:inherit; font-size:18px; }.admin-nav { width:min(286px,86vw); transform:translateX(-105%); transition:transform .22s ease; box-shadow:12px 0 32px rgba(31,48,57,.12); }.admin-nav.open { transform:translateX(0); }.nav-close { display:grid; width:32px; height:32px; place-items:center; border-radius:5px; }.nav-close:hover { background:#f0f5f5; color:#258b88; }.nav-backdrop { position:fixed; z-index:25; inset:0; display:block; background:rgba(20,35,41,.45); backdrop-filter:blur(2px); }
   .admin-content { margin-left:0; padding:82px 12px 28px; }.content-frame :deep(.page-title),.content-frame :deep(h1) { margin-bottom:15px; font-size:21px; }.content-frame :deep(.page-header) { align-items:stretch; gap:10px; }.content-frame :deep(.header-actions) { justify-content:flex-start; }.content-frame :deep(.query-card .el-form) { display:grid; grid-template-columns:1fr; }.content-frame :deep(.query-card .el-form-item) { width:100%; margin-right:0; }.content-frame :deep(.query-card .el-input),.content-frame :deep(.query-card .el-select),.content-frame :deep(.query-card .el-date-editor) { width:100%!important; }
   .content-frame :deep(.bulk-toolbar),.content-frame :deep(.bulk-actions) { align-items:stretch; }.content-frame :deep(.bulk-actions) { margin-left:0; }.content-frame :deep(.el-dialog) { width:calc(100vw - 20px)!important; margin:10px auto; }.content-frame :deep(.el-dialog__body) { max-height:calc(100vh - 145px); overflow-y:auto; padding:16px; }.content-frame :deep(.el-dialog__header),.content-frame :deep(.el-dialog__footer) { padding-right:16px; padding-left:16px; }
 }
