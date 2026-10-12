@@ -13,11 +13,8 @@
         <el-input v-model.trim="form.title" class="title-input" maxlength="200" show-word-limit placeholder="给这篇日记起个标题" />
         <el-input v-model="form.content" class="content-input" type="textarea" :autosize="{ minRows: 16, maxRows: 36 }" maxlength="20000" show-word-limit placeholder="今天发生了什么？写下你的所见、所闻与感受……" />
         <div class="photo-section">
-          <div class="section-title"><el-icon><Picture /></el-icon><span>照片</span><small>最多 20 张</small></div>
-          <el-upload v-model:file-list="mediaFiles" list-type="picture-card" accept="image/jpeg,image/png,image/webp,image/gif" :limit="20" :http-request="uploadImage" :on-remove="syncMediaIds" :on-exceed="onUploadLimit" multiple>
-            <el-icon><Plus /></el-icon>
-          </el-upload>
-          <p class="upload-tip">支持 JPEG、PNG、WebP、GIF，单张最大 20 MB</p>
+          <div class="section-title"><el-icon><Picture /></el-icon><span>照片和视频</span></div>
+          <MediaUploadEditor v-model="mediaItems" :upload="uploadDiaryAsset" :url-for="diaryMediaUrl" allow-video :disabled="saving" @busy-change="uploadingImages = $event" />
         </div>
       </section>
 
@@ -38,11 +35,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Check, LocationInformation, Notebook, Picture, Plus } from '@element-plus/icons-vue'
-import { createDiaryEntry, diaryMediaUrl, getDiaryEntry, updateDiaryEntry, uploadDiaryMedia } from '../apis/diary.js'
+import { createDiaryEntry, diaryMediaUrl, getDiaryEntry, updateDiaryEntry, uploadDiaryMedia, uploadDiaryVideo } from '../apis/diary.js'
+import { diaryFeedState } from '../utils/feedState.js'
+import MediaUploadEditor from '@/components/MediaUploadEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,15 +51,20 @@ const moods = [
   { value: '🥰 感恩', label: '🥰 感恩' }, { value: '🤔 思考', label: '🤔 思考' },
   { value: '😔 低落', label: '😔 低落' }, { value: '😤 忙碌', label: '😤 忙碌' },
 ]
-const form = reactive({ title: '', content: '', entryDate: today(), mood: '', location: '', tags: [], mediaIds: [] })
-const mediaFiles = ref([])
+const form = reactive({ title: '', content: '', entryDate: today(), mood: '', location: '', tags: [], mediaIds: [], mediaTypes: {} })
+const mediaItems = ref([])
 const tagDraft = ref('')
 const saving = ref(false)
+const uploadingImages = ref(false)
 const ready = ref(false)
 const saved = ref(false)
 const original = ref('')
-const uploadingImages = computed(() => mediaFiles.value.some(file => file.status === 'uploading'))
 const isDirty = computed(() => ready.value && JSON.stringify({ ...form, tags: [...form.tags], mediaIds: [...form.mediaIds] }) !== original.value)
+
+watch(mediaItems, items => {
+  form.mediaIds = items.map(item => item.mediaId)
+  form.mediaTypes = Object.fromEntries(items.map(item => [item.mediaId, item.contentType]))
+}, { deep: true })
 
 function today() {
   const date = new Date()
@@ -69,7 +73,13 @@ function today() {
 function snapshot() { original.value = JSON.stringify({ ...form, tags: [...form.tags], mediaIds: [...form.mediaIds] }) }
 function backPath() {
   const source = route.query.from
-  return ({ home: '/diary/home', feed: '/diary/feed', manage: '/diary/manage' })[source] || '/diary/feed'
+  if (source === 'feed') {
+    const query = {}
+    if (route.query.year) query.year = route.query.year
+    if (route.query.keyword) query.keyword = route.query.keyword
+    return { path: '/diary/feed', query }
+  }
+  return ({ home: '/diary/home', manage: '/diary/manage' })[source] || '/diary/feed'
 }
 function goBack() { router.push(backPath()) }
 function addTag() {
@@ -78,25 +88,16 @@ function addTag() {
   tagDraft.value = ''
 }
 function removeTag(tag) { form.tags = form.tags.filter(value => value !== tag) }
-async function uploadImage(options) {
-  try {
-    const result = await uploadDiaryMedia(options.file)
-    form.mediaIds.push(result.media_id)
-    options.onSuccess(result)
-  } catch (error) { options.onError(error) }
-}
-function syncMediaIds(_file, fileList) { form.mediaIds = fileList.map(file => file.response?.media_id).filter(Boolean) }
-function onUploadLimit() { ElMessage.warning('每篇日记最多添加20张图片') }
-
+function uploadDiaryAsset(file, mediaType) { return mediaType === 'video' ? uploadDiaryVideo(file) : uploadDiaryMedia(file) }
 async function loadEntry() {
   if (entryId.value) {
     try {
       const entry = await getDiaryEntry(entryId.value)
       Object.assign(form, {
         title: entry.title || '', content: entry.content || '', entryDate: String(entry.entryDate).slice(0, 10),
-        mood: entry.mood || '', location: entry.location || '', tags: [...(entry.tags || [])], mediaIds: [...(entry.mediaIds || [])],
+        mood: entry.mood || '', location: entry.location || '', tags: [...(entry.tags || [])], mediaIds: [...(entry.mediaIds || [])], mediaTypes: { ...(entry.mediaTypes || {}) },
       })
-      mediaFiles.value = form.mediaIds.map(id => ({ name: id, uid: id, url: diaryMediaUrl(id), status: 'success', response: { media_id: id } }))
+      mediaItems.value = form.mediaIds.map(id => ({ mediaId: id, url: diaryMediaUrl(id), contentType: form.mediaTypes[id] || 'image/jpeg', name: id }))
     } catch { router.replace(backPath()); return }
   }
   snapshot()
@@ -109,9 +110,16 @@ async function saveEntry() {
   if (uploadingImages.value) { ElMessage.warning('照片上传完成后再保存'); return }
   saving.value = true
   try {
-    const payload = { ...form, tags: [...form.tags], mediaIds: [...new Set(form.mediaIds)] }
-    if (entryId.value) await updateDiaryEntry(entryId.value, payload)
-    else await createDiaryEntry(payload)
+    const payload = { title: form.title, content: form.content, entryDate: form.entryDate, mood: form.mood, location: form.location, tags: [...form.tags], mediaIds: [...new Set(form.mediaIds)] }
+    if (entryId.value) {
+      await updateDiaryEntry(entryId.value, payload)
+      diaryFeedState.entries = diaryFeedState.entries.map(entry => String(entry.id) === String(entryId.value)
+        ? { ...entry, ...payload, mediaTypes: { ...entry.mediaTypes, ...form.mediaTypes } }
+        : entry)
+    } else {
+      await createDiaryEntry(payload)
+      diaryFeedState.savedAt = 0
+    }
     saved.value = true
     ElMessage.success(entryId.value ? '日记已更新' : '日记已保存')
     await router.push(backPath())
@@ -140,7 +148,7 @@ onMounted(loadEntry)
 .editor-main,.editor-aside { min-width:0; border:1px solid var(--line); border-radius:7px; background:#fff; }
 .editor-main { padding:22px 24px 18px; }.title-input :deep(.el-input__wrapper) { padding:0 0 12px; border-radius:0; box-shadow:0 1px 0 #e9eeee; }.title-input :deep(.el-input__inner) { height:48px; color:#30474d; font-size:23px; font-weight:680; }.title-input :deep(.el-input__count) { background:transparent; }
 .content-input { margin-top:15px; }.content-input :deep(.el-textarea__inner) { padding:8px 0; border:0; box-shadow:none; color:#42585e; font-size:14px; line-height:1.95; resize:vertical; }.content-input :deep(.el-input__count) { right:0; bottom:-4px; background:transparent; }
-.photo-section { margin-top:20px; padding-top:16px; border-top:1px solid #edf1f1; }.section-title { display:flex; align-items:center; gap:7px; margin-bottom:12px; color:#536b70; font-size:12px; font-weight:650; }.section-title .el-icon { color:var(--accent); font-size:15px; }.section-title small { margin-left:4px; color:#9aa6a9; font-size:10px; font-weight:400; }.photo-section :deep(.el-upload--picture-card) { --el-upload-picture-card-size:88px; border-radius:5px; }.photo-section :deep(.el-upload-list--picture-card .el-upload-list__item) { --el-upload-picture-card-size:88px; border-radius:5px; }.upload-tip { margin:7px 0 0; color:#98a4a8; font-size:10px; }
+.photo-section { margin-top:20px; padding-top:16px; border-top:1px solid #edf1f1; }.section-title { display:flex; align-items:center; gap:7px; margin-bottom:12px; color:#536b70; font-size:12px; font-weight:650; }.section-title .el-icon { color:var(--accent); font-size:15px; }
 .editor-aside { padding:18px 17px; }.aside-section h2 { margin:0 0 15px; color:#40575d; font-size:13px; font-weight:680; }.aside-section :deep(.el-form-item) { display:block; margin-bottom:14px; }.aside-section :deep(.el-form-item__label) { padding:0; color:#74858a; font-size:10px; line-height:22px; }.aside-section :deep(.el-date-editor),.aside-section :deep(.el-select),.aside-section :deep(.el-input) { width:100%; }.aside-section :deep(.el-input__wrapper),.aside-section :deep(.el-select__wrapper) { min-height:35px; box-shadow:0 0 0 1px #dce5e6 inset; }
 .tag-section { padding-top:16px; border-top:1px solid #edf1f1; }.tag-editor { display:flex; flex-wrap:wrap; gap:6px; }.tag-editor :deep(.el-tag) { border-color:#d7e8e4; background:#f3f8f7; color:#557b75; }.tag-entry { display:flex; gap:6px; margin-top:9px; }.tag-entry :deep(.el-button) { width:35px; flex:0 0 auto; padding:0; }.aside-hint { display:flex; align-items:center; gap:7px; margin-top:18px; padding:10px; border-radius:5px; background:#f3f8f7; color:#829491; font-size:10px; }.aside-hint .el-icon { color:var(--accent); }
 @media(max-width:780px) { .editor-layout { grid-template-columns:1fr; }.editor-aside { display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }.aside-hint { align-self:end; }.editor-main { padding:18px; } }

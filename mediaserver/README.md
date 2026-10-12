@@ -1,6 +1,8 @@
 # 媒体服务
 
-媒体服务是独立的 Python/FastAPI 文件服务，负责图片上传、读取和删除。业务服务保存稳定的 `media_id`，不保存本机绝对路径；媒体 URL 的主机地址可在部署时变更而不改业务记录。
+媒体服务是独立的 Python/FastAPI 文件服务，负责图片、视频上传、读取和删除。业务服务保存稳定的 `media_id`，不保存本机绝对路径；媒体 URL 的主机地址可在部署时变更而不改业务记录。
+
+`main.py` 是唯一启动入口；`app/settings.py` 管配置，`app/routers/` 管 HTTP 接口，`app/services/` 管媒体存储与校验。配置和数据路径仍以媒体服务根目录为基准。
 
 ## 安装与启动
 
@@ -15,12 +17,13 @@ python -m venv .venv
 
 ## 接口与限制
 
-- `POST /api/media`：以 multipart 上传图片，可传分类 `travel`、`diary`、`bill` 或 `shared`。
-- `GET /media/{media_id}`：通过稳定 ID 获取媒体文件。
+- `POST /api/media`：以 multipart 上传图片或视频，可传分类 `travel`、`diary`、`bill` 或 `shared`。
+- `GET /api/media/types?ids=<id,id,...>`：批量查询媒体 ID 对应的 MIME 类型。
+- `GET /media/{media_id}`：通过稳定 ID 获取媒体文件，视频支持 Range 分段读取。
 - `DELETE /api/media/{media_id}`：删除媒体记录和文件。
 - `GET /health`：健康检查。
 
-默认接受 JPEG、PNG、WebP、GIF，单文件上限 20 MiB；拒绝 SVG 等可执行或主动内容格式。配置 `MEDIA_API_KEY` 后，写入接口需要通过 `X-Media-Key` 提供密钥。
+默认接受 JPEG、PNG、WebP、GIF 图片（最大 20 MiB）和 MP4、MOV、WebM、3GP、AVI 视频（最大 1 GiB）；拒绝 SVG 等可执行或主动内容格式。配置 `MEDIA_API_KEY` 后，写入接口需要通过 `X-Media-Key` 提供密钥。
 
 ## 存储、迁移与安全
 

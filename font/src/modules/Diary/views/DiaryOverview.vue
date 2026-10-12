@@ -43,6 +43,7 @@
 
     <section class="shortcut-row">
       <RouterLink to="/diary/feed" class="shortcut-card"><span class="shortcut-icon feed-shortcut"><el-icon><ChatLineSquare /></el-icon></span><span><strong>日记动态</strong><small>瀑布流浏览图文记录</small></span><el-icon class="shortcut-arrow"><ArrowRight /></el-icon></RouterLink>
+      <RouterLink to="/diary/statistics" class="shortcut-card"><span class="shortcut-icon statistics-shortcut"><el-icon><DataAnalysis /></el-icon></span><span><strong>时光统计</strong><small>看看日子如何慢慢积累</small></span><el-icon class="shortcut-arrow"><ArrowRight /></el-icon></RouterLink>
       <RouterLink to="/diary/manage" class="shortcut-card"><span class="shortcut-icon manage-shortcut"><el-icon><Memo /></el-icon></span><span><strong>日记管理</strong><small>检索、编辑与整理内容</small></span><el-icon class="shortcut-arrow"><ArrowRight /></el-icon></RouterLink>
     </section>
   </main>
@@ -51,7 +52,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight, Calendar, ChatLineSquare, Edit, Loading, Memo, Notebook, Picture, Plus } from '@element-plus/icons-vue'
+import { ArrowRight, Calendar, ChatLineSquare, DataAnalysis, Edit, Loading, Memo, Notebook, Picture, Plus } from '@element-plus/icons-vue'
 import { diaryMediaUrl, getDiaryEntries, getDiarySummary } from '../apis/diary.js'
 
 const router = useRouter()

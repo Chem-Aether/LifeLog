@@ -7,6 +7,11 @@ export const uploadTravelMedia = file => {
   return mediaRequest({ url: '/api/media', method: 'post', data, timeout: 0 })
 }
 
+export const deleteTravelMedia = mediaId => mediaRequest({
+  url: `/api/media/${encodeURIComponent(mediaId)}`,
+  method: 'delete',
+})
+
 export const mediaUrl = mediaId => mediaId
   ? `${MEDIA_BASE_URL}/media/${encodeURIComponent(mediaId)}`
   : ''

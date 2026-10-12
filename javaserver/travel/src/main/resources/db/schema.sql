@@ -44,10 +44,19 @@ CREATE INDEX IF NOT EXISTS idx_train_waypoint_location ON train_waypoint USING G
 CREATE TABLE IF NOT EXISTS footprint (
     footprint_id BIGSERIAL PRIMARY KEY,
     place_name VARCHAR(200) NOT NULL, visit_type VARCHAR(20) NOT NULL DEFAULT 'travel', visit_date DATE,
-    location geometry(Point,4326), poi_reference VARCHAR(100), note TEXT, media_id VARCHAR(32),
+    location geometry(Point,4326), poi_reference VARCHAR(100), note TEXT,
+    media_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_footprint_type CHECK (visit_type IN ('travel','transit'))
+    CONSTRAINT chk_footprint_type CHECK (visit_type IN ('travel','transit')),
+    CONSTRAINT chk_footprint_media_ids CHECK (jsonb_typeof(media_ids) = 'array' AND jsonb_array_length(media_ids) <= 9)
 );
+ALTER TABLE footprint ADD COLUMN IF NOT EXISTS media_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+UPDATE footprint
+SET media_ids = jsonb_build_array(to_jsonb(footprint)->>'media_id')
+WHERE to_jsonb(footprint) ? 'media_id'
+  AND to_jsonb(footprint)->>'media_id' IS NOT NULL
+  AND media_ids = '[]'::jsonb;
+ALTER TABLE footprint DROP COLUMN IF EXISTS media_id;
 CREATE INDEX IF NOT EXISTS idx_footprint_location ON footprint USING GIST (location);
 
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger

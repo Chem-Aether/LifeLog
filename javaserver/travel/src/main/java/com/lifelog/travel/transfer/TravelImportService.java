@@ -129,7 +129,13 @@ public class TravelImportService {
         spot.setPlaceName(text(row, h, "地点名称", formatter)); spot.setVisitType(text(row, h, "记录性质", formatter));
         spot.setVisitDate(date(row, h, "到访日期", formatter)); spot.setLongitude(decimal(row, h, "经度", formatter));
         spot.setLatitude(decimal(row, h, "纬度", formatter)); spot.setPoiReference(text(row, h, "POI引用", formatter));
-        spot.setNote(text(row, h, "旅行心得", formatter)); spot.setMediaId(text(row, h, "媒体ID", formatter));
+        spot.setNote(text(row, h, "旅行心得", formatter));
+        String mediaIds = text(row, h, "媒体ID列表JSON", formatter);
+        try {
+            spot.setMediaIds(mediaIds == null ? List.of() : objectMapper.readValue(mediaIds, new TypeReference<>() {}));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("媒体ID列表JSON格式无效", e);
+        }
         return spot;
     }
 

@@ -1,11 +1,13 @@
 package com.lifelog.travel.footprint;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lifelog.travel.integration.mapserver.GeoReferenceClient;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.lifelog.travel.footprint.FootSpot;
-import com.lifelog.travel.footprint.FootSpotMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
@@ -14,10 +16,16 @@ import java.util.*;
 public class FootSpotService {
     private final FootSpotMapper mapper;
     private final GeoReferenceClient geoClient;
-    public FootSpotService(FootSpotMapper mapper, GeoReferenceClient geoClient) { this.mapper = mapper; this.geoClient = geoClient; }
+    private final ObjectMapper objectMapper;
+    public FootSpotService(FootSpotMapper mapper, GeoReferenceClient geoClient, ObjectMapper objectMapper) {
+        this.mapper = mapper;
+        this.geoClient = geoClient;
+        this.objectMapper = objectMapper;
+    }
 
     public List<FootSpot> findAll(Integer year) {
         List<FootSpot> spots = mapper.selectRecords(year);
+        spots.forEach(this::hydrate);
         List<GeoReferenceClient.GeoPoint> points = spots.stream()
                 .filter(item -> item.getLongitude() != null && item.getLatitude() != null)
                 .map(item -> new GeoReferenceClient.GeoPoint(String.valueOf(item.getFootprintId()), item.getLongitude().doubleValue(), item.getLatitude().doubleValue()))
@@ -34,16 +42,18 @@ public class FootSpotService {
         return spots;
     }
 
+    @Transactional
     public FootSpot add(FootSpot spot) {
-        validate(spot); spot.setFootprintId(null);
+        validate(spot); prepare(spot); spot.setFootprintId(null);
         mapper.insert(spot); mapper.updateLocation(spot.getFootprintId(), spot.getLongitude(), spot.getLatitude());
-        return mapper.selectRecordById(spot.getFootprintId());
+        return hydrate(mapper.selectRecordById(spot.getFootprintId()));
     }
 
+    @Transactional
     public FootSpot update(Long id, FootSpot spot) {
         if (mapper.selectById(id) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
-        validate(spot); spot.setFootprintId(id); mapper.updateById(spot); mapper.updateLocation(id, spot.getLongitude(), spot.getLatitude());
-        return mapper.selectRecordById(id);
+        validate(spot); prepare(spot); spot.setFootprintId(id); mapper.updateById(spot); mapper.updateLocation(id, spot.getLongitude(), spot.getLatitude());
+        return hydrate(mapper.selectRecordById(id));
     }
 
     public void delete(Long id) { if (mapper.deleteById(id) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在"); }
@@ -62,5 +72,28 @@ public class FootSpotService {
         if (longitude && (spot.getLongitude().doubleValue() < -180 || spot.getLongitude().doubleValue() > 180
                 || spot.getLatitude().doubleValue() < -90 || spot.getLatitude().doubleValue() > 90))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "经纬度超出有效范围");
+        List<String> mediaIds = spot.getMediaIds() == null ? List.of() : spot.getMediaIds().stream()
+                .filter(Objects::nonNull).map(String::trim).filter(StringUtils::hasText).distinct().toList();
+        if (mediaIds.size() > 9) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "每条足迹最多上传 9 张图片");
+        spot.setMediaIds(mediaIds);
+    }
+
+    private FootSpot hydrate(FootSpot spot) {
+        if (spot == null) return null;
+        try {
+            spot.setMediaIds(spot.getMediaIdsJson() == null ? List.of()
+                    : objectMapper.readValue(spot.getMediaIdsJson(), new TypeReference<>() {}));
+            return spot;
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("足迹图片列表数据损坏", e);
+        }
+    }
+
+    private void prepare(FootSpot spot) {
+        try {
+            spot.setMediaIdsJson(objectMapper.writeValueAsString(spot.getMediaIds()));
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("足迹图片列表格式无效", e);
+        }
     }
 }

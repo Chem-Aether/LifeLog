@@ -6,6 +6,7 @@ export default [
     redirect: '/diary/home',
     children: [
       { path: 'home', name: 'DiaryHome', component: () => import('../views/DiaryOverview.vue') },
+      { path: 'statistics', name: 'DiaryStatistics', component: () => import('../views/DiaryStatistics.vue') },
       { path: 'feed', name: 'DiaryFeed', component: () => import('../views/DiaryHome.vue') },
       { path: 'manage', name: 'DiaryManage', component: () => import('../views/DiaryHome.vue') },
       { path: 'write', name: 'DiaryWrite', component: () => import('../views/DiaryWrite.vue') },

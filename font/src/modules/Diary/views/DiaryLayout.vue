@@ -16,6 +16,7 @@
       <nav class="diary-nav" aria-label="日记导航">
         <RouterLink to="/diary/home" class="diary-nav-link" active-class="is-active"><el-icon><House /></el-icon><span>主页</span></RouterLink>
         <RouterLink to="/diary/feed" class="diary-nav-link" active-class="is-active"><el-icon><ChatLineSquare /></el-icon><span>日记动态</span></RouterLink>
+        <RouterLink to="/diary/statistics" class="diary-nav-link" active-class="is-active"><el-icon><DataAnalysis /></el-icon><span>时光统计</span></RouterLink>
         <RouterLink to="/diary/manage" class="diary-nav-link" active-class="is-active"><el-icon><Memo /></el-icon><span>日记管理</span></RouterLink>
       </nav>
       <div class="sidebar-bottom">
@@ -24,7 +25,7 @@
       </div>
     </aside>
     <main class="diary-main">
-      <router-view v-slot="{ Component, route }"><Transition name="diary-page" mode="out-in" appear><component :is="Component" :key="route.path" /></Transition></router-view>
+      <router-view v-slot="{ Component, route }"><Transition name="diary-page" mode="out-in" appear @after-enter="restoreFeedScroll"><component :is="Component" :key="route.path" /></Transition></router-view>
     </main>
   </div>
 </template>
@@ -32,12 +33,31 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatLineSquare, Close, HomeFilled, House, Memo, Menu, Notebook } from '@element-plus/icons-vue'
+import { ChatLineSquare, Close, DataAnalysis, HomeFilled, House, Memo, Menu, Notebook } from '@element-plus/icons-vue'
+import { diaryFeedState } from '../utils/feedState.js'
 
 const route = useRoute()
 const navOpen = ref(false)
-const currentSection = computed(() => route.path.endsWith('/feed') ? '日记动态' : route.path.endsWith('/manage') ? '日记管理' : '主页')
-watch(() => route.path, () => { navOpen.value = false })
+const currentSection = computed(() => route.path.endsWith('/feed') ? '日记动态' : route.path.endsWith('/statistics') ? '时光统计' : route.path.endsWith('/manage') ? '日记管理' : '主页')
+function restoreFeedScroll() {
+  if (route.path.endsWith('/feed') && diaryFeedState.restoreOnReturn && Date.now() - diaryFeedState.savedAt < 5 * 60 * 1000) {
+    window.scrollTo(0, diaryFeedState.scrollTop)
+  }
+  diaryFeedState.restoreOnReturn = false
+}
+watch(() => route.path, (path, previousPath) => {
+  navOpen.value = false
+  if (path.startsWith('/diary/write')) {
+    diaryFeedState.editFromFeed = previousPath.endsWith('/feed')
+    diaryFeedState.restoreOnReturn = false
+  } else if (path.endsWith('/feed')) {
+    diaryFeedState.restoreOnReturn = previousPath.startsWith('/diary/write') && diaryFeedState.editFromFeed
+    diaryFeedState.editFromFeed = false
+  } else {
+    diaryFeedState.restoreOnReturn = false
+    diaryFeedState.editFromFeed = false
+  }
+}, { flush: 'sync' })
 </script>
 
 <style>

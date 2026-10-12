@@ -36,13 +36,13 @@ public class TravelExportService {
             headerStyle.setFillForegroundColor(IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             if ("flight".equals(type)) {
-                List<List<?>> rows = template ? List.of() : flights.selectList(null).stream()
+                List<? extends List<?>> rows = template ? List.of() : flights.selectList(null).stream()
                         .filter(item -> id == null || id.equals(item.getFlightId())).map(this::flightRow).toList();
                 writeSheet(workbook, "机票", List.of("记录ID", "航班号", "航空公司", "机型", "飞机注册号", "出发机场ICAO", "出发机场", "出发航站楼", "登机方式", "起飞时间", "到达机场ICAO", "到达机场", "到达航站楼", "下机方式", "到达时间", "经停机场JSON", "座位号", "里程KM", "备注"), rows, headerStyle);
             } else {
-                List<List<?>> rows = template ? List.of() : footprints.selectRecords(null).stream()
+                List<? extends List<?>> rows = template ? List.of() : footprints.selectRecords(null).stream()
                         .filter(item -> id == null || id.equals(item.getFootprintId())).map(this::footprintRow).toList();
-                writeSheet(workbook, "足迹", List.of("记录ID", "地点名称", "记录性质", "到访日期", "经度", "纬度", "POI引用", "旅行心得", "媒体ID"), rows, headerStyle);
+                writeSheet(workbook, "足迹", List.of("记录ID", "地点名称", "记录性质", "到访日期", "经度", "纬度", "POI引用", "旅行心得", "媒体ID列表JSON"), rows, headerStyle);
             }
             workbook.write(output);
             return output.toByteArray();
@@ -58,7 +58,7 @@ public class TravelExportService {
 
     private List<?> footprintRow(FootSpot row) {
         return Arrays.asList(row.getFootprintId(), row.getPlaceName(), row.getVisitType(), row.getVisitDate(), row.getLongitude(),
-                row.getLatitude(), row.getPoiReference(), row.getNote(), row.getMediaId());
+                row.getLatitude(), row.getPoiReference(), row.getNote(), row.getMediaIdsJson());
     }
 
     private void writeSheet(Workbook workbook, String name, List<String> columns, List<? extends List<?>> rows, CellStyle style) {

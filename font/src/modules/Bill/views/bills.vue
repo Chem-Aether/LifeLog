@@ -41,28 +41,6 @@
       </div>
     </section>
 
-    <el-dialog v-model="importVisible" title="导入账单 CSV" width="min(620px, 94vw)" :close-on-click-modal="false" @closed="clearImport">
-      <div class="import-content">
-        <p>导入采用全量校验：文件中任一行有误时不会写入任何记录。导出的 CSV 可直接重新导入。</p>
-        <div class="import-actions">
-          <el-button @click="downloadTemplate">下载 CSV 模板</el-button>
-          <el-upload accept=".csv,text/csv" :auto-upload="false" :show-file-list="false" :on-change="handleImportFile">
-            <el-button type="primary">选择 CSV 文件</el-button>
-          </el-upload>
-        </div>
-        <div v-if="importFileName" class="import-summary">
-          <strong>{{ importFileName }}</strong>
-          <span v-if="!importErrors.length">校验通过，可导入 {{ importRecords.length }} 条</span>
-          <span v-else class="import-error-count">发现 {{ importErrors.length }} 个问题</span>
-        </div>
-        <ul v-if="importErrors.length" class="import-errors">
-          <li v-for="error in importErrors.slice(0, 12)" :key="error">{{ error }}</li>
-          <li v-if="importErrors.length > 12">其余 {{ importErrors.length - 12 }} 个问题未显示</li>
-        </ul>
-      </div>
-      <template #footer><el-button @click="importVisible = false">取消</el-button><el-button type="primary" :disabled="!importRecords.length || importErrors.length" :loading="importing" @click="submitImport">确认导入</el-button></template>
-    </el-dialog>
-
     </template>
   </main>
 </template>
@@ -71,10 +49,9 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createBillRecord, deleteBillRecord, exportBillRecords, getAccounts, getBillCategories, getBillRecords, importBillRecords as sendBillImport, updateBillRecord } from '@/modules/Bill/apis/bill.js'
+import { createBillRecord, deleteBillRecord, exportBillRecords, getAccounts, getBillCategories, getBillRecords, updateBillRecord } from '@/modules/Bill/apis/bill.js'
 import BillRecordTable from '../components/BillRecordTable.vue'
 import CategoryTreePicker from '../components/CategoryTreePicker.vue'
-import { createBillCsvTemplate, parseBillCsv } from '../utils/billCsv.js'
 
 const records = ref([])
 const router = useRouter()
@@ -84,11 +61,6 @@ const accounts = ref([])
 const categories = ref([])
 const loading = ref(false)
 const saving = ref(false)
-const importVisible = ref(false)
-const importing = ref(false)
-const importFileName = ref('')
-const importRecords = ref([])
-const importErrors = ref([])
 const editingId = ref(null)
 const page = ref(1)
 const pageSize = ref(20)
@@ -173,36 +145,8 @@ async function exportAll() {
     downloadBlob(response.data, '账单-全部.csv')
   } catch (error) { ElMessage.error(error?.response?.data?.msg || '账单导出失败') }
 }
-function downloadTemplate() {
-  downloadBlob(new Blob([createBillCsvTemplate()], { type: 'text/csv;charset=utf-8' }), '账单导入模板.csv')
-}
 function openImport() {
-  importVisible.value = true
-}
-async function handleImportFile(uploadFile) {
-  importFileName.value = uploadFile.name
-  importRecords.value = []
-  importErrors.value = []
-  try {
-    const { records: parsed, errors } = parseBillCsv(await uploadFile.raw.text(), accounts.value, categories.value)
-    importRecords.value = parsed
-    importErrors.value = errors
-  } catch (error) { importErrors.value = [error.message || 'CSV 解析失败'] }
-}
-function clearImport() {
-  importFileName.value = ''
-  importRecords.value = []
-  importErrors.value = []
-}
-async function submitImport() {
-  importing.value = true
-  try {
-    const count = await sendBillImport(importRecords.value)
-    ElMessage.success(`成功导入 ${count} 条账单`)
-    importVisible.value = false
-    await loadRecords()
-  } catch (error) { ElMessage.error(error?.response?.data?.msg || '导入失败，未写入数据') }
-  finally { importing.value = false }
+  router.push({ name: 'BillRecordImport' })
 }
 function changeDirection() {
   draft.fromAccountId = null
@@ -318,6 +262,5 @@ onMounted(async () => {
 .account-flow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
 .account-flow :deep(.el-form-item) { min-width: 0; }
 .full-width { width: 100%; }
-.import-content > p { margin:0 0 14px; color:#71818a; line-height:1.6; }.import-actions { display:flex; align-items:center; gap:10px; }.import-summary { display:flex; flex-direction:column; gap:6px; margin-top:16px; padding:12px; background:#f5f8f9; border-radius:6px; color:#60737d; }.import-summary strong { color:#344b57; }.import-error-count { color:#c95e66; }.import-errors { max-height:190px; overflow:auto; margin:12px 0 0; padding:12px 12px 12px 32px; color:#bd515b; background:#fff6f6; border-radius:6px; line-height:1.7; }
 @media (max-width: 760px) { .page-header { align-items:flex-start; flex-direction:column; gap:12px; }.header-actions { justify-content:flex-start; }.filter-control,.keyword-filter,.date-filter { width: 100%; }.filter-panel :deep(.el-button) { flex: 1; }.record-count { width:100%; margin:2px 0 0; text-align:right; }.account-flow { grid-template-columns: 1fr; gap: 0; } }
 </style>

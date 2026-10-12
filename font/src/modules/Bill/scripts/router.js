@@ -9,6 +9,7 @@ export default [
       { path: 'statistics', component: () => import('../views/Statistics.vue') },
       { path: 'query', component: () => import('../views/bills.vue') },
       { path: 'query/edit/:id?', name: 'BillRecordEdit', component: () => import('../views/bills.vue') },
+      { path: 'query/import', name: 'BillRecordImport', component: () => import('../views/BillImport.vue') },
       { path: 'categories', component: () => import('../views/CategoryManagement.vue') },
       { path: 'categories/edit/:id?', name: 'BillCategoryEdit', component: () => import('../views/CategoryManagement.vue') },
       { path: 'account', component: () => import('../views/TaskRelease.vue') },

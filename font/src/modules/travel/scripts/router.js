@@ -22,6 +22,7 @@ export default [
             { path: 'flightTicket/edit/:id?', name: 'TravelFlightTicketEdit', component: () => import('../views/admin/flightTicket.vue'), },
             { path: 'footprint', component: () => import('../views/admin/footprint.vue'), },
             { path: 'footprint/edit/:id?', name: 'TravelFootprintEdit', component: () => import('../views/admin/footprint.vue'), },
+            { path: 'album', name: 'TravelCityAlbum', component: () => import('../views/admin/cityAlbum.vue'), },
         ]
     }
 ]

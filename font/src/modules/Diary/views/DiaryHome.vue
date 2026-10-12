@@ -43,7 +43,7 @@
           </template>
         </el-table-column>
         <el-table-column label="照片" width="82" align="center">
-          <template #default="{ row }">{{ row.mediaIds?.length || 0 }} 张</template>
+          <template #default="{ row }">{{ row.mediaIds?.length || 0 }} 个媒体</template>
         </el-table-column>
         <el-table-column label="心情" width="108">
           <template #default="{ row }">{{ row.mood || '—' }}</template>
@@ -74,14 +74,22 @@
           <div v-if="entry.content" class="feed-content" :class="{ expanded: expandedEntries.has(entry.id) }">{{ entry.content }}</div>
           <button v-if="entry.content?.length > 180" class="content-toggle" @click="toggleContent(entry.id)">{{ expandedEntries.has(entry.id) ? '收起' : '全文' }}</button>
           <div v-if="entry.mediaIds?.length" class="feed-gallery" :class="galleryClass(entry)">
-            <div v-for="(mediaId, index) in entry.mediaIds.slice(0, 9)" :key="mediaId" class="photo-cell">
-              <el-image :src="diaryMediaUrl(mediaId)" :preview-src-list="entry.mediaIds.map(diaryMediaUrl)" :initial-index="index" fit="cover" loading="lazy" />
-              <button v-if="index === 8 && entry.mediaIds.length > 9" class="photo-overflow" @click="openDetail(entry)">+{{ entry.mediaIds.length - 9 }}</button>
+            <div v-for="(mediaId, index) in visibleMedia(entry)" :key="mediaId" class="photo-cell">
+              <video v-if="entry.mediaTypes?.[mediaId]?.startsWith('video/')" :src="diaryMediaUrl(mediaId)" controls preload="metadata"></video>
+              <el-image v-else :src="diaryMediaUrl(mediaId)" :preview-src-list="entry.mediaIds.filter(id => !entry.mediaTypes?.[id]?.startsWith('video/')).map(diaryMediaUrl)" fit="cover" loading="lazy" />
+              <button v-if="index === 8 && entry.mediaIds.length > 9 && !expandedMediaEntries.has(entry.id)" class="photo-overflow" :aria-label="`展开其余 ${entry.mediaIds.length - 9} 个媒体`" @click="toggleMedia(entry)">+{{ entry.mediaIds.length - 9 }} 更多</button>
             </div>
           </div>
+          <button v-if="expandedMediaEntries.has(entry.id) && entry.mediaIds.length > 9" class="media-collapse" @click="toggleMedia(entry)">收起照片</button>
           <div v-if="entry.tags?.length" class="entry-tags"><span v-for="tag in entry.tags" :key="tag"># {{ tag }}</span></div>
-          <footer class="feed-card-footer"><span v-if="entry.mediaIds?.length" class="photo-count"><el-icon><Picture /></el-icon>{{ entry.mediaIds.length }} 张照片</span><span v-else></span><el-button text :icon="ChatLineSquare" @click="openDetail(entry)">查看日记</el-button></footer>
+          <footer class="feed-card-footer"><span v-if="entry.mediaIds?.length" class="photo-count"><el-icon><Picture /></el-icon>{{ entry.mediaIds.length }} 个媒体</span><span v-else></span><el-button text :icon="ChatLineSquare" @click="openDetail(entry)">查看日记</el-button></footer>
         </article>
+      </div>
+
+      <div v-if="!isManage && entries.length" ref="feedSentinel" class="feed-load-state" aria-live="polite">
+        <span v-if="loadingMore"><el-icon class="is-loading"><Loading /></el-icon>正在翻开更多日记</span>
+        <button v-else-if="loadMoreFailed" @click="retryLoadMore">加载失败，点击重试</button>
+        <span v-else-if="!hasMore">已经看到最近的日子</span>
       </div>
 
       <el-empty v-if="!loading && !entries.length" :image-size="92" :description="keyword || selectedYear ? '没有找到匹配的日记' : '还没有日记，写下第一篇吧'">
@@ -89,7 +97,7 @@
       </el-empty>
     </section>
 
-    <footer v-if="total > pageSize" class="pagination-row">
+    <footer v-if="isManage && total > pageSize" class="pagination-row">
       <span>第 {{ page }} / {{ pageCount }} 页</span>
       <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="loadEntries" />
     </footer>
@@ -105,7 +113,8 @@
         <div v-if="detailEntry.location" class="detail-location"><el-icon><LocationInformation /></el-icon>{{ detailEntry.location }}</div>
         <div class="detail-content">{{ detailEntry.content || '这篇日记没有正文。' }}</div>
         <div v-if="detailEntry.mediaIds?.length" class="detail-gallery">
-          <el-image v-for="(id, index) in detailEntry.mediaIds" :key="id" :src="diaryMediaUrl(id)" :preview-src-list="detailEntry.mediaIds.map(diaryMediaUrl)" :initial-index="index" fit="cover" />
+          <video v-for="id in detailEntry.mediaIds.filter(id => detailEntry.mediaTypes?.[id]?.startsWith('video/'))" :key="id" :src="diaryMediaUrl(id)" controls preload="metadata"></video>
+          <el-image v-for="(id, index) in detailEntry.mediaIds.filter(id => !detailEntry.mediaTypes?.[id]?.startsWith('video/'))" :key="id" :src="diaryMediaUrl(id)" :preview-src-list="detailEntry.mediaIds.filter(value => !detailEntry.mediaTypes?.[value]?.startsWith('video/')).map(diaryMediaUrl)" :initial-index="index" fit="cover" />
         </div>
         <div v-if="detailEntry.tags?.length" class="entry-tags detail-tags"><span v-for="tag in detailEntry.tags" :key="tag"># {{ tag }}</span></div>
       </template>
@@ -114,31 +123,43 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, ChatLineSquare, Delete, Edit, LocationInformation, MoreFilled, Notebook, Picture, Plus, Search } from '@element-plus/icons-vue'
-import { useRoute, useRouter } from 'vue-router'
+import { Calendar, ChatLineSquare, Delete, Edit, Loading, LocationInformation, MoreFilled, Notebook, Picture, Plus, Search } from '@element-plus/icons-vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import {
   deleteDiaryEntry, diaryMediaUrl, getDiaryEntries, getDiarySummary, getDiaryYears,
 } from '../apis/diary.js'
+import { diaryFeedState } from '../utils/feedState.js'
 
 const currentYear = new Date().getFullYear()
 const route = useRoute()
 const router = useRouter()
 const isManage = computed(() => route.path.endsWith('/manage'))
-const selectedYear = ref(null)
+const selectedYear = ref(route.query.year ? Number(route.query.year) : null)
 const years = ref([currentYear])
-const keyword = ref('')
+const keyword = ref(String(route.query.keyword || ''))
 const page = ref(1)
 const pageSize = 10
 const total = ref(0)
 const entries = ref([])
 const summary = ref({ entries: 0, daysWritten: 0, thisMonth: 0 })
 const loading = ref(false)
+const loadingMore = ref(false)
+const loadMoreFailed = ref(false)
+const feedSentinel = ref(null)
+const hasMore = computed(() => entries.value.length < total.value)
 const detailVisible = ref(false)
 const detailEntry = ref(null)
 const expandedEntries = ref(new Set())
+const expandedMediaEntries = ref(new Set())
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
+
+watch(() => [route.query.keyword, route.query.year], ([nextKeyword, nextYear]) => {
+  keyword.value = String(nextKeyword || '')
+  selectedYear.value = nextYear ? Number(nextYear) : null
+  applyFilters()
+})
 
 function dateText(value) {
   if (!value) return null
@@ -147,8 +168,19 @@ function dateText(value) {
 }
 
 function galleryClass(entry) {
-  const count = Math.min(entry.mediaIds?.length || 0, 9)
-  return count === 1 ? 'single' : count === 2 ? 'double' : ''
+  const count = visibleMedia(entry).length
+  const expanded = expandedMediaEntries.value.has(entry.id)
+  const layout = count === 1 ? 'single' : count <= 2 ? 'double' : count <= 4 ? 'grid-two' : 'grid-three'
+  return [layout, expanded ? 'expanded' : ''].filter(Boolean).join(' ')
+}
+function visibleMedia(entry) {
+  return expandedMediaEntries.value.has(entry.id) ? entry.mediaIds : entry.mediaIds.slice(0, 9)
+}
+function toggleMedia(entry) {
+  const next = new Set(expandedMediaEntries.value)
+  if (next.has(entry.id)) next.delete(entry.id)
+  else next.add(entry.id)
+  expandedMediaEntries.value = next
 }
 function toggleContent(id) {
   const next = new Set(expandedEntries.value)
@@ -161,14 +193,41 @@ function formatDate(value) {
   return date ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(date) : ''
 }
 
-async function loadEntries() {
-  loading.value = true
+function cacheFeedState() {
+  if (isManage.value) return
+  Object.assign(diaryFeedState, {
+    entries: entries.value,
+    page: page.value,
+    total: total.value,
+    scrollTop: window.scrollY,
+    keyword: keyword.value,
+    year: selectedYear.value,
+    expandedIds: [...expandedEntries.value],
+    savedAt: Date.now(),
+  })
+}
+
+onBeforeRouteLeave(cacheFeedState)
+
+async function loadEntries({ append = false } = {}) {
+  if (append ? loadingMore.value || loadMoreFailed.value || !hasMore.value : loading.value) return
+  const requestedPage = append ? page.value + 1 : page.value
+  if (append) { loadingMore.value = true; loadMoreFailed.value = false }
+  else loading.value = true
   try {
-    const result = await getDiaryEntries({ keyword: keyword.value || undefined, year: selectedYear.value || undefined, page: page.value, size: pageSize })
-    entries.value = result.items || []
+    const result = await getDiaryEntries({ keyword: keyword.value || undefined, year: selectedYear.value || undefined, page: requestedPage, size: pageSize })
+    const items = result.items || []
+    entries.value = append ? [...entries.value, ...items] : items
     total.value = result.total || 0
-  } catch { entries.value = []; total.value = 0 }
-  finally { loading.value = false }
+    page.value = requestedPage
+    if (!isManage.value) await nextTick()
+  } catch {
+    if (!append) { entries.value = []; total.value = 0 }
+    else loadMoreFailed.value = true
+  } finally {
+    if (append) loadingMore.value = false
+    else loading.value = false
+  }
 }
 
 async function loadSummary() {
@@ -185,8 +244,28 @@ async function loadMetadata() {
 
 async function applyFilters() {
   page.value = 1
+  entries.value = []
+  loadMoreFailed.value = false
   await Promise.all([loadEntries(), loadSummary()])
 }
+
+function retryLoadMore() { loadMoreFailed.value = false; loadEntries({ append: true }) }
+
+let feedObserver
+onMounted(async () => {
+  if (!isManage.value && 'IntersectionObserver' in window) {
+    feedObserver = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) loadEntries({ append: true })
+    }, { rootMargin: '500px 0px' })
+    await nextTick()
+    if (feedSentinel.value) feedObserver.observe(feedSentinel.value)
+  }
+})
+watch(feedSentinel, (element, previous) => {
+  if (previous) feedObserver?.unobserve(previous)
+  if (element) feedObserver?.observe(element)
+})
+onBeforeUnmount(() => feedObserver?.disconnect())
 
 function resetFilters() {
   keyword.value = ''
@@ -206,11 +285,31 @@ async function removeEntry(entry) {
 function openDetail(entry) { detailEntry.value = entry; detailVisible.value = true }
 function goToEditor(entry = null) {
   detailVisible.value = false
-  router.push({ path: entry ? `/diary/write/${entry.id}` : '/diary/write', query: { from: isManage.value ? 'manage' : 'feed' } })
+  const query = { from: isManage.value ? 'manage' : 'feed' }
+  if (!isManage.value) {
+    if (selectedYear.value) query.year = selectedYear.value
+    if (keyword.value) query.keyword = keyword.value
+  }
+  router.push({ path: entry ? `/diary/write/${entry.id}` : '/diary/write', query })
 }
 
 onMounted(async () => {
   await loadMetadata()
+  const restoreFeed = !isManage.value
+    && diaryFeedState.restoreOnReturn
+    && diaryFeedState.entries.length > 0
+    && Date.now() - diaryFeedState.savedAt < 5 * 60 * 1000
+    && diaryFeedState.keyword === keyword.value
+    && diaryFeedState.year === selectedYear.value
+  if (restoreFeed) {
+    entries.value = diaryFeedState.entries
+    page.value = diaryFeedState.page
+    total.value = diaryFeedState.total
+    expandedEntries.value = new Set(diaryFeedState.expandedIds)
+    await nextTick()
+    await loadSummary()
+    return
+  }
   await Promise.all([loadEntries(), loadSummary()])
 })
 </script>
@@ -241,7 +340,7 @@ onMounted(async () => {
 .diary-dialog :deep(.el-dialog) { overflow:hidden; border:1px solid var(--line); border-radius:8px; }.diary-dialog :deep(.el-dialog__header) { padding:19px 22px 14px; border-bottom:1px solid #edf1f1; }.diary-dialog :deep(.el-dialog__title) { color:#30454b; font-size:17px; font-weight:680; }.diary-dialog :deep(.el-dialog__body) { max-height:72vh; overflow:auto; padding:18px 22px 8px; }.diary-dialog :deep(.el-dialog__footer) { padding:12px 22px 18px; border-top:1px solid #edf1f1; }.diary-dialog :deep(.el-form-item__label) { color:#566b70; font-size:12px; font-weight:600; }.diary-dialog :deep(.el-textarea__inner) { line-height:1.75; }.diary-dialog :deep(.el-upload--picture-card) { --el-upload-picture-card-size:82px; border-radius:5px; }.diary-dialog :deep(.el-upload-list--picture-card .el-upload-list__item) { --el-upload-picture-card-size:82px; border-radius:5px; }
 .tag-editor { display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:100%; }.tag-editor :deep(.el-tag) { border-color:#d7e8e4; color:#557b75; background:#f3f8f7; }
 .detail-dialog :deep(.el-dialog__header) { padding:18px 22px 14px; }.detail-dialog :deep(.el-dialog__body) { padding-top:17px; }.detail-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }.detail-heading span { color:#89979c; font-size:11px; }.detail-heading h2 { margin:5px 0 0; color:#2f454b; font-size:20px; font-weight:700; }
-.detail-location { display:flex; align-items:center; gap:6px; margin-bottom:14px; color:#7c8d92; font-size:12px; }.detail-content { color:#43585e; font-size:14px; line-height:1.9; white-space:pre-wrap; overflow-wrap:anywhere; }.detail-gallery { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:18px; }.detail-gallery :deep(.el-image) { width:100%; aspect-ratio:4/3; border-radius:5px; background:#f1f4f4; }.detail-tags { margin-top:20px; }
+.detail-location { display:flex; align-items:center; gap:6px; margin-bottom:14px; color:#7c8d92; font-size:12px; }.detail-content { color:#43585e; font-size:14px; line-height:1.9; white-space:pre-wrap; overflow-wrap:anywhere; }.detail-gallery { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:18px; }.detail-gallery :deep(.el-image),.detail-gallery video { width:100%; aspect-ratio:4/3; border-radius:5px; background:#172329; object-fit:cover; }.detail-tags { margin-top:20px; }
 .manage-mode .page-header { margin-bottom:18px; }
 .diary-table { --el-table-border-color:#e6ecee; --el-table-header-bg-color:#f4f7f8; --el-table-row-hover-bg-color:#f4f9f8; overflow:hidden; border:1px solid #e3e9ec; border-radius:7px; background:#fff; }
 .diary-table :deep(th.el-table__cell) { height:44px; color:#63757d; font-size:11px; font-weight:650; }
@@ -256,12 +355,13 @@ onMounted(async () => {
 .feed-card > .entry-title { display:block; max-width:100%; margin:14px 0 0; color:#30474e; font-size:17px; line-height:1.5; }.feed-card > .entry-title:hover { color:#258b88; }
 .feed-content { display:-webkit-box; overflow:hidden; margin:7px 0 0; color:#4d6268; font-size:13px; line-height:1.85; white-space:pre-wrap; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:6; }.feed-content.expanded { display:block; }
 .content-toggle { margin:4px 0 0; padding:0; border:0; background:none; color:#258b88; font-size:11px; font-weight:600; cursor:pointer; }
-.feed-gallery { display:grid; width:min(100%,480px); grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin-top:12px; }.photo-cell { position:relative; min-width:0; aspect-ratio:1; overflow:hidden; background:#f0f3f3; }.photo-cell :deep(.el-image) { display:block; width:100%; height:100%; }.photo-cell :deep(img) { transition:transform .22s ease; }.photo-cell:hover :deep(img) { transform:scale(1.035); }.feed-gallery.single { grid-template-columns:minmax(0,1fr); width:min(100%,420px); }.feed-gallery.single .photo-cell { aspect-ratio:4/3; }.feed-gallery.double { grid-template-columns:repeat(2,minmax(0,1fr)); width:min(100%,440px); }.photo-overflow { position:absolute; inset:0; display:grid; width:100%; height:100%; place-items:center; border:0; background:rgba(20,35,40,.52); color:#fff; font-size:24px; font-weight:600; cursor:pointer; }
+.feed-gallery { display:grid; width:min(100%,420px); grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin-top:12px; }.photo-cell { position:relative; min-width:0; aspect-ratio:1; overflow:hidden; background:#f0f3f3; }.photo-cell :deep(.el-image),.photo-cell video { display:block; width:100%; height:100%; object-fit:cover; background:#172329; }.photo-cell :deep(img) { transition:transform .22s ease; }.photo-cell:hover :deep(img) { transform:scale(1.035); }.feed-gallery.single { grid-template-columns:minmax(0,1fr); width:min(100%,240px); }.feed-gallery.double,.feed-gallery.grid-two { grid-template-columns:repeat(2,minmax(0,1fr)); width:min(100%,360px); }.feed-gallery.grid-three { grid-template-columns:repeat(3,minmax(0,1fr)); }.feed-gallery.expanded { grid-auto-rows:auto; }.feed-gallery.expanded .photo-cell { aspect-ratio:1; }.photo-overflow { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:4px; width:100%; height:100%; border:0; background:rgba(20,35,40,.56); color:#fff; font-size:16px; font-weight:600; cursor:pointer; }.media-collapse { margin-top:7px; padding:3px 0; border:0; background:none; color:#258b88; font-size:11px; cursor:pointer; }
 .feed-card .entry-tags { margin-top:11px; }.feed-card .entry-tags span { border-color:#e5edeb; background:#f7faf9; }
 .feed-card-footer { display:flex; align-items:center; justify-content:space-between; min-height:42px; margin-top:9px; border-top:1px solid #edf1f2; }.feed-card-footer :deep(.el-button) { color:#71838a; font-size:11px; }.feed-card-footer :deep(.el-button:hover) { color:#258b88; background:#eff7f6; }.photo-count { display:flex; align-items:center; gap:5px; color:#8a999e; font-size:10px; }
+.feed-load-state { display:flex; min-height:52px; align-items:center; justify-content:center; color:#91a0a3; font-size:11px; }.feed-load-state span { display:flex; align-items:center; gap:7px; }.feed-load-state button { padding:7px 12px; border:1px solid #e0e9e7; border-radius:5px; background:#fff; color:#64847f; font:inherit; cursor:pointer; }
 @media(max-width:760px) {
   .page-header { margin-bottom:15px; }.page-header h1 { font-size:23px; }.summary-row { gap:12px; min-height:82px; padding:12px; }.summary-note { display:none; }.summary-stat { min-width:0; }.summary-divider { margin:0; }.filter-row { flex-wrap:wrap; gap:8px; }.filter-row .el-input { width:100%; }.filter-row .el-select { flex:1; min-width:120px; }.result-count { margin-left:auto; }
-  .entry-title { font-size:14px; }.pagination-row { padding-left:3px; }.detail-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); }.feed-card { padding:15px 14px 8px; }.feed-gallery { width:100%; gap:4px; }.feed-gallery.single { width:min(100%,360px); }
+  .entry-title { font-size:14px; }.pagination-row { padding-left:3px; }.detail-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); }.feed-card { padding:15px 14px 8px; }.feed-gallery { width:100%; gap:4px; }.feed-gallery.single { width:min(100%,240px); }.feed-gallery.double,.feed-gallery.grid-two { width:min(100%,360px); }
 }
 @media(max-width:900px) { .summary-row { gap:12px; } }
 @media(max-width:460px) {

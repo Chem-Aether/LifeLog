@@ -26,6 +26,8 @@ import { MAP_BASE_URL } from '@/utils/request.js'
 
 const EMPTY_COLLECTION = { type: 'FeatureCollection', features: [] }
 const FOOTPRINT_DETAIL_ZOOM = 9
+const MAX_PHOTO_MARKERS = 120
+const MAX_MAP_IMAGE_REQUESTS = 8
 const props = defineProps({
   selectedYear: {
     type: [String, Number],
@@ -47,6 +49,8 @@ let footprintRecords = []
 let visibleFootprintRecords = []
 let footprintFeatures = EMPTY_COLLECTION
 let footprintMarkers = []
+let mapImageQueue = []
+let activeMapImageRequests = 0
 let footprintUpdateId = 0
 let planeAnimationFrame = 0
 let lastPlaneFrame = 0
@@ -298,7 +302,7 @@ function addTravelLayers() {
     paint: { 'text-color': '#eafff7', 'text-halo-color': '#124d3e', 'text-halo-width': 1 }
   })
   map.addLayer({
-    id: 'footprint-single-points', type: 'circle', source: 'footprint-points', maxzoom: FOOTPRINT_DETAIL_ZOOM,
+    id: 'footprint-single-points', type: 'circle', source: 'footprint-points',
     filter: ['!', ['has', 'point_count']],
     paint: {
       'circle-radius': 6,
@@ -320,24 +324,36 @@ function validCoordinates(item) {
 function clearFootprintMarkers() {
   footprintMarkers.forEach(marker => marker.remove())
   footprintMarkers = []
+  mapImageQueue = []
 }
 
 function renderFootprintMarkers() {
   if (!map) return
   clearFootprintMarkers()
-  for (const item of visibleFootprintRecords.filter(item => item.visitType !== 'transit' && validCoordinates(item))) {
+  if (!visibleLayers.value.includes('foot') || map.getZoom() < FOOTPRINT_DETAIL_ZOOM) return
+
+  const bounds = map.getBounds()
+  const center = map.project(map.getCenter())
+  const photoRecords = visibleFootprintRecords
+    .filter(item => item.visitType !== 'transit' && validCoordinates(item) && item.mediaIds?.[0])
+    .filter(item => bounds.contains([Number(item.longitude), Number(item.latitude)]))
+    .map(item => {
+      const point = map.project([Number(item.longitude), Number(item.latitude)])
+      return { item, distance: (point.x - center.x) ** 2 + (point.y - center.y) ** 2 }
+    })
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, MAX_PHOTO_MARKERS)
+
+  for (const { item } of photoRecords) {
     const element = document.createElement('button')
     element.type = 'button'
     element.className = 'footprint-photo-marker is-travel'
     element.title = item.placeName || '足迹地点'
-    if (item.mediaId) {
-      const image = document.createElement('img')
-      image.src = mediaUrl(item.mediaId)
-      image.alt = ''
-      image.loading = 'lazy'
-      image.addEventListener('error', () => image.remove(), { once: true })
-      element.appendChild(image)
-    }
+    const mediaId = item.mediaIds?.[0]
+    const image = document.createElement('img')
+    image.alt = ''
+    image.decoding = 'async'
+    element.appendChild(image)
     const fallback = document.createElement('span')
     fallback.textContent = (item.placeName || '地').trim().slice(0, 1)
     element.appendChild(fallback)
@@ -349,8 +365,30 @@ function renderFootprintMarkers() {
       .setLngLat([Number(item.longitude), Number(item.latitude)])
       .addTo(map)
     footprintMarkers.push(marker)
+    mapImageQueue.push({ element, image, url: mediaUrl(mediaId) })
   }
+  loadNextMapImages()
   updateFootprintMarkerVisibility()
+}
+
+function loadNextMapImages() {
+  while (activeMapImageRequests < MAX_MAP_IMAGE_REQUESTS && mapImageQueue.length) {
+    const request = mapImageQueue.shift()
+    if (!request.element.isConnected) continue
+    activeMapImageRequests += 1
+    const finish = () => {
+      request.image.onload = null
+      request.image.onerror = null
+      activeMapImageRequests -= 1
+      loadNextMapImages()
+    }
+    request.image.onload = finish
+    request.image.onerror = () => {
+      request.image.remove()
+      finish()
+    }
+    request.image.src = request.url
+  }
 }
 
 function updateFootprintMarkerVisibility() {
@@ -648,6 +686,7 @@ onMounted(async () => {
     map.getCanvas().style.cursor = features.length ? 'pointer' : ''
   })
   map.on('zoom', updateFootprintMarkerVisibility)
+  map.on('moveend', renderFootprintMarkers)
 })
 
 watch(visibleLayers, updateMode)

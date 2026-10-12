@@ -94,7 +94,6 @@ public class DiaryEntryService {
 
     private static List<String> normalizeMediaIds(List<String> mediaIds) {
         if (mediaIds == null) return List.of();
-        if (mediaIds.size() > 20) throw badRequest("每篇日记最多添加20张图片");
         return mediaIds.stream().filter(id -> id != null && !id.isBlank()).distinct().peek(id -> {
             if (!MEDIA_ID.matcher(id).matches()) throw badRequest("图片标识无效");
         }).toList();

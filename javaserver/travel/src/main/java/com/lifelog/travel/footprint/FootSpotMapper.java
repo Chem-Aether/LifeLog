@@ -10,7 +10,7 @@ import java.util.List;
 
 @Mapper
 public interface FootSpotMapper extends BaseMapper<FootSpot> {
-    @Select("SELECT footprint_id, place_name, visit_type, visit_date, poi_reference, note, media_id, " +
+    @Select("SELECT footprint_id, place_name, visit_type, visit_date, poi_reference, note, media_ids::text AS \"mediaIdsJson\", " +
             "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint WHERE footprint_id = #{id}")
     FootSpot selectRecordById(@Param("id") Long id);
 
@@ -19,7 +19,7 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
     int updateLocation(@Param("id") Long id, @Param("longitude") java.math.BigDecimal longitude,
                        @Param("latitude") java.math.BigDecimal latitude);
 
-    @Select({"<script>", "SELECT footprint_id, place_name, visit_type, visit_date, poi_reference, note, media_id,",
+    @Select({"<script>", "SELECT footprint_id, place_name, visit_type, visit_date, poi_reference, note, media_ids::text AS \"mediaIdsJson\",",
             "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint",
             "<if test='year != null'>WHERE visit_date &gt;= make_date(#{year},1,1) AND visit_date &lt; make_date(#{year}+1,1,1)</if>",
             "ORDER BY visit_date DESC NULLS LAST", "</script>"})
