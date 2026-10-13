@@ -76,7 +76,7 @@
           <div v-if="entry.mediaIds?.length" class="feed-gallery" :class="galleryClass(entry)">
             <div v-for="(mediaId, index) in visibleMedia(entry)" :key="mediaId" class="photo-cell">
               <video v-if="entry.mediaTypes?.[mediaId]?.startsWith('video/')" :src="diaryMediaUrl(mediaId)" controls preload="metadata"></video>
-              <el-image v-else :src="diaryMediaUrl(mediaId)" :preview-src-list="entry.mediaIds.filter(id => !entry.mediaTypes?.[id]?.startsWith('video/')).map(diaryMediaUrl)" fit="cover" loading="lazy" />
+              <el-image v-else :src="diaryMediaUrl(mediaId)" :preview-src-list="imageMedia(entry).map(diaryMediaUrl)" :initial-index="imageMedia(entry).indexOf(mediaId)" hide-on-click-modal fit="cover" loading="lazy" />
               <button v-if="index === 8 && entry.mediaIds.length > 9 && !expandedMediaEntries.has(entry.id)" class="photo-overflow" :aria-label="`展开其余 ${entry.mediaIds.length - 9} 个媒体`" @click="toggleMedia(entry)">+{{ entry.mediaIds.length - 9 }} 更多</button>
             </div>
           </div>
@@ -114,7 +114,7 @@
         <div class="detail-content">{{ detailEntry.content || '这篇日记没有正文。' }}</div>
         <div v-if="detailEntry.mediaIds?.length" class="detail-gallery">
           <video v-for="id in detailEntry.mediaIds.filter(id => detailEntry.mediaTypes?.[id]?.startsWith('video/'))" :key="id" :src="diaryMediaUrl(id)" controls preload="metadata"></video>
-          <el-image v-for="(id, index) in detailEntry.mediaIds.filter(id => !detailEntry.mediaTypes?.[id]?.startsWith('video/'))" :key="id" :src="diaryMediaUrl(id)" :preview-src-list="detailEntry.mediaIds.filter(value => !detailEntry.mediaTypes?.[value]?.startsWith('video/')).map(diaryMediaUrl)" :initial-index="index" fit="cover" />
+          <el-image v-for="(id, index) in detailEntry.mediaIds.filter(id => !detailEntry.mediaTypes?.[id]?.startsWith('video/'))" :key="id" :src="diaryMediaUrl(id)" :preview-src-list="detailEntry.mediaIds.filter(value => !detailEntry.mediaTypes?.[value]?.startsWith('video/')).map(diaryMediaUrl)" :initial-index="index" hide-on-click-modal fit="cover" />
         </div>
         <div v-if="detailEntry.tags?.length" class="entry-tags detail-tags"><span v-for="tag in detailEntry.tags" :key="tag"># {{ tag }}</span></div>
       </template>
@@ -147,6 +147,7 @@ const summary = ref({ entries: 0, daysWritten: 0, thisMonth: 0 })
 const loading = ref(false)
 const loadingMore = ref(false)
 const loadMoreFailed = ref(false)
+const feedReloadFailed = ref(false)
 const feedSentinel = ref(null)
 const hasMore = computed(() => entries.value.length < total.value)
 const detailVisible = ref(false)
@@ -170,11 +171,14 @@ function dateText(value) {
 function galleryClass(entry) {
   const count = visibleMedia(entry).length
   const expanded = expandedMediaEntries.value.has(entry.id)
-  const layout = count === 1 ? 'single' : count <= 2 ? 'double' : count <= 4 ? 'grid-two' : 'grid-three'
+  const layout = count === 1 ? 'single' : count === 2 ? 'double' : count === 4 ? 'grid-two' : 'grid-three'
   return [layout, expanded ? 'expanded' : ''].filter(Boolean).join(' ')
 }
 function visibleMedia(entry) {
   return expandedMediaEntries.value.has(entry.id) ? entry.mediaIds : entry.mediaIds.slice(0, 9)
+}
+function imageMedia(entry) {
+  return entry.mediaIds.filter(id => !entry.mediaTypes?.[id]?.startsWith('video/'))
 }
 function toggleMedia(entry) {
   const next = new Set(expandedMediaEntries.value)
@@ -249,7 +253,37 @@ async function applyFilters() {
   await Promise.all([loadEntries(), loadSummary()])
 }
 
-function retryLoadMore() { loadMoreFailed.value = false; loadEntries({ append: true }) }
+function retryLoadMore() {
+  if (feedReloadFailed.value) return reloadLoadedFeed()
+  loadMoreFailed.value = false
+  return loadEntries({ append: true })
+}
+
+async function reloadLoadedFeed(deletedId) {
+  const loadedPageCount = Math.max(1, page.value)
+  loadingMore.value = true
+  loadMoreFailed.value = false
+  feedReloadFailed.value = false
+  try {
+    const results = await Promise.all(Array.from({ length: loadedPageCount }, (_, index) => getDiaryEntries({
+      keyword: keyword.value || undefined,
+      year: selectedYear.value || undefined,
+      page: index + 1,
+      size: pageSize,
+    })))
+    entries.value = results.flatMap(result => result.items || [])
+    total.value = results[0]?.total || 0
+    page.value = Math.min(loadedPageCount, Math.max(1, Math.ceil(total.value / pageSize)))
+  } catch {
+    const hadEntry = entries.value.some(item => item.id === deletedId)
+    entries.value = entries.value.filter(item => item.id !== deletedId)
+    if (hadEntry) total.value = Math.max(0, total.value - 1)
+    feedReloadFailed.value = true
+    loadMoreFailed.value = true
+  } finally {
+    loadingMore.value = false
+  }
+}
 
 let feedObserver
 onMounted(async () => {
@@ -278,7 +312,11 @@ async function removeEntry(entry) {
     await ElMessageBox.confirm(`确定删除《${entry.title}》？`, '删除日记', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
     await deleteDiaryEntry(entry.id)
     ElMessage.success('日记已删除')
-    await Promise.all([loadMetadata(), loadEntries(), loadSummary()])
+    await Promise.all([
+      loadMetadata(),
+      isManage.value ? loadEntries() : reloadLoadedFeed(entry.id),
+      loadSummary(),
+    ])
   } catch { /* cancelled or reported by request interceptor */ }
 }
 

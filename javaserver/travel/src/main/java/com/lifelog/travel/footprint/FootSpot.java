@@ -37,4 +37,8 @@ public class FootSpot {
     private String cityName;
     @TableField(exist = false)
     private String provinceName;
+    @TableField(exist = false)
+    private String regionId;
+    @TableField(exist = false)
+    private String cityRegionId;
 }

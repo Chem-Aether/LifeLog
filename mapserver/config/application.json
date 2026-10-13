@@ -11,7 +11,7 @@
   "storage": {
     "data_dir": "data",
     "railway_network": "data/china_railway_network.gpkg",
-    "admin_boundaries": "data/china_admin_boundaries.gpkg",
+    "admin_boundaries": "data/admin_boundaries.gpkg",
     "airports": "data/airports.gpkg",
     "poi": "data/poi.gpkg"
   },

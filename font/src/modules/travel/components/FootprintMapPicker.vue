@@ -53,7 +53,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { forwardGeocode, reverseGeocode } from '@/modules/travel/apis/sysResource.js'
+import { reverseGeocode, searchPoiCatalog } from '@/modules/travel/apis/sysResource.js'
 import { MAP_BASE_URL } from '@/utils/request.js'
 
 const props = defineProps({
@@ -114,10 +114,18 @@ function setCoordinateInputs(longitude, latitude) {
 async function locationAt(longitude, latitude) {
   const response = await reverseGeocode(longitude, latitude)
   const location = response.data
+  const path = location?.path || []
+  const matched = path.at(-1)
+  const names = path.filter(node => node.level > 0).map(node => node.name).filter(Boolean)
+    .reduce((result, name) => {
+      if (result.at(-1) !== name) result.push(name)
+      return result
+    }, [])
   return {
-    adcode: location?.district?.code || '',
-    districtName: location?.district?.name || '',
-    fullName: location?.formattedRegion || ''
+    adcode: matched?.regionCode || '',
+    regionId: matched?.id || '',
+    districtName: matched?.name || '',
+    fullName: names.join('')
   }
 }
 
@@ -162,16 +170,13 @@ async function searchPois(keyword) {
   const requestId = ++searchRequestId
   poiLoading.value = true
   try {
-    const response = await forwardGeocode(text, 'poi', 20)
+    const response = await searchPoiCatalog(text, 20)
     if (requestId !== searchRequestId) return
     poiOptions.value = (response.data || []).map(item => ({
       id: item.id,
-      name: item.name,
+      name: item.nameZh || item.name,
       kind: item.subcategory || item.category || '',
       coordinates: [item.longitude, item.latitude],
-      adcode: item.region?.district?.code || '',
-      districtName: item.region?.district?.name || '',
-      fullName: item.region?.formattedRegion || ''
     }))
   } catch {
     if (requestId === searchRequestId) poiOptions.value = []
@@ -180,19 +185,21 @@ async function searchPois(keyword) {
   }
 }
 
-function selectPoi(id) {
+async function selectPoi(id) {
   const poi = poiOptions.value.find(item => item.id === id)
   if (!poi) return
   const [longitude, latitude] = poi.coordinates.map(Number)
   setCoordinateInputs(Number(longitude.toFixed(7)), Number(latitude.toFixed(7)))
   map.flyTo({ center: [longitude, latitude], zoom: Math.max(map.getZoom(), 13) })
   setMarker(longitude, latitude)
+  let location = { adcode: '', districtName: '', fullName: '' }
+  try {
+    location = await locationAt(longitude, latitude)
+  } catch {}
   emit('pick', {
     longitude: Number(longitude.toFixed(7)),
     latitude: Number(latitude.toFixed(7)),
-    adcode: poi.adcode,
-    districtName: poi.districtName,
-    fullName: poi.fullName,
+    ...location,
     suggestedName: poi.name
   })
 }

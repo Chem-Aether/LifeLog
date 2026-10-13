@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Path, Request, Response
 
 from ..settings import DATA_DIR, TILE_CACHE_SIZE, TILE_MAX_ZOOM, TILE_MIN_ZOOM, load_tile_sources
 from ..tiles.registry import TileSourceRegistry
@@ -27,7 +27,11 @@ def tilejson(request: Request):
 
 
 @router.get("/tiles/{z}/{x}/{y}.mvt", summary="获取矢量瓦片")
-def vector_tile(z: int, x: int, y: int):
+def vector_tile(
+    z: int = Path(description="瓦片缩放级别，支持 0–22"),
+    x: int = Path(description="瓦片横坐标，范围取决于缩放级别 z"),
+    y: int = Path(description="瓦片纵坐标，范围取决于缩放级别 z"),
+):
     if z < 0 or z > 22 or x < 0 or y < 0 or x >= (1 << z) or y >= (1 << z):
         raise HTTPException(400, "Invalid tile coordinate")
     result = service.get(z, x, y)

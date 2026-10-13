@@ -1,11 +1,52 @@
 <template>
   <div v-if="isEditing" v-loading="saving" class="travel-edit-page">
-    <header class="edit-header"><div><el-button text @click="requestClose">返回航班记录</el-button><h1>{{ editItem?.flightId ? '编辑机票记录' : '新增机票记录' }}</h1></div><div class="edit-actions"><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button></div></header>
+    <header class="edit-header">
+      <div><el-button text @click="requestClose">返回航班记录</el-button>
+        <h1>{{ editItem?.flightId ? '编辑机票记录' : '新增机票记录' }}</h1>
+      </div>
+      <div class="edit-actions"><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button
+          type="primary" :loading="saving" @click="saveEdit">保存</el-button></div>
+    </header>
     <section class="edit-panel">
-      <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form"><div class="grid-form">
-        <el-form-item label="航班号"><el-input v-model="editItem.flightNo" /></el-form-item><el-form-item label="航空公司"><el-input v-model="editItem.airline" /></el-form-item><el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item><el-form-item label="机号"><el-input v-model="editItem.aircraftRegistration" /></el-form-item><el-form-item label="机型"><el-input v-model="editItem.aircraftType" /></el-form-item><el-form-item label="飞行距离(km)"><el-input-number v-model="editItem.distanceKm" :min="0" :precision="1" /></el-form-item>
-        <el-form-item label="经停机场"><el-autocomplete v-model="editItem.stopoverDisplay" :fetch-suggestions="queryAirport" placeholder="无则不填" @select="s => handleAirportSelect(s, 'formStopover')" /></el-form-item><el-form-item label="起飞机场"><el-autocomplete v-model="editItem.departureAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formDeparture')" /></el-form-item><el-form-item label="起飞机场航站楼"><el-input v-model="editItem.departureTerminal" /></el-form-item><el-form-item label="登机方式"><el-select v-model="editItem.boardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item><el-form-item label="起飞时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item><el-form-item label="到达机场"><el-autocomplete v-model="editItem.arrivalAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formArrival')" /></el-form-item><el-form-item label="到达机场航站楼"><el-input v-model="editItem.arrivalTerminal" /></el-form-item><el-form-item label="下机方式"><el-select v-model="editItem.deboardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item><el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item><el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
-      </div></el-form>
+      <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form">
+        <section class="form-section">
+          <header class="form-section__heading"><h2>航班信息</h2><span>航班、承运人与机型</span></header>
+          <div class="grid-form">
+            <el-form-item label="航班号"><el-input v-model="editItem.flightNo" /></el-form-item>
+            <el-form-item label="航空公司"><el-input v-model="editItem.airline" /></el-form-item>
+            <el-form-item label="机型"><el-input v-model="editItem.aircraftType" /></el-form-item>
+            <el-form-item label="飞机注册号"><el-input v-model="editItem.aircraftRegistration" /></el-form-item>
+            <el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item>
+            <el-form-item label="飞行距离 (km)"><el-input-number v-model="editItem.distanceKm" :min="0" :precision="1" /></el-form-item>
+          </div>
+        </section>
+        <section class="form-section">
+          <header class="form-section__heading"><h2>行程信息</h2><span>出发与到达</span></header>
+          <div class="route-grid">
+            <div class="route-group">
+              <h3>出发</h3>
+              <el-form-item label="起飞机场"><el-autocomplete v-model="editItem.departureAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formDeparture')" /></el-form-item>
+              <el-form-item label="起飞时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
+              <el-form-item label="出发航站楼"><el-input v-model="editItem.departureTerminal" /></el-form-item>
+              <el-form-item label="登机方式"><el-select v-model="editItem.boardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item>
+            </div>
+            <div class="route-group">
+              <h3>到达</h3>
+              <el-form-item label="到达机场"><el-autocomplete v-model="editItem.arrivalAirportNameDisplay" :fetch-suggestions="queryAirport" @select="s => handleAirportSelect(s, 'formArrival')" /></el-form-item>
+              <el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
+              <el-form-item label="到达航站楼"><el-input v-model="editItem.arrivalTerminal" /></el-form-item>
+              <el-form-item label="下机方式"><el-select v-model="editItem.deboardingMethod" clearable filterable allow-create placeholder="未记录"><el-option label="廊桥" value="廊桥" /><el-option label="摆渡车" value="摆渡车" /><el-option label="远机位步行" value="远机位步行" /><el-option label="其他" value="其他" /></el-select></el-form-item>
+            </div>
+          </div>
+        </section>
+        <section class="form-section">
+          <header class="form-section__heading"><h2>其他信息</h2><span>经停与备注</span></header>
+          <div class="grid-form supplementary-grid">
+            <el-form-item label="经停机场"><el-autocomplete v-model="editItem.stopoverDisplay" :fetch-suggestions="queryAirport" placeholder="无则不填" @select="s => handleAirportSelect(s, 'formStopover')" /></el-form-item>
+            <el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="3" /></el-form-item>
+          </div>
+        </section>
+      </el-form>
     </section>
   </div>
   <div v-else v-loading="loading || saving || deleting" class="flight-manage-page">
@@ -17,35 +58,19 @@
         <el-form-item label="航班号">
           <el-input v-model="queryForm.flightNo" placeholder="请输入航班号" clearable />
         </el-form-item>
-  <el-form-item label="起飞机场">
-          <el-autocomplete
-              v-model="queryForm.departureAirportNameDisplay"
-              :fetch-suggestions="queryAirport"
-              placeholder="起飞机场"
-              @select="(s) => handleAirportSelect(s, 'queryDeparture')"
-          />
+        <el-form-item label="起飞机场">
+          <el-autocomplete v-model="queryForm.departureAirportNameDisplay" :fetch-suggestions="queryAirport"
+            placeholder="起飞机场" @select="(s) => handleAirportSelect(s, 'queryDeparture')" />
         </el-form-item>
         <el-form-item label="到达机场">
-          <el-autocomplete
-              v-model="queryForm.arrivalAirportNameDisplay"
-              :fetch-suggestions="queryAirport"
-              placeholder="到达机场"
-              @select="(s) => handleAirportSelect(s, 'queryArrival')"
-          />
+          <el-autocomplete v-model="queryForm.arrivalAirportNameDisplay" :fetch-suggestions="queryAirport"
+            placeholder="到达机场" @select="(s) => handleAirportSelect(s, 'queryArrival')" />
         </el-form-item>
 
         <el-form-item label="起飞时间">
-          <el-date-picker
-              v-model="queryForm.departureTimeRange"
-              type="datetimerange"
-              format="YYYY/M/D HH:mm"
-              value-format="YYYY-MM-DDTHH:mm"
-              editable
-              range-separator="至"
-              start-placeholder="开始时间"
-              end-placeholder="结束时间"
-              style="width: 360px"
-          />
+          <el-date-picker v-model="queryForm.departureTimeRange" type="datetimerange" format="YYYY/M/D HH:mm"
+            value-format="YYYY-MM-DDTHH:mm" editable range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间"
+            style="width: 360px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :disabled="editIndex !== -1 || loading" @click="doQuery">查询</el-button>
@@ -62,9 +87,10 @@
     </div>
 
     <div class="table-section">
-    <div class="bulk-toolbar">
+      <div class="bulk-toolbar">
         <span>已选择 {{ selectedRows.length }} 条（当前页）</span>
-        <el-button type="danger" plain :disabled="!selectedRows.length || deleting" :loading="deleting" @click="deleteSelected">批量删除</el-button>
+        <el-button type="danger" plain :disabled="!selectedRows.length || deleting" :loading="deleting"
+          @click="deleteSelected">批量删除</el-button>
       </div>
       <el-table ref="tableRef" :data="pageData" stripe @selection-change="selectedRows = $event">
         <el-table-column type="selection" width="48" />
@@ -101,17 +127,10 @@
 
     <!-- 分页 -->
     <div class="pagination-bar">
-    <el-pagination
-        :disabled="editIndex !== -1 || saving || deleting || loading"
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50]"
-        :total="pageInfo.total || 0"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
-        @current-change="loadData"
-        @size-change="handlePageSizeChange"
-    />
+      <el-pagination :disabled="editIndex !== -1 || saving || deleting || loading" v-model:current-page="currentPage"
+        v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" :total="pageInfo.total || 0"
+        layout="total, sizes, prev, pager, next, jumper" background @current-change="loadData"
+        @size-change="handlePageSizeChange" />
     </div>
   </div>
 </template>
@@ -150,11 +169,11 @@ const handleAirportSelect = (suggestion, type) => {
   const name = suggestion?.name || ''
 
   if (type === 'queryDeparture') {
-  queryForm.departureIcao = code
+    queryForm.departureIcao = code
     queryForm.departureAirportNameDisplay = display
   }
   if (type === 'queryArrival') {
-  queryForm.arrivalIcao = code
+    queryForm.arrivalIcao = code
     queryForm.arrivalAirportNameDisplay = display
   }
 
@@ -162,19 +181,19 @@ const handleAirportSelect = (suggestion, type) => {
   if (!item) return
 
   if (type === 'formDeparture') {
-  // 提交后端：ICAO
-  item.departureIcao = code
-  // 展示/入库中文名
-  item.departureAirportName = name
+    // 提交后端：ICAO
+    item.departureIcao = code
+    // 展示/入库中文名
+    item.departureAirportName = name
     item.departureAirportNameDisplay = display
   }
   if (type === 'formArrival') {
-  item.arrivalIcao = code
-  item.arrivalAirportName = name
+    item.arrivalIcao = code
+    item.arrivalAirportName = name
     item.arrivalAirportNameDisplay = display
   }
   if (type === 'formStopover') {
-  // 表结构：经停机场只存中文
+    // 表结构：经停机场只存中文
     item.stopovers = [{ sequence: 1, icao: code, name }]
     item.stopoverDisplay = display
   }
@@ -217,13 +236,13 @@ watch(() => route.fullPath, async () => {
 // 用 ICAO 回填显示文本（列表加载/刷新时）
 const fillAirportDisplays = (list = []) => {
   return (list || []).map(item => {
-  // 入库字段：airport 是中文名，icao 是码；展示两者组合
-  item.departureAirportNameDisplay = item.departureAirportName && item.departureIcao ? `${item.departureAirportName} (${item.departureIcao})` : (item.departureAirportName || item.departureIcao || '')
-  item.arrivalAirportNameDisplay = item.arrivalAirportName && item.arrivalIcao ? `${item.arrivalAirportName} (${item.arrivalIcao})` : (item.arrivalAirportName || item.arrivalIcao || '')
+    // 入库字段：airport 是中文名，icao 是码；展示两者组合
+    item.departureAirportNameDisplay = item.departureAirportName && item.departureIcao ? `${item.departureAirportName} (${item.departureIcao})` : (item.departureAirportName || item.departureIcao || '')
+    item.arrivalAirportNameDisplay = item.arrivalAirportName && item.arrivalIcao ? `${item.arrivalAirportName} (${item.arrivalIcao})` : (item.arrivalAirportName || item.arrivalIcao || '')
 
-  // 经停机场表里只有中文，展示直接用中文即可
-  const stopover = item.stopovers?.[0]
-  item.stopoverDisplay = stopover ? `${stopover.name || ''}${stopover.icao ? ` (${stopover.icao})` : ''}` : ''
+    // 经停机场表里只有中文，展示直接用中文即可
+    const stopover = item.stopovers?.[0]
+    item.stopoverDisplay = stopover ? `${stopover.name || ''}${stopover.icao ? ` (${stopover.icao})` : ''}` : ''
     return item
   })
 }
@@ -234,25 +253,25 @@ const loadData = async () => {
   selectedRows.value = []
   tableRef.value?.clearSelection()
   try {
-  const departureTimeStart = Array.isArray(queryForm.departureTimeRange)
-    ? queryForm.departureTimeRange[0]
-    : null
-  const departureTimeEnd = Array.isArray(queryForm.departureTimeRange)
-    ? queryForm.departureTimeRange[1]
-    : null
+    const departureTimeStart = Array.isArray(queryForm.departureTimeRange)
+      ? queryForm.departureTimeRange[0]
+      : null
+    const departureTimeEnd = Array.isArray(queryForm.departureTimeRange)
+      ? queryForm.departureTimeRange[1]
+      : null
 
-  const res = await getFlightList({
-    pageNum: currentPage.value,
-    pageSize: pageSize.value,
-    flightNo: queryForm.flightNo,
-  departureIcao: queryForm.departureIcao,
-  arrivalIcao: queryForm.arrivalIcao,
-    departureTimeStart,
-    departureTimeEnd
-  })
-  if (sequence !== loadSequence) return
-  flightList.value = fillAirportDisplays(res.data || [])
-  pageInfo.value = res.page || { total: (res.data || []).length }
+    const res = await getFlightList({
+      pageNum: currentPage.value,
+      pageSize: pageSize.value,
+      flightNo: queryForm.flightNo,
+      departureIcao: queryForm.departureIcao,
+      arrivalIcao: queryForm.arrivalIcao,
+      departureTimeStart,
+      departureTimeEnd
+    })
+    if (sequence !== loadSequence) return
+    flightList.value = fillAirportDisplays(res.data || [])
+    pageInfo.value = res.page || { total: (res.data || []).length }
   } catch (error) {
     if (sequence === loadSequence) ElMessage.error(error?.response?.data?.message || '航班记录加载失败')
   } finally {
@@ -457,15 +476,47 @@ const deleteSelected = async () => {
 </script>
 
 <style scoped>
-.travel-edit-page { display:flex; flex-direction:column; gap:16px; min-height:100%; color:#1d3035; }
-.edit-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 0 14px; border-bottom:1px solid #e5ebec; }
-.edit-header h1 { margin:6px 0 0; font-size:22px; font-weight:700; }
-.edit-actions { display:flex; align-items:center; gap:8px; }
-.edit-panel { padding:20px; background:#fff; border:1px solid #e5ebec; border-radius:7px; }
+.travel-edit-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  color: #1d3035;
+}
+
+.edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid #e5ebec;
+}
+
+.edit-header h1 {
+  margin: 6px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-panel {
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #e5ebec;
+  border-radius: 7px;
+}
+
 .flight-manage-page {
   width: 100%;
   margin: 0 auto;
 }
+
 .page-title {
   margin-bottom: 18px;
   color: #1d3035;
@@ -473,9 +524,11 @@ const deleteSelected = async () => {
   font-weight: 720;
   line-height: 1.25;
 }
+
 .query-card {
   margin-bottom: 16px;
 }
+
 .tool-bar {
   display: flex;
   align-items: center;
@@ -487,17 +540,154 @@ const deleteSelected = async () => {
   border: 1px solid #e5ebec;
   border-radius: 6px;
 }
-.bulk-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; color: #667085; font-size: 13px; }
-.pagination-bar { display: flex; justify-content: center; margin-top: 20px; padding-bottom: 12px; }
-.record-form .grid-form { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 16px; }
-.record-form :deep(.el-form-item) { margin-bottom: 10px; }
-.record-form :deep(.el-form-item__content > .el-input), .record-form :deep(.el-form-item__content > .el-autocomplete), .record-form :deep(.el-form-item__content > .el-date-editor), .record-form :deep(.el-form-item__content > .el-select), .record-form :deep(.el-form-item__content > .el-input-number) { width: 100%; }
-.wide-field { grid-column: 1 / -1; }
+
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-bottom: 12px;
+}
+
+.form-section + .form-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #edf1f2;
+}
+
+.form-section__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.form-section__heading h2 {
+  margin: 0;
+  color: #24383d;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.form-section__heading span {
+  color: #89999d;
+  font-size: 12px;
+}
+
+.record-form .grid-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.route-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.route-group {
+  min-width: 0;
+  padding: 14px 16px 2px;
+  background: #f7f9f9;
+  border: 1px solid #e8eeee;
+  border-radius: 6px;
+}
+
+.route-group h3 {
+  margin: 0 0 12px;
+  color: #278e8d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.supplementary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.record-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.record-form :deep(.el-form-item__content > .el-input),
+.record-form :deep(.el-form-item__content > .el-autocomplete),
+.record-form :deep(.el-form-item__content > .el-date-editor),
+.record-form :deep(.el-form-item__content > .el-select),
+.record-form :deep(.el-form-item__content > .el-input-number) {
+  width: 100%;
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 960px) {
+  .record-form .grid-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
-  .page-title { font-size: 21px; margin-bottom: 16px; }
-  .tool-bar { align-items: stretch; flex-direction: column; }
-  .tool-bar > :deep(.el-button), .tool-bar > :deep(.travel-data-tools) { width: 100%; margin: 0; }
-  .pagination-bar { justify-content: flex-start; overflow-x: auto; }
-  .pagination-bar :deep(.el-pagination) { flex-wrap: nowrap; min-width: max-content; }
+  .edit-panel {
+    padding: 16px;
+  }
+
+  .route-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-title {
+    font-size: 21px;
+    margin-bottom: 16px;
+  }
+
+  .tool-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tool-bar> :deep(.el-button),
+  .tool-bar> :deep(.travel-data-tools) {
+    width: 100%;
+    margin: 0;
+  }
+
+  .pagination-bar {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .pagination-bar :deep(.el-pagination) {
+    flex-wrap: nowrap;
+    min-width: max-content;
+  }
+}
+
+@media (max-width: 520px) {
+  .record-form .grid-form,
+  .supplementary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .edit-header {
+    align-items: flex-start;
+  }
+
+  .edit-actions {
+    gap: 4px;
+  }
+
+  .route-group {
+    padding: 12px 12px 2px;
+  }
 }
 </style>

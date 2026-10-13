@@ -9,8 +9,11 @@ import com.lifelog.travel.train.TrainRecord;
 import com.lifelog.travel.train.TrainRecordMapper;
 import com.lifelog.travel.train.TrainTicketService;
 import com.lifelog.travel.train.TrainWaypoint;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -20,6 +23,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class TravelTicketQueryService {
+    private static final Logger log = LoggerFactory.getLogger(TravelTicketQueryService.class);
     private final TrainRecordMapper trainMapper;
     private final FlightRecordMapper flightMapper;
     private final TrainTicketService trainService;
@@ -76,7 +80,7 @@ public class TravelTicketQueryService {
         flights.forEach(flightService::hydrate);
         Set<String> codes = flights.stream().flatMap(item -> java.util.stream.Stream.of(item.getDepartureIcao(), item.getArrivalIcao()))
                 .filter(Objects::nonNull).collect(Collectors.toSet());
-        Map<String,GeoReferenceClient.GeoAirport> airports = geoClient.airportsByIcao(codes);
+        Map<String,GeoReferenceClient.GeoAirport> airports = lookupAirports(codes);
         return flights.stream().map(item -> {
             Map<String,Object> row = new LinkedHashMap<>();
             row.put("ticketType", "flight"); row.put("flightId", item.getFlightId()); row.put("Number", item.getFlightNo());
@@ -89,6 +93,15 @@ public class TravelTicketQueryService {
                     detail("机型", Objects.toString(item.getAircraftType(), "")), detail("座位", Objects.toString(item.getSeatNo(), ""))));
             return row;
         }).toList();
+    }
+
+    private Map<String, GeoReferenceClient.GeoAirport> lookupAirports(Set<String> codes) {
+        try {
+            return geoClient.airportsByIcao(codes);
+        } catch (RestClientException exception) {
+            log.warn("Mapserver unavailable; flight tickets will omit airport coordinates", exception);
+            return Map.of();
+        }
     }
 
     private Map<String,Object> trainSummary(Integer year) {

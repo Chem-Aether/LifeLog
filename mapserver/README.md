@@ -9,7 +9,7 @@
 | 数据文件 | 内容 | 主要使用方 |
 | --- | --- | --- |
 | `data/world.pmtiles`、`data/china.pmtiles` | 矢量地图瓦片 | 前端底图 |
-| `data/china_admin_boundaries.gpkg` | 行政区边界及层级关系 | 地区识别、范围显示 |
+| `data/admin_boundaries.gpkg` | 行政区树节点及边界 | 地区识别、范围显示 |
 | `data/china_railway_network.gpkg` | 铁路线路及站点空间数据 | 铁路路线与站点检索 |
 | `data/airports.gpkg` | 机场点数据 | 航班机场识别 |
 | `data/poi.gpkg` | POI 数据与检索索引 | 地点搜索 |
@@ -31,7 +31,7 @@ python -m venv .venv
 
 ## 接口范围
 
-主要接口包括 `/api/tiles`、`/api/geocode`、`/api/regions`、`/api/pois`、`/api/airports` 和 `/api/railway`。接口字段以 `/docs` 和路由定义为准。mapserver 不负责车票、航班、足迹的 CRUD；这些记录属于 `travel` 模块。
+主要接口包括 `/api/tiles`、`/api/regions`（`/reverse`、`/reverse/batch`、`/search`、`/{node_id}`、`/boundaries`）。行政区详情、搜索和经纬度反查统一返回祖先到目标节点的 `path` 数组。其他接口包括 `/api/pois`、`/api/airports` 和 `/api/railway`。mapserver 不负责车票、航班、足迹的 CRUD；这些记录属于 `travel` 模块。
 
 ## 数据来源与署名
 

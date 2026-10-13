@@ -3,7 +3,6 @@ import re
 import sqlite3
 
 from ..utils.database import all_rows, one
-from .admin_boundaries import reverse
 
 
 POI_FIELDS = """
@@ -52,20 +51,6 @@ def search_pois(keyword, category=None, limit=20):
         (*parameters, category, category, keyword, keyword, prefix, prefix,
          f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", limit),
     )
-
-
-def forward_pois(keyword, limit):
-    results = []
-    for poi in search_pois(keyword, limit=limit):
-        location = reverse(poi["longitude"], poi["latitude"])
-        results.append({
-            "type": "poi", "id": f"poi:{poi['id']}", "name": poi["nameZh"] or poi["name"],
-            "displayName": poi["address"] or poi["nameZh"] or poi["name"],
-            "longitude": poi["longitude"], "latitude": poi["latitude"], "category": poi["category"],
-            "subcategory": poi["subcategory"], "address": poi["address"],
-            "region": {key: location[key] for key in ("province", "city", "district", "formattedRegion")},
-        })
-    return results
 
 
 def _distance(longitude, latitude, other_longitude, other_latitude):

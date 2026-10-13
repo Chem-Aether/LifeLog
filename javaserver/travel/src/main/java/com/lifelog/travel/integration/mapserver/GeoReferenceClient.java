@@ -41,7 +41,7 @@ public class GeoReferenceClient {
     public Map<String, GeoLocation> reverseGeocodeBatch(Collection<GeoPoint> points) {
         if (points == null || points.isEmpty()) return Collections.emptyMap();
         ApiResponse<List<GeoLocation>> response = restClient.post()
-                .uri("/api/geocode/reverse/batch")
+                .uri("/api/regions/reverse/batch")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
                 .body(Map.of("points", points))
@@ -58,13 +58,13 @@ public class GeoReferenceClient {
     public record GeoAirport(String icao, String iata, String name, String city, String attr,
                              Double longitude, Double latitude) {}
 
-    public record GeoRegion(String code, String name, Integer level, String type, String parentCode,
-                            String fullName) {}
+    public record GeoRegion(String id, String parentId, String countryCode, String regionCode,
+                            String name, Integer level, String type) {}
 
     public record GeoPoint(String id, Double longitude, Double latitude) {}
 
-    public record GeoLocation(String id, Double longitude, Double latitude, GeoRegion province, GeoRegion city,
-                              GeoRegion district, String formattedRegion, String dataVersion) {}
+    public record GeoLocation(String id, Double longitude, Double latitude, List<GeoRegion> path,
+                              String dataVersion) {}
 
     private record ApiResponse<T>(String msg, T data) {}
 }

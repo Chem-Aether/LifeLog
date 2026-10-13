@@ -561,13 +561,6 @@ function filterByYear(records, timeGetter) {
   return records.filter(record => String(timeGetter(record) || '').startsWith(year))
 }
 
-function getCityCode(regionCode) {
-  const code = String(regionCode || '')
-  if (!code) return null
-  if (code.length < 6) return code
-  return ['11', '12', '31', '50'].includes(code.slice(0, 2)) ? code.slice(0, 2) : code.slice(0, 4)
-}
-
 function getPlaceKey(item) {
   if (item.footprintId != null) return `id:${item.footprintId}`
   return `${item.placeName || ''}:${item.longitude || ''}:${item.latitude || ''}`
@@ -582,24 +575,23 @@ async function updateTravelDataByYear() {
   flightFeatures = lineCollection(filterByYear(flightRecords, item => getTicketTime(item, 'flight')), 'flight')
   trainFeatures = lineCollection(filterByYear(trainRecords, item => getTicketTime(item, 'train')), 'train')
 
-  const travelCityCodes = new Set(visibleFootprintRecords
+  const travelCityIds = new Set(visibleFootprintRecords
     .filter(item => item.visitType !== 'transit')
-    .map(item => getCityCode(item.regionCode)).filter(Boolean))
-  const transitCityCodes = new Set(visibleFootprintRecords
+    .map(item => item.cityRegionId).filter(Boolean))
+  const transitCityIds = new Set(visibleFootprintRecords
     .filter(item => item.visitType === 'transit')
-    .map(item => getCityCode(item.regionCode)).filter(Boolean))
-  const cityCodes = [...new Set([...travelCityCodes, ...transitCityCodes])]
+    .map(item => item.cityRegionId).filter(Boolean))
+  const cityIds = [...new Set([...travelCityIds, ...transitCityIds])]
   let nextRegions = EMPTY_COLLECTION
   try {
-    nextRegions = cityCodes.length ? await getRegionBoundaries(cityCodes) : EMPTY_COLLECTION
+    nextRegions = cityIds.length ? await getRegionBoundaries(cityIds) : EMPTY_COLLECTION
     nextRegions = {
       ...nextRegions,
       features: (nextRegions.features || []).map(feature => {
-        const code = String(feature.properties?.code || '')
-        const cityCode = getCityCode(code)
+        const id = String(feature.properties?.id || feature.id || '')
         return {
           ...feature,
-          properties: { ...feature.properties, visitType: travelCityCodes.has(code) || travelCityCodes.has(cityCode) ? 'travel' : 'transit' }
+          properties: { ...feature.properties, visitType: travelCityIds.has(id) ? 'travel' : 'transit' }
         }
       })
     }
@@ -618,8 +610,8 @@ async function updateTravelDataByYear() {
     }))
   }
   emit('footprint-summary', {
-    cities: travelCityCodes.size,
-    transitCities: [...transitCityCodes].filter(code => !travelCityCodes.has(code)).length,
+    cities: travelCityIds.size,
+    transitCities: [...transitCityIds].filter(id => !travelCityIds.has(id)).length,
     places: new Set(visibleFootprintRecords.filter(item => item.visitType !== 'transit').map(getPlaceKey)).size
   })
   renderFootprintMarkers()

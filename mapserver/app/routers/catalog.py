@@ -1,35 +1,32 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 
 from ..utils.database import all_rows, one
-from ..utils.models import ValuesRequest
 from ..utils.responses import payload
-from ..services import airports as airport_service, catalog
+from ..services import catalog
 
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
 
-@router.get("/airports/search", summary="搜索机场")
-def airports(keyword: str = "", limit: int = Query(20, ge=1, le=50)):
-    return payload(airport_service.search(keyword.strip(), limit))
-
-
-@router.post("/airports/by-codes", summary="根据 ICAO/IATA 代码查询机场(可批量)")
-def airports_by_codes(body: ValuesRequest):
-    return payload(airport_service.by_codes(body.codes))
-
-
 @router.get("/pois/search", summary="搜索兴趣点")
-def pois(q: str | None = None, keyword: str | None = None, category: str | None = None, limit: int = Query(20, ge=1, le=100)):
+def pois(
+    q: str | None = Query(None, description="兴趣点名称、别名或地址关键词"),
+    keyword: str | None = Query(None, description="关键词备用参数；同时提供 q 时优先使用 q"),
+    category: str | None = Query(None, description="按兴趣点类别筛选，例如 tourism、amenity"),
+    limit: int = Query(20, ge=1, le=100, description="最多返回的兴趣点数量，范围 1–100"),
+):
     return payload(catalog.search_pois((q or keyword or "").strip(), category, limit))
 
 
 @router.get("/pois/nearby", summary="查询附近兴趣点")
 def nearby(
-    longitude: float | None = None, latitude: float | None = None,
-    lng: float | None = None, lat: float | None = None,
-    radius: float = Query(5000, ge=50, le=100000), category: str | None = None,
-    limit: int = Query(20, ge=1, le=100),
+    longitude: float | None = Query(None, description="中心点经度，范围 -180 至 180"),
+    latitude: float | None = Query(None, description="中心点纬度，范围 -90 至 90"),
+    lng: float | None = Query(None, description="longitude 的简写；未提供 longitude 时使用"),
+    lat: float | None = Query(None, description="latitude 的简写；未提供 latitude 时使用"),
+    radius: float = Query(5000, ge=50, le=100000, description="搜索半径，单位米，范围 50–100000"),
+    category: str | None = Query(None, description="按兴趣点类别筛选"),
+    limit: int = Query(20, ge=1, le=100, description="最多返回的兴趣点数量，范围 1–100"),
 ):
     longitude = longitude if longitude is not None else lng
     latitude = latitude if latitude is not None else lat
@@ -47,7 +44,7 @@ def poi_stats():
 
 
 @router.get("/pois/{identifier}", summary="根据 ID 查询兴趣点")
-def poi(identifier: int):
+def poi(identifier: int = Path(description="兴趣点唯一 ID")):
     result = catalog.poi_by_id(identifier)
     if not result:
         raise HTTPException(404, "POI 不存在")

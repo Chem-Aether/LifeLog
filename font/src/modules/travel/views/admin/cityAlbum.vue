@@ -56,14 +56,16 @@
         </header>
 
         <div v-if="activeCity.photos.length" class="photo-grid">
-          <article v-for="photo in activeCity.photos" :key="photo.key" class="photo-tile">
+          <article v-for="photo in activeCity.photos" :key="photo.key" class="photo-tile" :class="{ 'is-loaded': loadedPhotoKeys.has(photo.key) }">
             <el-image
               :src="photo.url"
               :preview-src-list="previewUrls"
               :initial-index="photo.index"
+              hide-on-click-modal
               :alt="`${photo.placeName}旅行照片`"
               fit="cover"
               loading="lazy"
+              @load="markPhotoLoaded(photo.key)"
             >
               <template #error><div class="photo-error"><el-icon><Picture /></el-icon></div></template>
             </el-image>
@@ -91,6 +93,7 @@ import { mediaUrl } from '@/modules/travel/apis/media.js'
 
 const records = ref([])
 const loading = ref(false)
+const loadedPhotoKeys = ref(new Set())
 const searchText = ref('')
 const selectedYear = ref('all')
 const activeCityKey = ref('')
@@ -148,6 +151,11 @@ const cityCount = computed(() => cities.value.filter(city => !city.unassigned).l
 const placeCount = computed(() => cities.value.reduce((sum, city) => sum + city.places.size, 0))
 const photoCount = computed(() => cities.value.reduce((sum, city) => sum + city.photos.length, 0))
 
+function markPhotoLoaded(key) {
+  if (loadedPhotoKeys.value.has(key)) return
+  loadedPhotoKeys.value = new Set(loadedPhotoKeys.value).add(key)
+}
+
 watch(activeCity, city => { if (city) activeCityKey.value = city.key }, { immediate: true })
 
 onMounted(async () => {
@@ -174,7 +182,11 @@ onMounted(async () => {
 .album-toolbar { display:flex; align-items:center; gap:9px; margin-bottom:17px; padding:11px 12px; border:1px solid var(--line); border-radius:7px; background:#fff; }
 .album-search { width:min(300px, 100%); }.year-select { width:140px; }
 .album-layout { display:grid; grid-template-columns:250px minmax(0,1fr); gap:22px; align-items:start; }
-.city-navigation { position:sticky; top:20px; max-height:calc(100vh - 40px); overflow:auto; padding:12px 9px; border:1px solid var(--line); border-radius:7px; background:#fff; }
+.city-navigation { position:sticky; top:20px; max-height:calc(100vh - 40px); overflow:auto; padding:12px 9px; border:1px solid var(--line); border-radius:7px; background:#fff; scrollbar-width:thin; scrollbar-color:rgba(37,139,136,.38) transparent; }
+.city-navigation::-webkit-scrollbar { width:6px; height:6px; }
+.city-navigation::-webkit-scrollbar-track { background:transparent; }
+.city-navigation::-webkit-scrollbar-thumb { border:1px solid #fff; border-radius:6px; background:rgba(37,139,136,.38); }
+.city-navigation::-webkit-scrollbar-thumb:hover { background:rgba(37,139,136,.68); }
 .city-navigation-heading { display:flex; align-items:center; justify-content:space-between; margin:2px 7px 9px; color:#86959b; font-size:11px; font-weight:650; }
 .city-navigation-heading span { color:#9aabad; font-weight:500; }
 .city-option { display:flex; width:100%; min-height:55px; align-items:center; gap:10px; padding:7px 8px; border:0; border-radius:5px; background:transparent; color:var(--ink); text-align:left; cursor:pointer; }
@@ -187,7 +199,7 @@ onMounted(async () => {
 .gallery-count { display:flex; flex-direction:column; align-items:flex-end; color:#8a999e; font-size:10px; }.gallery-count strong { color:#315b5a; font-size:18px; }
 .photo-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; }
 .photo-tile { position:relative; min-width:0; overflow:hidden; aspect-ratio:1; border:1px solid #e2e9e9; border-radius:5px; background:#e8efee; }
-.photo-tile :deep(.el-image) { display:block; width:100%; height:100%; cursor:zoom-in; }.photo-tile :deep(.el-image__inner) { transition:transform .2s ease; }.photo-tile:hover :deep(.el-image__inner) { transform:scale(1.035); }
+.photo-tile :deep(.el-image) { display:block; width:100%; height:100%; cursor:zoom-in; }.photo-tile :deep(.el-image__inner) { opacity:0; transition:opacity .32s ease,transform .24s ease; }.photo-tile.is-loaded :deep(.el-image__inner) { opacity:1; }.photo-tile:hover :deep(.el-image__inner) { transform:scale(1.035); }
 .photo-caption { position:absolute; inset:auto 0 0; display:flex; flex-direction:column; gap:3px; padding:25px 9px 8px; background:linear-gradient(transparent,rgba(9,23,25,.76)); color:#fff; pointer-events:none; }.photo-caption strong,.photo-caption span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.photo-caption strong { font-size:11px; font-weight:650; }.photo-caption span { color:rgba(255,255,255,.78); font-size:9px; }
 .photo-error,.gallery-empty,.empty-state { display:flex; align-items:center; justify-content:center; flex-direction:column; color:#829397; }.photo-error { width:100%; height:100%; color:#91a6a6; }.gallery-empty { min-height:250px; gap:9px; border:1px dashed #cedbdb; border-radius:6px; background:#fbfcfc; font-size:12px; }.gallery-empty .el-icon,.empty-state .el-icon { color:#68a6a2; font-size:26px; }
 .empty-state { min-height:330px; gap:9px; border:1px solid var(--line); border-radius:7px; background:#fff; text-align:center; }.empty-state strong { color:#40565b; font-size:14px; }.empty-state span { color:#87969b; font-size:11px; }
@@ -197,9 +209,10 @@ onMounted(async () => {
   .page-header { align-items:flex-start; flex-direction:column; gap:10px; }.album-summary { gap:13px; }
   .album-toolbar { align-items:stretch; }.album-search { min-width:0; flex:1; }.year-select { flex:0 0 124px; }
   .album-layout { grid-template-columns:minmax(0,1fr); gap:14px; }
-  .city-navigation { position:static; display:flex; max-height:none; gap:5px; overflow-x:auto; padding:8px; }.city-navigation-heading { display:none; }
+  .city-navigation { position:static; display:flex; max-height:none; gap:5px; overflow-x:auto; padding:8px; scrollbar-width:thin; }.city-navigation::-webkit-scrollbar { height:4px; }.city-navigation-heading { display:none; }
   .city-option { width:auto; min-width:145px; flex:0 0 auto; }.city-option-arrow { display:none; }
   .gallery-heading { margin-bottom:10px; }.photo-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
 }
 @media(max-width:430px) { .photo-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.album-summary { width:100%; justify-content:space-between; }.album-toolbar { flex-wrap:wrap; }.album-search { flex-basis:100%; }.year-select { width:100%; flex-basis:100%; } }
+@media(prefers-reduced-motion:reduce) { .photo-tile :deep(.el-image__inner) { transition:none; } }
 </style>

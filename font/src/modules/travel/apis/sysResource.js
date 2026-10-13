@@ -4,12 +4,12 @@ export const searchAirports = (keyword, limit = 20) => mapRequest.get('/api/airp
   params: { keyword, limit },
 })
 
-export const forwardGeocode = (keyword, type = 'all', limit = 20) => mapRequest.get('/api/geocode/forward', {
-  params: { q: keyword, type, limit },
+export const searchPoiCatalog = (keyword, limit = 20) => mapRequest.get('/api/pois/search', {
+  params: { q: keyword, limit },
 })
 
-export const reverseGeocode = (longitude, latitude) => mapRequest.get('/api/geocode/reverse', {
+export const reverseGeocode = (longitude, latitude) => mapRequest.get('/api/regions/reverse', {
   params: { longitude, latitude },
 })
 
-export const getRegionBoundaries = codes => mapRequest.post('/api/regions/boundaries/by-codes', { codes })
+export const getRegionBoundaries = ids => mapRequest.post('/api/regions/boundaries', { ids })

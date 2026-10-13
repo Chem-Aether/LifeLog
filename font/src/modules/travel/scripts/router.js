@@ -23,6 +23,7 @@ export default [
             { path: 'footprint', component: () => import('../views/admin/footprint.vue'), },
             { path: 'footprint/edit/:id?', name: 'TravelFootprintEdit', component: () => import('../views/admin/footprint.vue'), },
             { path: 'album', name: 'TravelCityAlbum', component: () => import('../views/admin/cityAlbum.vue'), },
+            { path: 'statistics', name: 'TravelStatistics', component: () => import('../views/admin/statistics.vue'), },
         ]
     }
 ]

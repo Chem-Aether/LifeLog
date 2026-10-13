@@ -5,15 +5,19 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lifelog.travel.integration.mapserver.GeoReferenceClient;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
 
 @Service
 public class FootSpotService {
+    private static final Logger log = LoggerFactory.getLogger(FootSpotService.class);
     private final FootSpotMapper mapper;
     private final GeoReferenceClient geoClient;
     private final ObjectMapper objectMapper;
@@ -30,16 +34,42 @@ public class FootSpotService {
                 .filter(item -> item.getLongitude() != null && item.getLatitude() != null)
                 .map(item -> new GeoReferenceClient.GeoPoint(String.valueOf(item.getFootprintId()), item.getLongitude().doubleValue(), item.getLatitude().doubleValue()))
                 .toList();
-        Map<String, GeoReferenceClient.GeoLocation> regions = geoClient.reverseGeocodeBatch(points);
+        Map<String, GeoReferenceClient.GeoLocation> regions = reverseGeocode(points);
         spots.forEach(item -> {
             GeoReferenceClient.GeoLocation location = regions.get(String.valueOf(item.getFootprintId()));
-            item.setRegionName(location == null || location.formattedRegion() == null ? "" : location.formattedRegion());
-            if (location != null) {
-                GeoReferenceClient.GeoRegion region = location.district() != null ? location.district() : location.city();
-                item.setRegionCode(region == null ? null : region.code());
-            }
+            List<GeoReferenceClient.GeoRegion> path = location == null || location.path() == null ? List.of() : location.path();
+            GeoReferenceClient.GeoRegion matched = path.isEmpty() ? null : path.get(path.size() - 1);
+            item.setRegionName(formatRegionPath(path));
+            GeoReferenceClient.GeoRegion city = path.stream().filter(region -> region.level() != null && region.level() == 2)
+                    .findFirst().orElse(matched != null && matched.level() != null && matched.level() > 0 ? matched : null);
+            item.setCityName(city == null ? null : city.name());
+            item.setCityRegionId(city == null ? null : city.id());
+            item.setProvinceName(path.stream().filter(region -> region.level() != null && region.level() == 1)
+                    .map(GeoReferenceClient.GeoRegion::name).findFirst().orElse(null));
+            item.setRegionCode(matched == null ? null : matched.regionCode());
+            item.setRegionId(matched == null ? null : matched.id());
         });
         return spots;
+    }
+
+    private String formatRegionPath(List<GeoReferenceClient.GeoRegion> path) {
+        StringBuilder name = new StringBuilder();
+        String previous = null;
+        for (GeoReferenceClient.GeoRegion region : path) {
+            if (region.level() == null || region.level() == 0 || !StringUtils.hasText(region.name())) continue;
+            if (!region.name().equals(previous)) name.append(region.name());
+            previous = region.name();
+        }
+        return name.toString();
+    }
+
+    private Map<String, GeoReferenceClient.GeoLocation> reverseGeocode(List<GeoReferenceClient.GeoPoint> points) {
+        try {
+            return geoClient.reverseGeocodeBatch(points);
+        } catch (RestClientException exception) {
+            log.warn("Mapserver unavailable; returning footprints without administrative regions", exception);
+            return Map.of();
+        }
     }
 
     @Transactional

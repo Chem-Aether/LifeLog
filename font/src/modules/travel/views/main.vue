@@ -16,6 +16,7 @@
         <p>旅行浏览</p>
         <router-link to="/travel/map"><el-icon><MapLocation /></el-icon><span>旅行地图<small>路线与地点总览</small></span></router-link>
         <router-link to="/travel/admin/album"><el-icon><Picture /></el-icon><span>城市图册<small>按城市浏览旅行照片</small></span></router-link>
+        <router-link to="/travel/admin/statistics"><el-icon><DataAnalysis /></el-icon><span>旅行统计<small>探索出行数据</small></span></router-link>
         <p>数据管理</p>
         <router-link to="/travel/admin/trainTicket"><el-icon><Tickets /></el-icon><span>铁路行程<small>车票与途经站</small></span></router-link>
         <router-link to="/travel/admin/flightTicket"><el-icon><Position /></el-icon><span>航空行程<small>航班与里程记录</small></span></router-link>
@@ -34,13 +35,13 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Close, Download, HomeFilled, LocationInformation, MapLocation, Menu, Picture, Position, Tickets } from '@element-plus/icons-vue'
+import { Close, DataAnalysis, Download, HomeFilled, LocationInformation, MapLocation, Menu, Picture, Position, Tickets } from '@element-plus/icons-vue'
 import { exportTravelData } from '@/modules/travel/apis/travel.js'
 
 const route = useRoute()
 const navOpen = ref(false)
 const exporting = ref(false)
-const currentSection = computed(() => route.path.includes('trainTicket') ? '铁路行程' : route.path.includes('flightTicket') ? '航空行程' : route.path.includes('/album') ? '城市图册' : '旅行足迹')
+const currentSection = computed(() => route.path.includes('trainTicket') ? '铁路行程' : route.path.includes('flightTicket') ? '航空行程' : route.path.includes('/album') ? '城市图册' : route.path.includes('/statistics') ? '旅行统计' : '旅行足迹')
 watch(() => route.path, () => { navOpen.value = false })
 
 async function exportAll() {
