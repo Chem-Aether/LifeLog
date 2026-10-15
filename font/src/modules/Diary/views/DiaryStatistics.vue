@@ -44,8 +44,10 @@ import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { Calendar, LocationInformation, Notebook, Picture } from '@element-plus/icons-vue'
 import { getDiaryEntries, getDiaryYears } from '../apis/diary.js'
+import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
 const router = useRouter()
+const heatmapPalette = getCssThemePalette('diary', 5)
 const currentYear = new Date().getFullYear()
 const year = ref(currentYear)
 const years = ref([currentYear])
@@ -93,7 +95,7 @@ function renderCharts() {
   calendarChart.setOption({
     ...chartBase,
     tooltip: { borderWidth: 0, backgroundColor: '#283e40', textStyle: { color: '#fff' }, formatter: params => `${params.value[0]} · ${params.value[1]} 篇` },
-    visualMap: { show: false, min: 0, max: Math.max(4, ...dailyCounts.value.values()), inRange: { color: ['#edf2ef', '#c6dfd4', '#89bd9f', '#4c9579', '#286857'] } },
+    visualMap: { show: false, min: 0, max: Math.max(4, ...dailyCounts.value.values()), inRange: { color: heatmapPalette } },
     calendar: { top: 18, left: 34, right: 12, cellSize: ['auto', 14], range: String(year.value), itemStyle: { borderWidth: 3, borderColor: '#fff', color: '#edf2ef' }, splitLine: { show: false }, yearLabel: { show: false }, monthLabel: { color: '#7b8c89', fontSize: 10, nameMap: 'cn' }, dayLabel: { firstDay: 1, color: '#8b9994', fontSize: 9, nameMap: 'cn' } },
     series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: dayData }],
   }, true)
@@ -110,7 +112,7 @@ function renderCharts() {
     grid: { top: 22, right: 10, bottom: 25, left: 30 },
     xAxis: { type: 'category', data: monthly.map((_, index) => `${index + 1}月`), axisTick: { show: false }, axisLine: { lineStyle: { color: '#e3e9e5' } }, axisLabel: { color: '#85928c', fontSize: 10 } },
     yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf1ed', type: 'dashed' } }, axisLabel: { color: '#a0aaa4', fontSize: 9 } },
-    series: [{ type: 'bar', data: monthly, barMaxWidth: 22, itemStyle: { color: '#78aa91', borderRadius: [4, 4, 0, 0] }, showBackground: true, backgroundStyle: { color: '#f4f6f3', borderRadius: [4, 4, 0, 0] } }],
+    series: [{ type: 'bar', data: monthly, barMaxWidth: 22, itemStyle: { color: getCssThemeColor('--diary-chart-bar'), borderRadius: [4, 4, 0, 0] }, showBackground: true, backgroundStyle: { color: getCssThemeColor('--diary-chart-1'), borderRadius: [4, 4, 0, 0] } }],
   }, true)
 }
 function resizeCharts() { calendarChart?.resize(); trendChart?.resize() }
@@ -145,7 +147,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.statistics-page { --ink:#2c4144; --muted:#87948f; --line:#e4eae5; --accent:#3d806b; color:var(--ink); }
+.statistics-page { --ink:var(--diary-ink); --muted:var(--diary-muted); --line:var(--diary-line); --accent:var(--diary-accent); color:var(--ink); }
 .page-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:18px; }.eyebrow { color:#91a098; font-size:9px; font-weight:700; letter-spacing:1px; }.page-heading h1 { margin:5px 0 4px; font-size:25px; }.page-heading p { margin:0; color:var(--muted); font-size:12px; }.year-picker { display:flex; align-items:center; gap:10px; color:#86928d; font-size:11px; }.year-picker :deep(.el-select) { width:116px; }
 .year-banner { position:relative; display:flex; min-height:164px; align-items:center; justify-content:space-between; overflow:hidden; padding:24px 30px; border:1px solid #dce9df; border-radius:7px; background:#eaf2e9; }.banner-copy { position:relative; z-index:1; }.banner-copy>span { color:#79937d; font-size:9px; font-weight:700; letter-spacing:.7px; }.banner-copy h2 { margin:9px 0 7px; color:#314f45; font-size:21px; line-height:1.55; }.banner-copy p { margin:0; color:#798f82; font-size:11px; }.banner-number { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; margin-right:6%; color:#4e8468; }.banner-number strong { font-family:Georgia,serif; font-size:52px; font-weight:500; line-height:1; }.banner-number span { margin-top:8px; color:#82958a; font-size:10px; }.banner-mark { position:absolute; right:15%; top:-63px; color:rgba(91,139,105,.08); font-size:240px; font-style:normal; line-height:1; }.mobile-break { display:none; }
 .metric-row { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; margin-top:13px; }.metric { display:flex; min-width:0; min-height:80px; align-items:center; gap:11px; padding:12px; border:1px solid var(--line); border-radius:6px; background:#fff; }.metric-icon { display:grid; width:35px; height:35px; flex:0 0 auto; place-items:center; border-radius:6px; font-size:16px; }.metric-icon.teal { background:#e8f2ed; color:#478168; }.metric-icon.coral { background:#f8eeeb; color:#bd7969; }.metric-icon.gold { background:#f7f2e5; color:#ad8b49; }.metric-icon.green { background:#edf2e8; color:#758c58; }.metric small,.metric strong { display:block; }.metric small { color:#8d9992; font-size:10px; }.metric strong { margin-top:4px; color:#344b44; font-size:20px; }.metric em { color:#8b9891; font-size:10px; font-style:normal; font-weight:500; }
@@ -154,4 +156,5 @@ onBeforeUnmount(() => {
 .second-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }.tag-cloud { display:flex; flex-wrap:wrap; gap:8px; margin-top:19px; }.tag-cloud button { display:flex; align-items:center; gap:7px; min-height:31px; padding:0 10px; border:1px solid #dce9e1; border-radius:4px; background:#f2f7f3; color:#548069; font:inherit; font-size:10px; cursor:pointer; }.tag-cloud button:hover,.place-list button:hover { border-color:#9dc4ac; background:#f7faf7; }.tag-cloud small { color:#9aa9a0; font-size:9px; }.tag-tone-1 { border-color:#ebdfd5!important; background:#faf5ef!important; color:#a77d5e!important; }.tag-tone-2 { border-color:#e2e5ef!important; background:#f4f5fa!important; color:#7781a0!important; }.tag-tone-3 { border-color:#f0e5d3!important; background:#fbf7ed!important; color:#a78d54!important; }.tag-tone-4 { border-color:#eadfe5!important; background:#faf4f7!important; color:#a0788c!important; }.place-list { display:grid; margin-top:10px; }.place-list button { display:flex; min-width:0; align-items:center; gap:9px; padding:9px 2px; border:0; border-bottom:1px solid #eef1ee; background:transparent; text-align:left; cursor:pointer; }.place-pin { display:grid; width:25px; height:25px; flex:0 0 auto; place-items:center; border-radius:50%; background:#f8eeeb; color:#bd7969; font-size:12px; }.place-name { overflow:hidden; flex:1; color:#566b61; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }.place-count { flex:0 0 auto; color:#99a49d; font-size:9px; }.place-order { width:20px; color:#ccd4ce; font-family:Georgia,serif; font-size:10px; text-align:right; }.closing-note { display:flex; align-items:center; justify-content:center; gap:14px; padding:24px 10px 8px; color:#9aaba0; text-align:center; }.closing-note span { color:#b3c8b8; font-family:Georgia,serif; font-size:24px; }.closing-note p { margin:0; font-size:10px; line-height:1.8; }
 @media(max-width:900px) { .metric-row { grid-template-columns:repeat(2,minmax(0,1fr)); }.lower-grid { grid-template-columns:minmax(0,1fr) minmax(220px,.8fr); } }
 @media(max-width:620px) { .page-heading { align-items:flex-start; }.page-heading h1 { font-size:22px; }.page-heading p { max-width:240px; font-size:10px; }.year-picker { flex-direction:column; align-items:flex-end; gap:4px; font-size:9px; }.year-picker :deep(.el-select) { width:102px; }.year-banner { min-height:154px; padding:19px 16px; }.banner-copy h2 { max-width:275px; font-size:17px; }.banner-copy p { max-width:250px; font-size:9px; line-height:1.6; }.banner-number { margin-right:0; }.banner-number strong { font-size:39px; }.banner-number span { max-width:62px; font-size:8px; text-align:center; }.banner-mark { right:8%; font-size:190px; }.mobile-break { display:block; }.metric-row { gap:8px; }.metric { min-height:71px; gap:8px; padding:9px; }.metric-icon { width:30px; height:30px; font-size:14px; }.metric strong { font-size:17px; }.panel { padding:14px 11px; }.calendar-chart { height:128px; }.lower-grid,.second-grid { grid-template-columns:minmax(0,1fr); gap:9px; margin-top:9px; }.trend-chart { height:184px; }.rank-list { gap:13px; margin-top:17px; }.closing-note { padding-top:18px; } }
+.calendar-legend .tone-1 { background:var(--diary-chart-1); }.calendar-legend .tone-2 { background:var(--diary-chart-2); }.calendar-legend .tone-3 { background:var(--diary-chart-3); }.calendar-legend .tone-4 { background:var(--diary-chart-4); }.calendar-legend .tone-5 { background:var(--diary-chart-5); }
 </style>

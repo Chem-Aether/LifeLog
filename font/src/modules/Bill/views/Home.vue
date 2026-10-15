@@ -92,17 +92,18 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Plus, Wallet } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
-import { getAccounts, getBillRecords, getBillSummary, getCategoryStatistics } from '@/modules/Bill/apis/bill.js'
+import { getAccounts, getBillRecordPage, getBillSummary, getBillTimeline, getCategoryStatistics } from '@/modules/Bill/apis/bill.js'
 import { maskAccountNumber } from '../utils/accountNumber.js'
+import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
 const router = useRouter()
-const palette = ['#5488d8', '#59aa8b', '#e6b44f', '#8a79c7', '#e47a72', '#54aeb5', '#7e9b62']
+const palette = getCssThemePalette('bill', 7)
 const summary = ref({ income: 0, expense: 0, transfer: 0 })
 const accounts = ref([])
 const expenseCategories = ref([])
 const incomeCategories = ref([])
 const recent = ref([])
-const allRecords = ref([])
+const dailyRecords = ref([])
 const flowChartEl = ref(null)
 const expenseChartEl = ref(null)
 const incomeChartEl = ref(null)
@@ -175,7 +176,7 @@ function paintCharts() {
     { name: '收入', value: Number(summary.value.income) },
     { name: '支出', value: Number(summary.value.expense) },
     { name: '内部转账', value: Number(summary.value.transfer) },
-  ], ['#4c83d4', '#d96973', '#a8c844'], '本月\n总收支'))
+  ], [getCssThemeColor('--bill-chart-1'), getCssThemeColor('--bill-expense'), getCssThemeColor('--bill-chart-3')], '本月\n总收支'))
 
   const expenseChart = create(expenseChartEl.value)
   expenseChart?.setOption(donutOption(expenseLegend.value, palette, '支出\n分类'))
@@ -187,17 +188,17 @@ function paintCharts() {
   const days = Array.from({ length: dayCount }, (_, index) => String(index + 1))
   const incomes = Array(dayCount).fill(0)
   const expenses = Array(dayCount).fill(0)
-  for (const record of allRecords.value) {
-    const date = String(record.occurredAt || '').slice(0, 10)
+  for (const record of dailyRecords.value) {
+    const date = String(record.period || '')
     if (!date.startsWith(selectedMonth.value)) continue
     const day = Number(date.slice(8, 10)) - 1
     if (day < 0 || day >= dayCount) continue
-    if (record.direction === 'income') incomes[day] += Number(record.amount)
-    if (record.direction === 'expense') expenses[day] -= Number(record.amount)
+    incomes[day] += Number(record.income || 0)
+    expenses[day] -= Number(record.expense || 0)
   }
   const daily = create(dailyChartEl.value)
   daily?.setOption({
-    color: ['#4c83d4', '#d96973'],
+    color: [getCssThemeColor('--bill-chart-1'), getCssThemeColor('--bill-expense')],
     tooltip: {
       trigger: 'axis', axisPointer: { type: 'shadow' },
       formatter: params => {
@@ -223,28 +224,28 @@ async function loadMonth() {
     const [year, monthNumber] = monthParts.value
     const end = `${selectedMonth.value}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, '0')}T23:59:59`
     const range = { startTime: monthStart.value, endTime: end }
-    const [summaryData, expenseData, incomeData] = await Promise.all([
+    const [summaryData, expenseData, incomeData, timeline] = await Promise.all([
       getBillSummary(range),
       getCategoryStatistics({ ...range, direction: 'expense' }),
       getCategoryStatistics({ ...range, direction: 'income', detailed: true }),
+      getBillTimeline(year),
     ])
     summary.value = summaryData
     expenseCategories.value = expenseData
     incomeCategories.value = incomeData
+    dailyRecords.value = timeline.daily || []
     await nextTick()
     paintCharts()
   } catch (error) { ElMessage.error(error?.response?.data?.msg || '总览加载失败') }
 }
 async function load() {
   try {
-    const [accountsData, recordsData] = await Promise.all([getAccounts(), getBillRecords()])
+    const [accountsData, recordsData] = await Promise.all([
+      getAccounts(), getBillRecordPage({ page: 1, pageSize: 4 })
+    ])
     accounts.value = accountsData
-    allRecords.value = recordsData
-    recent.value = recordsData.slice(0, 4)
-    const latestMonth = recordsData.reduce((latest, record) => {
-      const month = String(record.occurredAt || '').slice(0, 7)
-      return /^\d{4}-\d{2}$/.test(month) && month > latest ? month : latest
-    }, '')
+    recent.value = recordsData.records || []
+    const latestMonth = String(recent.value[0]?.occurredAt || '').slice(0, 7)
     if (/^\d{4}-\d{2}$/.test(latestMonth) && latestMonth !== selectedMonth.value) selectedMonth.value = latestMonth
     else await loadMonth()
   } catch (error) { ElMessage.error(error?.response?.data?.msg || '总览加载失败') }
@@ -256,7 +257,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', resizeCharts); char
 </script>
 
 <style scoped>
-.overview { --ink:#263746; --muted:#778692; --line:#e5eaee; display:flex; flex-direction:column; gap:12px; max-width:1600px; margin:0 auto; color:var(--ink); }
+.overview { --ink:var(--bill-ink); --muted:var(--bill-muted); --line:var(--bill-line); display:flex; flex-direction:column; gap:12px; max-width:1600px; margin:0 auto; color:var(--ink); }
 .page-header { display:flex; align-items:center; justify-content:space-between; min-height:48px; }
 .page-header h1 { margin:0; font-size:22px; font-weight:700; }
 .page-header p { margin:4px 0 0; color:var(--muted); font-size:12px; }

@@ -90,6 +90,7 @@ public class TravelImportService {
         record.setArrivalIcao(text(row, h, "到达机场ICAO", formatter)); record.setArrivalAirportName(text(row, h, "到达机场", formatter));
         record.setArrivalTerminal(text(row, h, "到达航站楼", formatter)); record.setDeboardingMethod(text(row, h, "下机方式", formatter));
         record.setArrivalTime(dateTime(row, h, "到达时间", formatter)); record.setSeatNo(text(row, h, "座位号", formatter));
+        record.setCabinClass(text(row, h, "舱位类型", formatter));
         record.setDistanceKm(decimal(row, h, "里程KM", formatter)); record.setNote(text(row, h, "备注", formatter));
         String stopovers = text(row, h, "经停机场JSON", formatter);
         record.setStopovers(parseStopovers(stopovers));

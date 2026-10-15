@@ -13,8 +13,8 @@
         <strong>{{ selectedTicket.To || '-' }}</strong>
       </article>
       <el-descriptions :column="1" border class="detail-fields">
-        <el-descriptions-item v-for="item in selectedTicket.more || []" :key="item.label" :label="item.label">
-          {{ item.value || '-' }}
+        <el-descriptions-item v-for="item in detailItems" :key="item.label" :label="item.label">
+          <span class="detail-value">{{ item.value || '-' }}</span>
         </el-descriptions-item>
       </el-descriptions>
       <section v-if="selectedTicket.routeStations?.length" class="station-route">
@@ -67,6 +67,7 @@ const selectedTicket = ref(null)
 let requestId = 0
 
 const modeTitle = computed(() => props.mode === 'flight' ? '航空行程' : '铁路行程')
+const detailItems = computed(() => (selectedTicket.value?.more || []).filter(item => String(item.value || '').trim()))
 const maximumStatistic = computed(() => Math.max(1, ...statistics.value.map(item => Number(item.value) || 0)))
 const ticketKey = ticket => `${props.mode}-${ticket.flightId ?? ticket.trainId ?? ticket.Number}-${ticket.From}-${ticket.To}`
 const primaryTime = ticket => ticket.more?.find(item => item.label === (props.mode === 'flight' ? '起飞时间' : '发车时间'))?.value || ''
@@ -164,6 +165,7 @@ watch(() => props.selectedYear, loadPanel)
 .detail-fields :deep(.el-descriptions__label.el-descriptions__cell.is-bordered-label) { width: 104px; background: rgba(17, 45, 59, .64); color: #7f9ea6; }
 .detail-fields :deep(.el-descriptions__content.el-descriptions__cell.is-bordered-content) { background: rgba(8, 26, 38, .48); color: #d9e8eb; }
 .detail-fields :deep(.el-descriptions__cell) { border-color: rgba(113, 184, 195, .16) !important; }
+.detail-value { white-space: pre-wrap; overflow-wrap: anywhere; }
 .station-route { margin-top: 20px; }
 .station-route :deep(.el-timeline) { margin-top: 16px; padding-left: 6px; }
 .station-route :deep(.el-timeline-item__content) { color: #bad0d5; }

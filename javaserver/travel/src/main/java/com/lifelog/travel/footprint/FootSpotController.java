@@ -18,9 +18,27 @@ public class FootSpotController{
     private FootSpotService footSpotService;
 
     @GetMapping("/footprints")
-    @Operation(summary = "查询足迹管理列表")
-    public Result footprints(@RequestParam(required = false) Integer year) {
+    @Operation(summary = "分页查询足迹")
+    public Result footprints(@RequestParam(required = false) String visitType,
+                             @RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String region,
+                             @RequestParam(defaultValue = "1") int page,
+                             @RequestParam(defaultValue = "10") int pageSize,
+                             @RequestParam(defaultValue = "visitDate") String sortBy,
+                             @RequestParam(defaultValue = "desc") String sortOrder) {
+        return Result.success(footSpotService.findPage(visitType, keyword, region, page, pageSize, sortBy, sortOrder));
+    }
+
+    @GetMapping("/footprints/all")
+    @Operation(summary = "查询全部足迹")
+    public Result allFootprints(@RequestParam(required = false) Integer year) {
         return Result.success(footSpotService.findAll(year));
+    }
+
+    @GetMapping("/footprints/{id}")
+    @Operation(summary = "查询单条足迹")
+    public Result get(@PathVariable Long id) {
+        return Result.success(footSpotService.findById(id));
     }
 
     @PostMapping("/footprints")

@@ -88,7 +88,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowRight, Location, Picture, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getFootprints } from '@/modules/travel/apis/travel.js'
+import { getAllFootprints } from '@/modules/travel/apis/travel.js'
 import { mediaUrl } from '@/modules/travel/apis/media.js'
 
 const records = ref([])
@@ -161,7 +161,7 @@ watch(activeCity, city => { if (city) activeCityKey.value = city.key }, { immedi
 onMounted(async () => {
   loading.value = true
   try {
-    const response = await getFootprints()
+    const response = await getAllFootprints()
     records.value = response.data || []
   } catch (error) {
     ElMessage.error(error?.response?.data?.message || '旅行足迹加载失败')

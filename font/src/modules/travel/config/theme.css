@@ -1,0 +1,14 @@
+:root {
+  --travel-ink: #293b49; --travel-muted: #7c8b95; --travel-line: #e3e9ec;
+  --travel-surface: #fff; --travel-canvas: #f3f5f8; --travel-accent: #258b88;
+  --travel-accent-hover: #1f7775; --travel-accent-active: #176d6b;
+  --travel-accent-soft: #e9f4f2; --travel-danger: #b5474a;
+  --travel-map-canvas: #07121e; --travel-map-panel: rgba(5, 19, 30, .94);
+  --travel-map-border: rgba(113, 170, 187, .28); --travel-map-text: #e5f2f4;
+  --travel-map-muted: #88a5ad; --travel-map-foot: #29d2ad;
+  --travel-map-flight: #ffb84d; --travel-map-train: #5db7e8;
+  --travel-chart-1: #258b88; --travel-chart-2: #4f8fc9; --travel-chart-3: #d39643;
+  --travel-chart-4: #778f67; --travel-chart-5: #bd7182;
+  --travel-season-spring: #4f9b65; --travel-season-summer: #df8650;
+  --travel-season-autumn: #c99a3e; --travel-season-winter: #4f8fc9;
+}

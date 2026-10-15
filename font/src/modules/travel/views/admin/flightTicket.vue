@@ -17,6 +17,7 @@
             <el-form-item label="机型"><el-input v-model="editItem.aircraftType" /></el-form-item>
             <el-form-item label="飞机注册号"><el-input v-model="editItem.aircraftRegistration" /></el-form-item>
             <el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item>
+            <el-form-item label="舱位类型"><el-input v-model="editItem.cabinClass" clearable maxlength="30" placeholder="例如：经济舱(S)" /></el-form-item>
             <el-form-item label="飞行距离 (km)"><el-input-number v-model="editItem.distanceKm" :min="0" :precision="1" /></el-form-item>
           </div>
         </section>
@@ -114,12 +115,15 @@
           <template #default="scope">{{ formatStopovers(scope.row.stopovers) }}</template>
         </el-table-column>
         <el-table-column prop="seatNo" label="座位号" width="95" sortable />
+        <el-table-column prop="cabinClass" label="舱位类型" min-width="105" sortable show-overflow-tooltip />
         <el-table-column prop="distanceKm" label="里程(km)" width="110" sortable />
         <el-table-column label="操作" width="190" fixed="right">
           <template #default="scope">
-            <TravelRecordExportButton v-if="scope.row.flightId" type="flight" :record-id="scope.row.flightId" />
-            <el-button link type="primary" @click="handleEdit(scope.row, scope.$index)">编辑</el-button>
-            <el-button link type="danger" :disabled="deleting" @click="handleDelete(scope.row)">删除</el-button>
+            <div class="table-actions">
+              <TravelRecordExportButton v-if="scope.row.flightId" type="flight" :record-id="scope.row.flightId" :record="scope.row" />
+              <el-button link type="primary" @click="handleEdit(scope.row, scope.$index)">编辑</el-button>
+              <el-button link type="danger" :disabled="deleting" @click="handleDelete(scope.row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -325,7 +329,7 @@ const handleEdit = (item, idx) => {
 }
 const beginEdit = (item, idx) => {
   editIndex.value = idx
-  const source = item ? JSON.parse(JSON.stringify(item)) : { flightNo: '', aircraftRegistration: '', aircraftType: '', airline: '', departureAirportName: '', departureAirportNameDisplay: '', departureTerminal: '', boardingMethod: '', departureIcao: '', departureTime: '', distanceKm: 0, arrivalAirportName: '', arrivalAirportNameDisplay: '', arrivalTerminal: '', deboardingMethod: '', arrivalIcao: '', arrivalTime: '', stopovers: [], seatNo: '', note: '', stopoverDisplay: '' }
+  const source = item ? JSON.parse(JSON.stringify(item)) : { flightNo: '', aircraftRegistration: '', aircraftType: '', airline: '', departureAirportName: '', departureAirportNameDisplay: '', departureTerminal: '', boardingMethod: '', departureIcao: '', departureTime: '', distanceKm: 0, arrivalAirportName: '', arrivalAirportNameDisplay: '', arrivalTerminal: '', deboardingMethod: '', arrivalIcao: '', arrivalTime: '', stopovers: [], seatNo: '', cabinClass: '', note: '', stopoverDisplay: '' }
   editBackup.value = JSON.parse(JSON.stringify(source))
   editItem.value = source
 }
@@ -476,6 +480,8 @@ const deleteSelected = async () => {
 </script>
 
 <style scoped>
+.table-actions { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
+.table-actions :deep(.el-button) { margin:0; font-size:14px; line-height:1; }
 .travel-edit-page {
   display: flex;
   flex-direction: column;

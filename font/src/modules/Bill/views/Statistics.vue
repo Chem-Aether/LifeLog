@@ -67,7 +67,7 @@
 
     <section v-if="viewLevel === 'day'" class="panel detail-panel">
       <div class="panel-heading">
-        <div><h2>{{ dayLabel }}流水</h2><p>共 {{ detailRecords.length }} 条收支记录</p></div>
+        <div><h2>{{ dayLabel }}流水</h2><p>共 {{ detailTotal }} 条收支记录</p></div>
         <el-button v-if="selectedRange" text type="primary" @click="openFilteredBills">查看账单列表</el-button>
       </div>
       <el-table v-if="selectedRange" :data="detailRecords" stripe empty-text="该时段没有账单" class="detail-table">
@@ -77,7 +77,10 @@
         <el-table-column prop="description" label="摘要" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ row.description || row.counterparty || '-' }}</template></el-table-column>
         <el-table-column prop="amount" label="金额" width="140" align="right"><template #default="{ row }"><strong :class="row.direction">{{ row.direction === 'income' ? '+' : row.direction === 'expense' ? '-' : '' }}¥ {{ money(row.amount) }}</strong></template></el-table-column>
       </el-table>
-      <el-empty v-else description="选择日期或月份，查看对应账单" :image-size="68" />
+      <div v-if="selectedRange && detailTotal" class="detail-pagination">
+        <el-pagination v-model:current-page="detailPage" v-model:page-size="detailPageSize" :page-sizes="[10, 20, 50]" :total="detailTotal" layout="total, sizes, prev, pager, next" background @current-change="loadDetailPage" @size-change="changeDetailPageSize" />
+      </div>
+      <el-empty v-if="!selectedRange" description="选择日期或月份，查看对应账单" :image-size="68" />
     </section>
   </main>
 </template>
@@ -87,7 +90,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import { getAccountStatistics, getBillCategories, getBillRecords, getBillSummary, getBillTimeline, getCategoryStatistics } from '@/modules/Bill/apis/bill.js'
+import { getAccountStatistics, getBillCategories, getBillRecordPage, getBillSummary, getBillTimeline, getCategoryStatistics } from '@/modules/Bill/apis/bill.js'
+import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
 const router = useRouter()
 const currentYear = new Date().getFullYear()
@@ -106,6 +110,10 @@ const categories = ref([])
 const accountStats = ref([])
 const selectedExpenseParent = ref(null)
 const detailRecords = ref([])
+const detailTotal = ref(0)
+const detailPage = ref(1)
+const detailPageSize = ref(20)
+const detailRange = ref(null)
 const selectedRange = ref(null)
 const calendarEl = ref(null)
 const trendEl = ref(null)
@@ -116,7 +124,7 @@ let trendChart
 let categoryChart
 let accountChart
 
-const palette = ['#258b88', '#528bd4', '#e3ad4f', '#8b78c3', '#e27670', '#58a897', '#7c9c64', '#d486a6', '#67849c']
+const palette = getCssThemePalette('bill', 9)
 const dailyMap = computed(() => new Map(daily.value.map(item => [item.period, item])))
 const monthLabel = computed(() => selectedMonth.value ? `${Number(selectedMonth.value.slice(5))} 月` : '')
 const dayLabel = computed(() => selectedDay.value ? `${Number(selectedMonth.value.slice(5))} 月 ${Number(selectedDay.value.slice(8))} 日` : '')
@@ -197,7 +205,7 @@ function renderCalendar() {
       const net = Number(item.income || 0) - Number(item.expense || 0)
       return `<strong>${date}</strong><br/>收入：¥ ${money(item.income)}<br/>支出：¥ ${money(item.expense)}<br/>净流水：<b style="color:${net < 0 ? '#d76069' : '#258b88'}">${net < 0 ? '-' : '+'}¥ ${money(Math.abs(net))}</b>`
     } },
-    visualMap: { min: -1, max: 1, calculable: false, orient: 'horizontal', left: 'center', bottom: 0, itemWidth: 12, itemHeight: 10, text: ['净流入', '净流出'], textStyle: { color: '#819099', fontSize: 11 }, inRange: { color: ['#cf4f5c', '#edf1f3', '#218579'] } },
+    visualMap: { min: -1, max: 1, calculable: false, orient: 'horizontal', left: 'center', bottom: 0, itemWidth: 12, itemHeight: 10, text: ['净流入', '净流出'], textStyle: { color: '#819099', fontSize: 11 }, inRange: { color: [getCssThemeColor('--bill-loss'), getCssThemeColor('--bill-neutral'), getCssThemeColor('--bill-profit')] } },
     calendar: { top: 34, left: 42, right: 18, bottom: 38, range: String(year.value), cellSize: ['auto', 14], itemStyle: { color: '#f1f4f5', borderWidth: 3, borderColor: '#fff', borderRadius: 3 }, yearLabel: { show: false }, monthLabel: { color: '#62747e', nameMap: 'cn', fontSize: 11 }, dayLabel: { firstDay: 1, color: '#829098', nameMap: 'cn', fontSize: 10 }, splitLine: { show: false } },
     series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: values }],
   }, true)
@@ -209,7 +217,7 @@ function renderTrend() {
   const net = items.map(item => Number(item.income || 0) - Number(item.expense || 0))
   trendChart.setOption({
     ...chartTheme(),
-    color: ['#528bd4', '#e27670', '#258b88'],
+    color: [palette[0], palette[4], getCssThemeColor('--bill-accent')],
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => {
       const item = items[params[0]?.dataIndex]
       if (!item) return ''
@@ -222,9 +230,9 @@ function renderTrend() {
     xAxis: { type: 'category', data: labels, boundaryGap: true, axisLine: { lineStyle: { color: '#dce3e6' } }, axisTick: { show: false }, axisLabel: { color: '#87959c', fontSize: 10, interval: items.length > 20 ? 3 : 0, hideOverlap: true } },
     yAxis: [{ type: 'value', axisLabel: { color: '#87959c', fontSize: 10, formatter: value => compactMoney(value) }, splitLine: { lineStyle: { color: '#edf1f2', type: 'dashed' } } }, { type: 'value', show: false }],
     series: [
-      { name: '收入', type: 'bar', data: items.map(item => Number(item.income || 0)), barMaxWidth: 18, itemStyle: { color: '#528bd4', borderRadius: [3, 3, 0, 0] } },
-      { name: '支出', type: 'bar', data: items.map(item => Number(item.expense || 0)), barMaxWidth: 18, itemStyle: { color: '#e27670', borderRadius: [3, 3, 0, 0] } },
-      { name: '净流水', type: 'line', yAxisIndex: 1, data: net, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: '#258b88' }, itemStyle: { color: '#258b88' } },
+      { name: '收入', type: 'bar', data: items.map(item => Number(item.income || 0)), barMaxWidth: 18, itemStyle: { color: palette[0], borderRadius: [3, 3, 0, 0] } },
+      { name: '支出', type: 'bar', data: items.map(item => Number(item.expense || 0)), barMaxWidth: 18, itemStyle: { color: palette[4], borderRadius: [3, 3, 0, 0] } },
+      { name: '净流水', type: 'line', yAxisIndex: 1, data: net, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: getCssThemeColor('--bill-accent') }, itemStyle: { color: getCssThemeColor('--bill-accent') } },
     ],
   }, true)
 }
@@ -258,7 +266,7 @@ function renderAccountStats() {
   })
   accountChart.setOption({
     ...chartTheme(),
-    color: ['#528bd4', '#e27670'],
+    color: [palette[0], palette[4]],
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -344,7 +352,7 @@ async function loadStatistics() {
     await nextTick()
     renderCalendar(); renderTrend(); renderCategories(); renderAccountStats(); resizeCharts()
     if (viewLevel.value === 'day') await loadDetails(range.startTime, range.endTime)
-    else detailRecords.value = []
+    else { detailRecords.value = []; detailTotal.value = 0 }
   } catch (error) { ElMessage.error(error?.response?.data?.msg || '统计数据加载失败') }
   finally { loading.value = false }
 }
@@ -421,14 +429,24 @@ function isFuturePeriod(offset) {
 }
 async function loadDetails(startTime, endTime) {
   try {
-    const [income, expense] = await Promise.all([
-      getBillRecords({ startTime, endTime, direction: 'income' }),
-      getBillRecords({ startTime, endTime, direction: 'expense' }),
-    ])
-    detailRecords.value = [...income, ...expense].sort((left, right) => String(right.occurredAt).localeCompare(String(left.occurredAt)))
+    detailPage.value = 1
+    detailRange.value = { startTime, endTime }
+    await loadDetailPage()
   }
   catch (error) { ElMessage.error(error?.response?.data?.msg || '明细加载失败') }
 }
+async function loadDetailPage() {
+  if (!detailRange.value) return
+  try {
+    const result = await getBillRecordPage({
+      ...detailRange.value, page: detailPage.value, pageSize: detailPageSize.value,
+      sortBy: 'occurredAt', sortOrder: 'desc', excludeTransfer: true
+    })
+    detailRecords.value = result.records || []
+    detailTotal.value = Number(result.total || 0)
+  } catch (error) { ElMessage.error(error?.response?.data?.msg || '明细加载失败') }
+}
+function changeDetailPageSize() { detailPage.value = 1; loadDetailPage() }
 function openFilteredBills() {
   if (!selectedRange.value) return
   const { day, month } = selectedRange.value
@@ -470,7 +488,7 @@ onBeforeUnmount(() => {
 .income-tile { border-top-color:#528bd4; }.expense-tile { border-top-color:#e27670; }.net-tile { border-top-color:#258b88; }
 .positive,.income { color:#258b88!important; }.negative,.expense { color:#d76069!important; }.transfer { color:#7183bf!important; }
 .panel { padding:16px 18px; min-width:0; }.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }.panel-heading h2 { margin:0; font-size:16px; }.panel-heading p { margin:5px 0 0; color:#8a979d; font-size:11px; }
-.heatmap-legend { display:flex; align-items:center; gap:5px; color:#87959c; font-size:10px; }.heatmap-legend i { width:12px; height:12px; border-radius:3px; }.heatmap-legend .loss { background:#d96870; }.heatmap-legend .neutral { background:#f2f4f6; border:1px solid #e4e9ee; }.heatmap-legend .profit { background:#54a58d; }
+.heatmap-legend { display:flex; align-items:center; gap:5px; color:#87959c; font-size:10px; }.heatmap-legend i { width:12px; height:12px; border-radius:3px; }.heatmap-legend .loss { background:#d96870; }.heatmap-legend .neutral { background:#f2f4f6; border:1px solid #e4e9ee; }.heatmap-legend .profit { background:#54a58d; }.detail-pagination { display:flex; justify-content:flex-end; margin-top:14px; overflow-x:auto; }
 .calendar-chart { height:190px; margin-top:8px; }.trend-chart,.category-chart { width:100%; height:310px; margin-top:8px; }.account-chart { width:100%; min-height:310px; margin-top:8px; }.detail-chart-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:stretch; }.category-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }.detail-panel { min-height:190px; }.detail-table { margin-top:12px; }.tag-income { color:#288d76; border-color:#b9ded2; background:#eff8f4; }.tag-expense { color:#c95e66; border-color:#efc6c8; background:#fff4f4; }.tag-transfer { color:#537fbd; border-color:#c5d5eb; background:#f2f6fc; }
 .statistics-page :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { background:#258b88; border-color:#258b88; box-shadow:-1px 0 0 0 #258b88; }
 @media(max-width:1000px) { .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.detail-chart-grid { grid-template-columns:1fr; } }

@@ -1,0 +1,8 @@
+:root {
+  --diary-ink: #293b49; --diary-muted: #7c8b95; --diary-line: #e3e9ec;
+  --diary-accent: #258b88; --diary-accent-soft: #e9f4f2;
+  --diary-canvas: #f3f5f8; --diary-surface: #fff;
+  --diary-chart-1: #edf2ef; --diary-chart-2: #c6dfd4; --diary-chart-3: #89bd9f;
+  --diary-chart-4: #4c9579; --diary-chart-5: #286857; --diary-chart-bar: #78aa91;
+  --diary-chart-grid: #edf1ed;
+}

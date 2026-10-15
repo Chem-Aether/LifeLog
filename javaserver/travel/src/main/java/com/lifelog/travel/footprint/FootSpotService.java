@@ -30,6 +30,50 @@ public class FootSpotService {
     public List<FootSpot> findAll(Integer year) {
         List<FootSpot> spots = mapper.selectRecords(year);
         spots.forEach(this::hydrate);
+        enrichRegions(spots);
+        return spots;
+    }
+
+    public Map<String, Object> findPage(String visitType, String keyword, String region, int page, int pageSize,
+                                        String sortBy, String sortOrder) {
+        if (page < 1 || pageSize < 1 || pageSize > 100)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分页参数无效");
+        if (StringUtils.hasText(visitType) && !List.of("travel", "transit").contains(visitType))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "记录性质无效");
+        String type = StringUtils.hasText(visitType) ? visitType : null;
+        String placeKeyword = like(keyword);
+        String regionKeyword = region == null ? "" : region.trim().toLowerCase(Locale.ROOT);
+        String sort = sortBy != null && List.of("placeName", "visitType", "visitDate").contains(sortBy) ? sortBy : "visitDate";
+        String order = "asc".equalsIgnoreCase(sortOrder) ? "asc" : "desc";
+        List<FootSpot> records;
+        long total;
+        if (regionKeyword.isEmpty()) {
+            total = mapper.countRecords(type, placeKeyword);
+            records = mapper.selectPage(type, placeKeyword, sort, order, pageSize, (page - 1L) * pageSize);
+            records.forEach(this::hydrate);
+            enrichRegions(records);
+        } else {
+            records = mapper.searchRecords(type, placeKeyword, sort, order);
+            records.forEach(this::hydrate);
+            enrichRegions(records);
+            records = records.stream().filter(item -> item.getRegionName() != null
+                    && item.getRegionName().toLowerCase(Locale.ROOT).contains(regionKeyword)).toList();
+            total = records.size();
+            int start = (int) Math.min((page - 1L) * pageSize, records.size());
+            records = records.subList(start, Math.min(start + pageSize, records.size()));
+        }
+        return Map.of("records", records, "total", total, "page", page, "pageSize", pageSize);
+    }
+
+    public FootSpot findById(Long id) {
+        FootSpot spot = mapper.selectRecordById(id);
+        if (spot == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
+        hydrate(spot);
+        enrichRegions(List.of(spot));
+        return spot;
+    }
+
+    private void enrichRegions(List<FootSpot> spots) {
         List<GeoReferenceClient.GeoPoint> points = spots.stream()
                 .filter(item -> item.getLongitude() != null && item.getLatitude() != null)
                 .map(item -> new GeoReferenceClient.GeoPoint(String.valueOf(item.getFootprintId()), item.getLongitude().doubleValue(), item.getLatitude().doubleValue()))
@@ -49,7 +93,10 @@ public class FootSpotService {
             item.setRegionCode(matched == null ? null : matched.regionCode());
             item.setRegionId(matched == null ? null : matched.id());
         });
-        return spots;
+    }
+
+    private String like(String value) {
+        return StringUtils.hasText(value) ? "%" + value.trim() + "%" : null;
     }
 
     private String formatRegionPath(List<GeoReferenceClient.GeoRegion> path) {

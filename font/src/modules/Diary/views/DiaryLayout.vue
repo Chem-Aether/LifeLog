@@ -35,6 +35,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ChatLineSquare, Close, DataAnalysis, HomeFilled, House, Memo, Menu, Notebook } from '@element-plus/icons-vue'
 import { diaryFeedState } from '../utils/feedState.js'
+import '../config/theme.css'
 
 const route = useRoute()
 const navOpen = ref(false)
@@ -61,12 +62,12 @@ watch(() => route.path, (path, previousPath) => {
 </script>
 
 <style>
-.diary-layout { --diary-ink:#293b49; --diary-muted:#7c8b95; --diary-line:#e3e9ec; --diary-accent:#258b88; --diary-canvas:#f3f5f8; display:flex; width:100%; min-height:100vh; background:var(--diary-canvas); color:var(--diary-ink); }
-.diary-sidebar { position:sticky; top:0; display:flex; width:220px; height:100vh; flex:0 0 220px; flex-direction:column; padding:20px 12px; border-right:1px solid var(--diary-line); background:#fff; }
+.diary-layout { display:flex; width:100%; min-height:100vh; background:var(--diary-canvas); color:var(--diary-ink); }
+.diary-sidebar { position:sticky; top:0; display:flex; width:220px; height:100vh; flex:0 0 220px; flex-direction:column; padding:20px 12px; border-right:1px solid var(--diary-line); background:var(--diary-surface); }
 .diary-brand { display:flex; align-items:center; gap:11px; padding:6px 10px 28px; color:inherit; text-decoration:none; }.diary-brand > span:last-child { min-width:0; }.diary-brand strong,.diary-brand small { display:block; }.diary-brand strong { font-size:15px; }.diary-brand small { margin-top:4px; color:#98a4a9; font-size:9px; letter-spacing:1px; }
-.diary-brand .brand-mark,.mobile-diary-header .brand-mark { display:grid; width:36px; height:36px; flex:0 0 auto; place-items:center; border-radius:8px; background:#258b88; color:#fff; font-size:17px; }
+.diary-brand .brand-mark,.mobile-diary-header .brand-mark { display:grid; width:36px; height:36px; flex:0 0 auto; place-items:center; border-radius:8px; background:var(--diary-accent); color:#fff; font-size:17px; }
 .nav-caption { padding:0 10px 8px; color:#9aa6aa; font-size:10px; font-weight:650; }.diary-nav { display:grid; gap:4px; }
-.diary-nav-link { display:flex; min-height:43px; align-items:center; gap:10px; padding:0 11px; border-radius:6px; color:#667780; font-size:13px; text-decoration:none; transition:background-color .16s,color .16s; }.diary-nav-link .el-icon { font-size:16px; }.diary-nav-link:hover { background:#f3f7f7; color:#287d7a; }.diary-nav-link.is-active { background:#e9f4f2; color:#197d79; font-weight:620; }
+.diary-nav-link { display:flex; min-height:43px; align-items:center; gap:10px; padding:0 11px; border-radius:6px; color:var(--diary-muted); font-size:13px; text-decoration:none; transition:background-color .16s,color .16s; }.diary-nav-link .el-icon { font-size:16px; }.diary-nav-link:hover { background:var(--diary-accent-soft); color:var(--diary-accent); }.diary-nav-link.is-active { background:var(--diary-accent-soft); color:var(--diary-accent); font-weight:620; }
 .sidebar-bottom { margin-top:auto; }.sidebar-note { display:flex; align-items:center; gap:10px; padding:12px 10px 18px; color:#72838a; font-size:11px; line-height:1.65; }.note-mark { display:grid; width:31px; height:31px; flex:0 0 auto; place-items:center; border:1px solid #d6e8e5; border-radius:7px; color:#258b88; font-family:Georgia,serif; font-size:17px; }.sidebar-note small { color:#9aa6aa; font-size:9px; }
 .back-link { display:flex; align-items:center; gap:8px; padding:13px 10px; border-top:1px solid #edf0f2; color:#71818b; font-size:12px; text-decoration:none; }.back-link:hover { color:#258b88; }.diary-main { min-width:0; flex:1; padding:26px clamp(20px,3vw,44px); }.mobile-diary-header,.nav-backdrop { display:none; }.nav-close { display:none; }
 .diary-page-enter-active,.diary-page-leave-active { transition:opacity .18s ease,transform .18s ease; }.diary-page-enter-from { opacity:0; transform:translateY(6px); }.diary-page-leave-to { opacity:0; transform:translateY(-3px); }

@@ -18,7 +18,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { getFootprints, getTickets } from '@/modules/travel/apis/travel.js'
+import { getAllFootprints, getTickets } from '@/modules/travel/apis/travel.js'
 import { getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
 import { mediaUrl } from '@/modules/travel/apis/media.js'
 import { useTravleStore } from '@/modules/travel/stores/TravelStore.js'
@@ -528,7 +528,7 @@ async function loadTravelData() {
   const results = await Promise.allSettled([
     getTickets('flight', props.selectedYear),
     getTickets('train', props.selectedYear),
-    getFootprints(props.selectedYear)
+    getAllFootprints(props.selectedYear)
   ])
   const value = index => results[index].status === 'fulfilled' ? results[index].value?.data || [] : []
   flightRecords = value(0)

@@ -5,10 +5,11 @@ CREATE TABLE IF NOT EXISTS flight_record (
     flight_no VARCHAR(20) NOT NULL, airline VARCHAR(100), aircraft_type VARCHAR(50), aircraft_registration VARCHAR(30),
     departure_icao VARCHAR(10) NOT NULL, departure_airport_name VARCHAR(150), departure_terminal VARCHAR(30), boarding_method VARCHAR(30), departure_time TIMESTAMP NOT NULL,
     arrival_icao VARCHAR(10) NOT NULL, arrival_airport_name VARCHAR(150), arrival_terminal VARCHAR(30), deboarding_method VARCHAR(30), arrival_time TIMESTAMP,
-    stopovers JSONB NOT NULL DEFAULT '[]'::jsonb, seat_no VARCHAR(30), distance_km NUMERIC(10,2), note TEXT,
+    stopovers JSONB NOT NULL DEFAULT '[]'::jsonb, seat_no VARCHAR(30), cabin_class VARCHAR(30), distance_km NUMERIC(10,2), note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_flight_time CHECK (arrival_time IS NULL OR arrival_time >= departure_time)
 );
+ALTER TABLE flight_record ADD COLUMN IF NOT EXISTS cabin_class VARCHAR(30);
 CREATE INDEX IF NOT EXISTS idx_flight_route ON flight_record (departure_icao, arrival_icao);
 
 CREATE TABLE IF NOT EXISTS train_record (

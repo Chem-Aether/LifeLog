@@ -35,6 +35,30 @@ public class BillRecordService {
                 timestamp(startTime), timestamp(endTime));
     }
 
+    public Map<String, Object> page(String direction, Long accountId, Long categoryId, String keyword,
+                                    String startTime, String endTime, int page, int pageSize,
+                                    String sortBy, String sortOrder, boolean excludeTransfer) {
+        if (page < 1 || pageSize < 1 || pageSize > 100) throw new ResponseStatusException(BAD_REQUEST, "分页参数无效");
+        if (direction != null && !direction.isBlank()) requireDirection(direction);
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : "%" + keyword.trim() + "%";
+        var start = timestamp(startTime);
+        var end = timestamp(endTime);
+        var order = "asc".equalsIgnoreCase(sortOrder) ? "asc" : "desc";
+        var sort = List.of("amount", "description", "category", "direction", "occurredAt", "payer", "payee")
+                .contains(sortBy) ? sortBy : "occurredAt";
+        List<Map<String, Object>> records = recordMapper.findRecordsPage(blankToNull(direction), accountId, categoryId,
+                normalizedKeyword, start, end, pageSize, (long) (page - 1) * pageSize, sort, order, excludeTransfer);
+        long total = recordMapper.countRecords(blankToNull(direction), accountId, categoryId,
+                normalizedKeyword, start, end, excludeTransfer);
+        return Map.of("records", records, "total", total, "page", page, "pageSize", pageSize);
+    }
+
+    public Map<String, Object> getRecord(long id) {
+        Map<String, Object> record = recordMapper.findRecordById(id);
+        if (record == null) throw new ResponseStatusException(NOT_FOUND, "账单记录不存在");
+        return record;
+    }
+
     @Transactional
     public int importRecords(List<BillTransactionRequest> records) {
         if (records == null || records.isEmpty()) throw new ResponseStatusException(BAD_REQUEST, "导入文件没有账单记录");

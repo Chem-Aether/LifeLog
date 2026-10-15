@@ -20,11 +20,14 @@ export const getTicketSummary = (mode, year = 'all') => {
     })
 }
 
-export const getFootprints = (year = 'all') => request({
-    url: '/travel/footprints',
+export const getAllFootprints = (year = 'all') => request({
+    url: '/travel/footprints/all',
     method: 'get',
     params: yearParams(year)
 })
+
+export const getFootprintsPage = params => request({ url: '/travel/footprints', method: 'get', params })
+export const getFootprintById = id => request({ url: `/travel/footprints/${id}`, method: 'get' })
 
 export const exportTravelData = (type, format) => request({
   url: '/travel/export',
@@ -39,15 +42,6 @@ export const exportTravelTemplate = (type) => request({
   url: '/travel/export/template',
   method: 'get',
   params: { type },
-  responseType: 'blob',
-  timeout: 0,
-  fullResponse: true
-})
-
-export const exportTravelRecord = (type, id, format) => request({
-  url: '/travel/export',
-  method: 'get',
-  params: { type, id, ...(format ? { format } : {}) },
   responseType: 'blob',
   timeout: 0,
   fullResponse: true

@@ -31,6 +31,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Close, DataAnalysis, HomeFilled, Menu, PriceTag, Tickets, TrendCharts, Wallet } from '@element-plus/icons-vue'
+import './config/theme.css'
 
 const route = useRoute()
 const navOpen = ref(false)
@@ -40,7 +41,7 @@ watch(() => route.path, () => { navOpen.value = false })
 </script>
 
 <style>
-.bill-layout { --bill-ink:#293b49; --bill-muted:#7c8b95; --bill-line:#e4e9ee; --bill-accent:#258b88; --bill-canvas:#f3f5f8; display:flex; width:100%; min-height:100vh; background:var(--bill-canvas); color:var(--bill-ink); }
+.bill-layout { display:flex; width:100%; min-height:100vh; background:var(--bill-canvas); color:var(--bill-ink); }
 .sidebar { display:flex; width:220px; height:100vh; flex:0 0 220px; flex-direction:column; padding:20px 12px; border-right:1px solid var(--bill-line); background:#fff; color:var(--bill-ink); }
 .brand { display:flex; align-items:center; gap:11px; padding:6px 10px 28px; }.brand-mark { display:grid; place-items:center; width:36px; height:36px; flex:0 0 auto; border-radius:7px; background:#258b88; color:#fff; font-weight:700; font-size:18px; }.brand strong,.brand small { display:block; }.brand strong { font-size:15px; }.brand small { margin-top:3px; color:#8b999f; font-size:9px; letter-spacing:.8px; }.nav-close,.mobile-header,.nav-backdrop { display:none; }
 .nav-menu { flex:1; border:0!important; background:transparent!important; }.nav-menu .el-menu-item { height:44px; margin:3px 0; border-radius:7px; color:#63747e!important; }.nav-menu .el-menu-item:hover { background:#f1f6f6!important; color:#287d7a!important; }.nav-menu .el-menu-item.is-active { background:#e9f4f2!important; color:#197d79!important; font-weight:600; }.nav-menu .el-icon { margin-right:9px; }

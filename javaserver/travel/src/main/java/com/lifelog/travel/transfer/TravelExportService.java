@@ -38,7 +38,7 @@ public class TravelExportService {
             if ("flight".equals(type)) {
                 List<? extends List<?>> rows = template ? List.of() : flights.selectList(null).stream()
                         .filter(item -> id == null || id.equals(item.getFlightId())).map(this::flightRow).toList();
-                writeSheet(workbook, "机票", List.of("记录ID", "航班号", "航空公司", "机型", "飞机注册号", "出发机场ICAO", "出发机场", "出发航站楼", "登机方式", "起飞时间", "到达机场ICAO", "到达机场", "到达航站楼", "下机方式", "到达时间", "经停机场JSON", "座位号", "里程KM", "备注"), rows, headerStyle);
+                writeSheet(workbook, "机票", List.of("记录ID", "航班号", "航空公司", "机型", "飞机注册号", "出发机场ICAO", "出发机场", "出发航站楼", "登机方式", "起飞时间", "到达机场ICAO", "到达机场", "到达航站楼", "下机方式", "到达时间", "经停机场JSON", "座位号", "舱位类型", "里程KM", "备注"), rows, headerStyle);
             } else {
                 List<? extends List<?>> rows = template ? List.of() : footprints.selectRecords(null).stream()
                         .filter(item -> id == null || id.equals(item.getFootprintId())).map(this::footprintRow).toList();
@@ -53,7 +53,7 @@ public class TravelExportService {
         return Arrays.asList(row.getFlightId(), row.getFlightNo(), row.getAirline(), row.getAircraftType(), row.getAircraftRegistration(),
                 row.getDepartureIcao(), row.getDepartureAirportName(), row.getDepartureTerminal(), row.getBoardingMethod(), row.getDepartureTime(),
                 row.getArrivalIcao(), row.getArrivalAirportName(), row.getArrivalTerminal(), row.getDeboardingMethod(), row.getArrivalTime(),
-                row.getStopoversJson(), row.getSeatNo(), row.getDistanceKm(), row.getNote());
+                row.getStopoversJson(), row.getSeatNo(), row.getCabinClass(), row.getDistanceKm(), row.getNote());
     }
 
     private List<?> footprintRow(FootSpot row) {

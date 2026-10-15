@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/** 提供图形验证码获取接口。 */
 @RestController
 @RequestMapping("/captcha")
 @Tag(name = "验证码模块", description = "图形验证码生成与验证接口")
@@ -18,6 +19,10 @@ public class CaptchaController {
 
     private final CaptchaService captchaService;
 
+    /**
+     * 生成验证码图片并通过响应头返回本次验证码的校验键。
+     * @return JPEG 验证码图片及其校验键
+     */
     @GetMapping(value = "/image", produces = MediaType.IMAGE_JPEG_VALUE)
     @Operation(summary = "获取图形验证码图片")
     public ResponseEntity<byte[]> getCaptchaImage() {

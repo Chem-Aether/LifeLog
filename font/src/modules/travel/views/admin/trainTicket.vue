@@ -118,9 +118,11 @@
         </el-table-column>
         <el-table-column label="操作" width="190" fixed="right">
           <template #default="scope">
-            <TravelRecordExportButton v-if="scope.row.trainId" type="train" :record-id="scope.row.trainId" />
-            <el-button link type="primary" @click="handleEdit(scope.row, scope.$index)">编辑</el-button>
-            <el-button link type="danger" :disabled="deleting" @click="handleDelete(scope.$index)">删除</el-button>
+            <div class="table-actions">
+              <TravelRecordExportButton v-if="scope.row.trainId" type="train" :record-id="scope.row.trainId" :record="scope.row" />
+              <el-button link type="primary" @click="handleEdit(scope.row, scope.$index)">编辑</el-button>
+              <el-button link type="danger" :disabled="deleting" @click="handleDelete(scope.$index)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -572,6 +574,8 @@ const handlePageSizeChange = () => {
 </script>
 
 <style scoped>
+.table-actions { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
+.table-actions :deep(.el-button) { margin:0; font-size:14px; line-height:1; }
 .travel-edit-page { display:flex; flex-direction:column; gap:16px; min-height:100%; color:#1d3035; }
 .edit-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 0 14px; border-bottom:1px solid #e5ebec; }
 .edit-header h1 { margin:6px 0 0; font-size:22px; font-weight:700; }

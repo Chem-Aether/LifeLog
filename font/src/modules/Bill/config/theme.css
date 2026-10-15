@@ -1,0 +1,10 @@
+:root {
+  --bill-ink: #293b49; --bill-muted: #7c8b95; --bill-line: #e4e9ee;
+  --bill-accent: #258b88; --bill-accent-hover: #1f7775; --bill-accent-active: #176d6b;
+  --bill-accent-soft: #e9f4f2; --bill-canvas: #f3f5f8; --bill-surface: #fff;
+  --bill-income: #288d76; --bill-expense: #d76069; --bill-transfer: #537fbd;
+  --bill-loss: #cf4f5c; --bill-neutral: #edf1f3; --bill-profit: #218579;
+  --bill-chart-1: #5488d8; --bill-chart-2: #59aa8b; --bill-chart-3: #e6b44f;
+  --bill-chart-4: #8a79c7; --bill-chart-5: #e47a72; --bill-chart-6: #54aeb5;
+  --bill-chart-7: #7e9b62; --bill-chart-8: #d486a6; --bill-chart-9: #67849c;
+}

@@ -57,6 +57,7 @@ const flightTicketFields = (params) => ({
     stopovers: params.stopovers || [],
     distanceKm: params.distanceKm,
     seatNo: params.seatNo,
+    cabinClass: params.cabinClass,
     note: params.note
 })
 

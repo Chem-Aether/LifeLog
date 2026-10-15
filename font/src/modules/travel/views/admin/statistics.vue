@@ -125,7 +125,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import { getFootprints, getTickets, getTicketSummary } from '@/modules/travel/apis/travel.js'
+import { getAllFootprints, getTickets, getTicketSummary } from '@/modules/travel/apis/travel.js'
+import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
 const selectedYear = ref('all')
 const loading = ref(false)
@@ -144,6 +145,7 @@ const airlineEl = ref(null)
 const charts = []
 let summaryRequestId = 0
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
+const travelPalette = getCssThemePalette('travel', 5)
 
 const ticketDate = ticket => detail(ticket, ticket.ticketType === 'flight' ? '起飞时间' : '发车时间')
 const years = computed(() => [...new Set([
@@ -314,7 +316,7 @@ function calendarDayClass(day) {
 
 function calendarDayStyle(day) {
   if (!day || day.types.length < 2) return undefined
-  const colors = { flight: '#4f8fc9', train: '#d39643', footprint: '#319889' }
+  const colors = { flight: getCssThemeColor('--travel-chart-2'), train: getCssThemeColor('--travel-chart-3'), footprint: getCssThemeColor('--travel-chart-1') }
   const stops = day.types.map((type, index) => `${colors[type]} ${Math.round(index / day.types.length * 100)}%`)
   stops.push(`${colors[day.types[day.types.length - 1]]} 100%`)
   return { background: `linear-gradient(135deg, ${stops.join(', ')})` }
@@ -390,7 +392,7 @@ function makeWordCloud(names) {
   names.forEach(name => counts.set(name, (counts.get(name) || 0) + 1))
   const rows = groupTop(counts, 28)
   const max = Math.max(1, ...rows.map(item => item.value))
-  const colors = ['#258b88', '#4f8fc9', '#d39643', '#778f67', '#bd7182']
+  const colors = travelPalette
   return rows.map((item, index) => ({
     ...item,
     style: {
@@ -491,11 +493,12 @@ function renderTravelPreferences(events) {
     if (month >= 0 && month <= 11) monthCounts[month] += 1
     weekdayCounts[(date.getDay() + 6) % 7] += 1
   }
+  const seasons = ['--travel-season-spring', '--travel-season-summer', '--travel-season-autumn', '--travel-season-winter'].map(name => getCssThemeColor(name))
   renderPreferenceRadar(seasonEl.value, ['春', '夏', '秋', '冬'], seasonCounts, {
-    春: '#4f9b65', 夏: '#df8650', 秋: '#c99a3e', 冬: '#4f8fc9'
-  }, ['#4f9b65', '#df8650', '#c99a3e', '#4f8fc9'])
-  renderPreferenceRadar(monthEl.value, Array.from({ length: 12 }, (_, index) => `${index + 1}月`), monthCounts, {}, ['#4f9b65', '#df8650', '#c99a3e', '#4f8fc9'])
-  renderPreferenceRadar(weekdayEl.value, ['周一', '周二', '周三', '周四', '周五', '周六', '周日'], weekdayCounts, {}, ['#4f8fc9', '#258b88'])
+    春: seasons[0], 夏: seasons[1], 秋: seasons[2], 冬: seasons[3]
+  }, seasons)
+  renderPreferenceRadar(monthEl.value, Array.from({ length: 12 }, (_, index) => `${index + 1}月`), monthCounts, {}, seasons)
+  renderPreferenceRadar(weekdayEl.value, ['周一', '周二', '周三', '周四', '周五', '周六', '周日'], weekdayCounts, {}, [travelPalette[1], travelPalette[0]])
 }
 
 function paintCharts() {
@@ -550,7 +553,7 @@ async function loadSummaries() {
 
 async function loadData() {
   loading.value = true
-  const [ticketResult, footprintResult] = await Promise.allSettled([getTickets('all'), getFootprints()])
+  const [ticketResult, footprintResult] = await Promise.allSettled([getTickets('all'), getAllFootprints()])
   if (ticketResult.status === 'fulfilled') tickets.value = ticketResult.value.data || []
   else ElMessage.error('旅行票据统计加载失败')
   if (footprintResult.status === 'fulfilled') footprints.value = footprintResult.value.data || []

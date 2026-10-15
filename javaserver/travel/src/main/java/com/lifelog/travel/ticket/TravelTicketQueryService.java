@@ -63,10 +63,12 @@ public class TravelTicketQueryService {
                     .map(point -> Map.<String,Object>of("name", Objects.toString(point.getStationName(), ""),
                             "longitude", point.getLongitude(), "latitude", point.getLatitude())).toList());
             row.put("more", List.of(detail("发车时间", format(item.getDepartureTime())), detail("到达时间", format(item.getArrivalTime())),
-                    detail("类型/车型", String.join(" / ", Objects.toString(item.getTrainType(), ""), Objects.toString(item.getTrainModel(), ""))),
+                    detail("列车类型", item.getTrainType()), detail("车型", item.getTrainModel()),
+                    detail("始发站", item.getOriginStationName()), detail("终到站", item.getTerminalStationName()),
                     detail("里程", item.getMileageKm() == null ? "" : item.getMileageKm() + " km"),
-                    detail("席位", Objects.toString(item.getSeatType(), "")), detail("车厢/座位", String.join(" / ",
-                            Objects.toString(item.getCarriageNo(), ""), Objects.toString(item.getSeatNo(), "")))));
+                    detail("席别", item.getSeatType()), detail("车厢", item.getCarriageNo()),
+                    detail("座位", item.getSeatNo()),
+                    detail("备注", item.getNote())));
             return row;
         }).toList();
     }
@@ -89,8 +91,15 @@ public class TravelTicketQueryService {
             GeoReferenceClient.GeoAirport from = airports.get(item.getDepartureIcao()), to = airports.get(item.getArrivalIcao());
             if (from != null) { row.put("fromLongitude", from.longitude()); row.put("fromLatitude", from.latitude()); }
             if (to != null) { row.put("toLongitude", to.longitude()); row.put("toLatitude", to.latitude()); }
-            row.put("more", List.of(detail("起飞时间", format(item.getDepartureTime())), detail("到达时间", format(item.getArrivalTime())),
-                    detail("机型", Objects.toString(item.getAircraftType(), "")), detail("座位", Objects.toString(item.getSeatNo(), ""))));
+            row.put("more", List.of(detail("航空公司", item.getAirline()),
+                    detail("起飞时间", format(item.getDepartureTime())), detail("出发航站楼", item.getDepartureTerminal()),
+                    detail("出发机场代码", item.getDepartureIcao()), detail("登机方式", item.getBoardingMethod()),
+                    detail("到达时间", format(item.getArrivalTime())), detail("到达航站楼", item.getArrivalTerminal()),
+                    detail("到达机场代码", item.getArrivalIcao()), detail("下机方式", item.getDeboardingMethod()),
+                    detail("机型", item.getAircraftType()), detail("飞机注册号", item.getAircraftRegistration()),
+                    detail("经停机场", formatStopovers(item.getStopovers())), detail("座位", item.getSeatNo()),
+                    detail("里程", item.getDistanceKm() == null ? "" : item.getDistanceKm() + " km"),
+                    detail("备注", item.getNote())));
             return row;
         }).toList();
     }
@@ -137,7 +146,18 @@ public class TravelTicketQueryService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不支持的旅行模式");
         if (year != null && (year < 1900 || year > 2100)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "年份超出范围");
     }
-    private Map<String,Object> detail(String label, String value) { return Map.of("label", label, "value", value); }
+    private Map<String,Object> detail(String label, String value) { return Map.of("label", label, "value", Objects.toString(value, "")); }
+    private String formatStopovers(List<Map<String, Object>> stopovers) {
+        if (stopovers == null) return "";
+        return stopovers.stream().filter(Objects::nonNull).map(stopover -> {
+            Object name = stopover.get("name");
+            if (name == null) name = stopover.get("airportName");
+            Object code = stopover.get("icao");
+            String airport = Objects.toString(name, "");
+            String icao = Objects.toString(code, "");
+            return airport.isBlank() ? icao : icao.isBlank() ? airport : airport + " (" + icao + ")";
+        }).filter(value -> !value.isBlank()).collect(Collectors.joining("、"));
+    }
     private Map<String,Object> metric(String label, Object value) { return Map.of("label", label, "value", value); }
     private String format(LocalDateTime value) { return value == null ? "" : value.format(DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")); }
     private long minutes(LocalDateTime a, LocalDateTime b) { return a == null || b == null ? 0 : Math.max(0, ChronoUnit.MINUTES.between(a,b)); }

@@ -22,6 +22,7 @@ IDED 配置
 .npm-cache/
 node_modules/
 dist/
+desktop/release/
 **/.venv/
 **/__pycache__/
 **/*.py[cod]

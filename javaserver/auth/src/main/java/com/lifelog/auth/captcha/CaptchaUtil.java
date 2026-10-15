@@ -9,6 +9,7 @@ import java.util.Random;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+/** 生成随机图形验证码及对应的 JPEG 图片。 */
 public class CaptchaUtil {
     //  配置验证码图片
     private static final int WIDTH = 100;
@@ -18,7 +19,10 @@ public class CaptchaUtil {
     private static final String CHARACTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final Random random = new Random();
 
-    //  生成验证码图片
+    /**
+     * 创建随机验证码，并绘制包含干扰线的 JPEG 图片。
+     * @return 验证码文本及图片字节数据
+     */
     public static Captcha generateCaptcha() {
         BufferedImage image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();
@@ -56,6 +60,7 @@ public class CaptchaUtil {
         return new Captcha(captchaText.toString(), baos.toByteArray());
     }
 
+    /** 封装验证码文本和对应的图片数据。 */
     @Getter
     @AllArgsConstructor
     public static class Captcha {

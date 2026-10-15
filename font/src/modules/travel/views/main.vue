@@ -37,6 +37,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, DataAnalysis, Download, HomeFilled, LocationInformation, MapLocation, Menu, Picture, Position, Tickets } from '@element-plus/icons-vue'
 import { exportTravelData } from '@/modules/travel/apis/travel.js'
+import '../config/theme.css'
 
 const route = useRoute()
 const navOpen = ref(false)
@@ -65,7 +66,7 @@ async function exportAll() {
 </script>
 
 <style scoped>
-.travel-admin { --ink:#293b49; --muted:#7c8b95; --line:#e3e9ec; --paper:#fff; --accent:#258b88; --accent-strong:#1f7775; --accent-soft:#e9f4f2; --danger:#b5474a; --el-color-primary:#258b88; --el-color-primary-light-3:#62aaa7; --el-color-primary-light-5:#8dc3c0; --el-color-primary-light-7:#badbd9; --el-color-primary-light-8:#d2e8e6; --el-color-primary-light-9:#e9f4f2; --el-color-primary-dark-2:#176d6b; --el-color-danger:#b5474a; --el-color-danger-light-9:#fff2f2; min-height:100vh; background:#f3f5f8; color:var(--ink); }
+.travel-admin { --ink:var(--travel-ink); --muted:var(--travel-muted); --line:var(--travel-line); --paper:var(--travel-surface); --accent:var(--travel-accent); --accent-strong:var(--travel-accent-hover); --accent-soft:var(--travel-accent-soft); --danger:var(--travel-danger); --el-color-primary:var(--travel-accent); --el-color-primary-dark-2:var(--travel-accent-active); --el-color-danger:var(--travel-danger); min-height:100vh; background:var(--travel-canvas); color:var(--ink); }
 .admin-nav { position:fixed; z-index:30; inset:0 auto 0 0; display:flex; width:220px; flex-direction:column; box-sizing:border-box; padding:20px 12px; border-right:1px solid var(--line); background:#fff; color:var(--ink); }
 .brand-block { display:flex; align-items:center; gap:11px; padding:6px 10px 28px; }.brand-mark { display:grid; width:36px; height:36px; flex:0 0 auto; place-items:center; border-radius:7px; background:#258b88; color:#fff; font-size:17px; }
 .brand-block strong,.brand-block span { display:block; letter-spacing:0; }.brand-block strong { font-size:15px; }.brand-block span { margin-top:3px; color:#8b999f; font-size:9px; letter-spacing:.8px; }.nav-close { display:none; margin-left:auto; border:0; background:transparent; color:#71818b; font-size:17px; }

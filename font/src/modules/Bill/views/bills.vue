@@ -31,13 +31,13 @@
       <el-input v-model="filters.keyword" clearable placeholder="搜索对方、摘要或备注" class="keyword-filter" @keyup.enter="loadRecords" />
       <el-button type="primary" :loading="loading" @click="loadRecords">查询</el-button>
       <el-button :disabled="loading" @click="resetFilters">重置</el-button>
-      <span class="record-count">共 <strong>{{ records.length }}</strong> 条记录</span>
+      <span class="record-count">共 <strong>{{ total }}</strong> 条记录</span>
     </section>
 
     <section class="table-panel" v-loading="loading">
-      <BillRecordTable :rows="pageRecords" :accounts="accounts" :show-actions="true" @edit="openEdit" @delete="remove" @sort-change="handleSort" />
-      <div class="pagination" v-if="records.length">
-        <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" :total="records.length" layout="total, sizes, prev, pager, next, jumper" background />
+      <BillRecordTable :rows="records" :accounts="accounts" :show-actions="true" @edit="openEdit" @delete="remove" @sort-change="handleSort" />
+      <div class="pagination" v-if="total">
+        <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" :total="total" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadPage" @size-change="changePageSize" />
       </div>
     </section>
 
@@ -46,10 +46,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createBillRecord, deleteBillRecord, exportBillRecords, getAccounts, getBillCategories, getBillRecords, updateBillRecord } from '@/modules/Bill/apis/bill.js'
+import { createBillRecord, deleteBillRecord, exportBillRecords, getAccounts, getBillCategories, getBillRecord, getBillRecordPage, updateBillRecord } from '@/modules/Bill/apis/bill.js'
 import BillRecordTable from '../components/BillRecordTable.vue'
 import CategoryTreePicker from '../components/CategoryTreePicker.vue'
 
@@ -64,24 +64,12 @@ const saving = ref(false)
 const editingId = ref(null)
 const page = ref(1)
 const pageSize = ref(20)
+const total = ref(0)
 const sortState = reactive({ prop: '', order: '' })
 const filters = reactive({ direction: '', accountId: null, categoryId: null, range: [], keyword: '' })
 const draft = reactive(emptyDraft())
 const editSnapshot = ref('')
 let skipLeaveGuard = false
-const sortedRecords = computed(() => {
-  if (!sortState.prop || !sortState.order) return records.value
-  const sign = sortState.order === 'ascending' ? 1 : -1
-  return [...records.value].sort((a, b) => {
-    const left = sortValue(a, sortState.prop)
-    const right = sortValue(b, sortState.prop)
-    const comparison = typeof left === 'number' && typeof right === 'number'
-      ? left - right
-      : String(left).localeCompare(String(right), 'zh-CN', { numeric: true })
-    return comparison * sign
-  })
-})
-const pageRecords = computed(() => sortedRecords.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 
 function emptyDraft() {
   return { direction: 'expense', fromAccountId: null, toAccountId: null, amount: null, occurredAt: localDateTime(), counterparty: '', description: '', categoryId: null, remark: '' }
@@ -91,13 +79,7 @@ function localDateTime() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
 }
 function money(value) { return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function sortValue(row, prop) {
-  if (prop === 'amount') return Number(row.amount || 0)
-  if (prop === 'payer') return `${row.fromAccountName || row.counterparty || ''}${row.fromAccountName && row.fromAccountCode ? `（${String(row.fromAccountCode).replace(/\D/g, '').slice(-4)}）` : ''}`
-  if (prop === 'payee') return `${row.toAccountName || row.counterparty || ''}${row.toAccountName && row.toAccountCode ? `（${String(row.toAccountCode).replace(/\D/g, '').slice(-4)}）` : ''}`
-  return row[prop] || ''
-}
-function handleSort({ prop, order }) { sortState.prop = prop || ''; sortState.order = order || ''; page.value = 1 }
+function handleSort({ prop, order }) { sortState.prop = prop || ''; sortState.order = order || ''; page.value = 1; loadPage() }
 function queryParams() {
   const params = { direction: filters.direction || undefined, accountId: filters.accountId || undefined, categoryId: filters.categoryId || undefined, keyword: filters.keyword.trim() || undefined }
   if (filters.range?.length === 2) {
@@ -107,14 +89,23 @@ function queryParams() {
   return params
 }
 async function loadRecords() {
-  loading.value = true
   page.value = 1
+  await loadPage()
+}
+async function loadPage() {
+  loading.value = true
   try {
-    records.value = await getBillRecords(queryParams())
+    const result = await getBillRecordPage({
+      ...queryParams(), page: page.value, pageSize: pageSize.value,
+      sortBy: sortState.prop || 'occurredAt', sortOrder: sortState.order === 'ascending' ? 'asc' : 'desc'
+    })
+    records.value = result.records || []
+    total.value = Number(result.total || 0)
   } catch (error) {
     ElMessage.error(error?.response?.data?.msg || '账单加载失败')
   } finally { loading.value = false }
 }
+function changePageSize() { page.value = 1; loadPage() }
 async function loadAccounts() {
   try { accounts.value = await getAccounts() } catch { ElMessage.error('账户加载失败') }
 }
@@ -220,20 +211,23 @@ async function remove(row) {
     await ElMessageBox.confirm('删除后账户余额统计会自动重算，确定删除这条账单吗？', '删除账单', { type: 'warning' })
     await deleteBillRecord(row.id)
     ElMessage.success('账单已删除')
-    await loadRecords()
+    if (records.value.length === 1 && page.value > 1) page.value -= 1
+    await loadPage()
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.msg || '删除失败')
   }
 }
-watch(pageSize, () => { page.value = 1 })
 onMounted(async () => {
   if (route.query.startTime && route.query.endTime) {
     filters.range = [String(route.query.startTime).slice(0, 10), String(route.query.endTime).slice(0, 10)]
   }
-  await Promise.all([loadAccounts(), loadCategories(), loadRecords()])
+  await Promise.all([loadAccounts(), loadCategories(), loadPage()])
   if (isEditing.value) {
-    const row = route.params.id ? records.value.find(item => String(item.id) === String(route.params.id)) : null
-    if (route.params.id && !row) { ElMessage.error('账单不存在'); router.replace('/bill/query'); return }
+    let row = null
+    if (route.params.id) {
+      try { row = await getBillRecord(route.params.id) }
+      catch { ElMessage.error('账单不存在'); router.replace('/bill/query'); return }
+    }
     if (row) populateDraft(row)
     else { editingId.value = null; Object.assign(draft, emptyDraft()) }
     editSnapshot.value = JSON.stringify(draft)

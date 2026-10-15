@@ -26,8 +26,19 @@ public class BillRecordController {
                           @RequestParam(required = false) Long categoryId,
                           @RequestParam(required = false) String keyword,
                           @RequestParam(required = false) String startTime,
-                          @RequestParam(required = false) String endTime) {
-        return Result.success(recordService.list(direction, accountId, categoryId, keyword, startTime, endTime));
+                          @RequestParam(required = false) String endTime,
+                          @RequestParam(defaultValue = "1") int page,
+                          @RequestParam(defaultValue = "20") int pageSize,
+                          @RequestParam(defaultValue = "occurredAt") String sortBy,
+                          @RequestParam(defaultValue = "desc") String sortOrder,
+                          @RequestParam(defaultValue = "false") boolean excludeTransfer) {
+        return Result.success(recordService.page(direction, accountId, categoryId, keyword, startTime, endTime,
+                page, pageSize, sortBy, sortOrder, excludeTransfer));
+    }
+
+    @GetMapping("/{id}")
+    public Result record(@PathVariable long id) {
+        return Result.success(recordService.getRecord(id));
     }
 
     @PostMapping

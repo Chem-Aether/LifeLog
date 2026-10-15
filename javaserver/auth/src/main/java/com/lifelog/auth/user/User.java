@@ -7,11 +7,17 @@ import com.baomidou.mybatisplus.annotation.TableName;
 
 @Data
 @TableName("app_user")
+/** 映射系统用户表的实体。 */
 public class User {
     @TableId(value = "user_id", type = IdType.AUTO)
+    /** 用户 ID。 */
     private Long userId;
-    private String account;           // 账号
-    private String userName;         // 姓名
-    private String password;          // 密码
-    private String role;              // 用户类型：超级管理员0；管理员1；普通用户2
+    /** 登录账号。 */
+    private String account;
+    /** 用户姓名或昵称。 */
+    private String userName;
+    /** 用户密码，存储时使用 BCrypt 哈希。 */
+    private String password;
+    /** 用户类型：超级管理员 0、管理员 1、普通用户 2。 */
+    private String role;
 }

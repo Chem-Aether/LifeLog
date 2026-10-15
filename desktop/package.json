@@ -1,0 +1,41 @@
+{
+  "name": "lifelog-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LifeLog desktop shell",
+  "main": "main.cjs",
+  "scripts": {
+    "dev:web": "npm --prefix ../font run dev -- --host 127.0.0.1 --strictPort",
+    "dev:app": "wait-on http://127.0.0.1:5173 && electron .",
+    "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:app\"",
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.lifelog.desktop",
+    "productName": "LifeLog",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "config.json",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

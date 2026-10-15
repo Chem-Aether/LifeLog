@@ -21,7 +21,7 @@
           <el-option label="途经城市" value="transit" />
         </el-select>
         <el-button :disabled="loading || saving || deleting" @click="loadRows">刷新</el-button>
-        <span class="count">共 {{ filteredRows.length }} 条</span>
+        <span class="count">共 {{ total }} 条</span>
       </div>
     </el-card>
 
@@ -37,7 +37,7 @@
 
     <el-table
       ref="tableRef"
-      :data="pageRows"
+      :data="rows"
       row-key="footprintId"
       :default-sort="{ prop: 'visitDate', order: 'descending' }"
       stripe
@@ -46,7 +46,7 @@
       @selection-change="selectedRows = $event"
     >
       <el-table-column type="selection" width="48" />
-      <el-table-column prop="regionName" label="点亮地区" min-width="220" sortable="custom" />
+      <el-table-column prop="regionName" label="点亮地区" min-width="220" />
       <el-table-column prop="placeName" label="地点名称" min-width="180" sortable="custom" />
       <el-table-column prop="visitType" label="记录性质" width="110" sortable="custom">
         <template #default="scope">
@@ -66,7 +66,6 @@
       </el-table-column>
       <el-table-column label="操作" width="210" fixed="right">
         <template #default="scope">
-          <TravelRecordExportButton v-if="scope.row.footprintId" type="footprint" :record-id="scope.row.footprintId" />
           <el-button link type="primary" :disabled="saving || deleting" @click="openEdit(scope.row)">编辑</el-button>
           <el-button link type="danger" :disabled="deleting" @click="remove(scope.row)">删除</el-button>
         </template>
@@ -78,9 +77,10 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :page-sizes="[10, 20, 50]"
-        :total="sortedRows.length"
+        :total="total"
         layout="total, sizes, prev, pager, next, jumper"
         background
+        @current-change="loadRows"
         @size-change="handlePageSizeChange"
       />
     </div>
@@ -92,14 +92,14 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addFootprint, deleteFootprint, deleteFootprints, getFootprints, updateFootprint } from '@/modules/travel/apis/travel.js'
+import { addFootprint, deleteFootprint, deleteFootprints, getFootprintById, getFootprintsPage, updateFootprint } from '@/modules/travel/apis/travel.js'
 import { deleteTravelMedia, mediaUrl, uploadTravelMedia } from '@/modules/travel/apis/media.js'
 import MediaUploadEditor from '@/components/MediaUploadEditor.vue'
 import FootprintMapPicker from '@/modules/travel/components/FootprintMapPicker.vue'
 import TravelDataTools from '@/modules/travel/components/TravelDataTools.vue'
-import TravelRecordExportButton from '@/modules/travel/components/TravelRecordExportButton.vue'
 
 const rows = ref([])
+const total = ref(0)
 const route = useRoute()
 const router = useRouter()
 const isEditing = computed(() => route.name === 'TravelFootprintEdit')
@@ -137,51 +137,19 @@ const coverItems = computed({
   set: items => { form.mediaIds = items.map(item => item.mediaId) },
 })
 
-const filteredRows = computed(() => {
-  const regionKeyword = regionFilter.value.trim().toLowerCase()
-  const placeKeyword = placeFilter.value.trim().toLowerCase()
-  const selectedType = visitTypeFilter.value
-  return rows.value.filter(item => {
-    const region = `${item.regionName || ''} ${item.regionCode || ''}`.toLowerCase()
-    const place = (item.placeName || '').toLowerCase()
-    return (!regionKeyword || region.includes(regionKeyword))
-      && (!placeKeyword || place.includes(placeKeyword))
-      && (selectedType === 'all' || (item.visitType || 'travel') === selectedType)
-  })
-})
-
-const sortedRows = computed(() => {
-  if (!sortState.prop || !sortState.order) return filteredRows.value
-  const direction = sortState.order === 'ascending' ? 1 : -1
-  return [...filteredRows.value].sort((left, right) => {
-    const a = left[sortState.prop]
-    const b = right[sortState.prop]
-    if (a == null || a === '') return b == null || b === '' ? 0 : 1
-    if (b == null || b === '') return -1
-    return String(a).localeCompare(String(b), 'zh-CN', { numeric: true }) * direction
-  })
-})
-
-const pageRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return sortedRows.value.slice(start, start + pageSize.value)
-})
-
+let filterTimer
 watch([regionFilter, placeFilter, visitTypeFilter], () => {
   currentPage.value = 1
   clearSelection()
+  clearTimeout(filterTimer)
+  filterTimer = setTimeout(loadRows, 250)
 })
 watch(currentPage, clearSelection)
-
-watch(() => sortedRows.value.length, total => {
-  const lastPage = Math.max(1, Math.ceil(total / pageSize.value))
-  if (currentPage.value > lastPage) currentPage.value = lastPage
-})
 
 onMounted(async () => {
   await loadRows()
   if (!isEditing.value) return
-  const row = route.params.id ? rows.value.find(item => String(item.footprintId) === String(route.params.id)) : null
+  const row = route.params.id ? await getEditRecord(route.params.id) : null
   if (route.params.id && !row) { ElMessage.error('足迹记录不存在'); router.replace('/travel/admin/footprint'); return }
   if (row) openEditData(row)
   else { resetForm(); editSnapshot.value = snapshotForm() }
@@ -193,7 +161,7 @@ watch(() => route.fullPath, async () => {
   if (currentEditId !== lastEditId) pendingMediaDeletion.value = new Set()
   lastEditId = currentEditId
   await loadRows()
-  const row = route.params.id ? rows.value.find(item => String(item.footprintId) === String(route.params.id)) : null
+  const row = route.params.id ? await getEditRecord(route.params.id) : null
   if (route.params.id && !row) { ElMessage.error('足迹记录不存在'); router.replace('/travel/admin/footprint'); return }
   if (row) openEditData(row)
   else { resetForm(); editSnapshot.value = snapshotForm() }
@@ -203,9 +171,19 @@ async function loadRows() {
   const sequence = ++loadSequence
   loading.value = true
   try {
-    const res = await getFootprints()
+    const res = await getFootprintsPage({
+      region: regionFilter.value.trim() || undefined,
+      keyword: placeFilter.value.trim() || undefined,
+      visitType: visitTypeFilter.value === 'all' ? undefined : visitTypeFilter.value,
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      sortBy: sortState.prop || 'visitDate',
+      sortOrder: sortState.order === 'ascending' ? 'asc' : 'desc',
+    })
     if (sequence !== loadSequence) return
-    rows.value = res.data || []
+    const result = res.data || {}
+    rows.value = result.records || []
+    total.value = Number(result.total || 0)
     clearSelection()
   } catch (error) {
     if (sequence === loadSequence) ElMessage.error(error?.response?.data?.message || '足迹记录加载失败')
@@ -214,16 +192,23 @@ async function loadRows() {
   }
 }
 
+async function getEditRecord(id) {
+  try { return (await getFootprintById(id)).data }
+  catch { return null }
+}
+
 function handleSortChange({ prop, order }) {
   sortState.prop = prop || ''
   sortState.order = order || ''
   currentPage.value = 1
   clearSelection()
+  loadRows()
 }
 
 function handlePageSizeChange() {
   currentPage.value = 1
   clearSelection()
+  loadRows()
 }
 
 function clearSelection() {
@@ -377,6 +362,7 @@ async function remove(row) {
     deleting.value = true
     await deleteFootprint(row.footprintId)
     ElMessage.success('删除成功')
+    if (rows.value.length === 1 && currentPage.value > 1) currentPage.value -= 1
     await loadRows()
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') ElMessage.error('删除失败')
@@ -397,6 +383,7 @@ async function deleteSelected() {
     const result = await deleteFootprints(selected.map(row => row.footprintId))
     const deleted = Number(result?.data ?? result) || 0
     clearSelection()
+    if (selected.length === rows.value.length && currentPage.value > 1) currentPage.value -= 1
     await loadRows()
     if (deleted === selected.length) ElMessage.success(`已删除 ${deleted} 条足迹记录`)
     else ElMessage.warning(`成功删除 ${deleted} 条，另有 ${selected.length - deleted} 条已不存在`)

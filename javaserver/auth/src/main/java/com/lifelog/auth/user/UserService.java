@@ -8,12 +8,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 @Service
+/** 处理用户认证、账号初始化和个人资料业务。 */
 public class UserService extends ServiceImpl<UserMapper, User> {
     private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
     @Autowired
     private UserMapper userMapper;
 
-    // 登录逻辑
+    /**
+     * 校验账号密码并返回用户；兼容的明文密码会在登录成功后升级为 BCrypt 哈希。
+     * @param account 用户账号
+     * @param password 用户输入的密码
+     * @return 认证成功的用户实体
+     * @throws RuntimeException 输入缺失、账号不存在或密码错误时抛出
+     */
     public User login(String account, String password) {
         if (account == null || account.isBlank()) {
             throw new RuntimeException("账号不能为空");
@@ -39,7 +46,12 @@ public class UserService extends ServiceImpl<UserMapper, User> {
 
         return user;
     }
-    // 注册
+    /**
+     * 创建系统首个用户账号，并以 BCrypt 哈希形式保存密码。
+     * @param user 待注册的用户信息
+     * @return 已写入数据库的用户实体
+     * @throws RuntimeException 注册数据无效或系统已完成初始化时抛出
+     */
     public User register(User user) {
         if (user == null) {
             throw new RuntimeException("请求数据不能为空");
@@ -60,6 +72,12 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         return user;
     }
 
+    /**
+     * 查询用户资料并清除密码字段后返回。
+     * @param account 用户账号
+     * @return 不包含密码的用户资料
+     * @throws RuntimeException 账号不存在时抛出
+     */
     public User getProfile(String account) {
         User user = userMapper.selectByAccount(account);
         if (user == null) throw new RuntimeException("账号不存在");
@@ -67,6 +85,13 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         return user;
     }
 
+    /**
+     * 更新用户昵称并返回不含密码的用户资料。
+     * @param account 用户账号
+     * @param userName 新昵称；{@code null} 将按空字符串处理
+     * @return 更新后的用户资料
+     * @throws RuntimeException 账号不存在或昵称超长时抛出
+     */
     public User updateProfile(String account, String userName) {
         User user = userMapper.selectByAccount(account);
         if (user == null) throw new RuntimeException("账号不存在");
@@ -78,6 +103,13 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         return user;
     }
 
+    /**
+     * 校验当前密码并保存新密码的 BCrypt 哈希。
+     * @param account 用户账号
+     * @param currentPassword 当前密码
+     * @param newPassword 新密码
+     * @throws RuntimeException 密码缺失、不符合要求或当前密码错误时抛出
+     */
     public void changePassword(String account, String currentPassword, String newPassword) {
         if (currentPassword == null || currentPassword.isBlank()) throw new RuntimeException("请输入当前密码");
         if (newPassword == null || newPassword.isBlank()) throw new RuntimeException("请输入新密码");

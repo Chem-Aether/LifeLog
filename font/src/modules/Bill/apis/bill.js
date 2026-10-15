@@ -12,7 +12,8 @@ export const updateBillCategory = (id, data) => request({ url: `/bill/categories
 export const deleteBillCategory = id => request({ url: `/bill/categories/${id}`, method: 'delete' })
 export const getAccountRecords = (id, params) => request({ url: `/bill/accounts/${id}/records`, method: 'get', params })
 
-export const getBillRecords = params => request({ url: '/bill/records', method: 'get', params })
+export const getBillRecordPage = params => request({ url: '/bill/records', method: 'get', params })
+export const getBillRecord = id => request({ url: `/bill/records/${id}`, method: 'get' })
 export const importBillRecords = records => request({ url: '/bill/records/import', method: 'post', data: { records }, timeout: 120000 })
 export const exportBillRecords = params => billRequest({ url: '/bill/records/export', method: 'get', params, responseType: 'blob', fullResponse: true, timeout: 120000 })
 export const createBillRecord = data => request({ url: '/bill/records', method: 'post', data })

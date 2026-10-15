@@ -36,6 +36,7 @@ public class FlightRecord {
     @TableField(value = "stopovers", typeHandler = JsonbStringTypeHandler.class, jdbcType = JdbcType.OTHER)
     private String stopoversJson;
     private String seatNo;
+    private String cabinClass;
     private BigDecimal distanceKm;
     private String note;
 }
