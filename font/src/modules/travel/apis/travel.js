@@ -1,24 +1,7 @@
 import { travelRequest as request } from '@/utils/request.js'
 
 
-const yearParams = (year) => year === 'all' ? {} : { year }
-
-export const getTickets = (mode, year = 'all') => {
-    return request({
-        url: '/travel/tickets',
-        method: 'get',
-        params: { mode, ...yearParams(year) }
-    })
-}
-
-
-export const getTicketSummary = (mode, year = 'all') => {
-    return request({
-        url: '/travel/tickets/summary',
-        method: 'get',
-        params: { mode, ...yearParams(year) }
-    })
-}
+const yearParams = year => year === 'all' ? {} : { year }
 
 export const getAllFootprints = (year = 'all') => request({
     url: '/travel/footprints/all',

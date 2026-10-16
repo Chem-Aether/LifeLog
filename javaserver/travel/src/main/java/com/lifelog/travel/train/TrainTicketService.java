@@ -33,7 +33,7 @@ public class TrainTicketService {
     }
 
     /** 按条件分页查询铁路行程并加载途经站。 */
-    public Object list(TrainRecordQueryDTO dto) {
+    public Page<TrainRecord> list(TrainRecordQueryDTO dto) {
         LambdaQueryWrapper<TrainRecord> query = new LambdaQueryWrapper<>();
         query.like(StringUtils.hasText(dto.getTrainNo()), TrainRecord::getTrainNo, dto.getTrainNo());
         query.like(StringUtils.hasText(dto.getStartStationName()), TrainRecord::getStartStationName, dto.getStartStationName());

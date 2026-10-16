@@ -108,33 +108,6 @@
           </div>
         </section>
 
-        <section class="quick-section" aria-labelledby="quick-heading">
-          <div class="section-heading compact-heading">
-            <div><h2 id="quick-heading">快捷入口</h2><p>直接前往常用页面</p></div>
-          </div>
-          <div class="quick-links">
-            <RouterLink to="/bill/query" class="quick-link">
-              <span class="quick-icon bill-quick"><el-icon><Tickets /></el-icon></span>
-              <span><strong>账单流水</strong><small>查询与记录收支</small></span>
-              <el-icon class="quick-arrow"><ArrowRight /></el-icon>
-            </RouterLink>
-            <RouterLink to="/bill/statistics" class="quick-link">
-              <span class="quick-icon stats-quick"><el-icon><DataAnalysis /></el-icon></span>
-              <span><strong>收支统计</strong><small>查看周期与分类分析</small></span>
-              <el-icon class="quick-arrow"><ArrowRight /></el-icon>
-            </RouterLink>
-            <RouterLink to="/travel/admin/footprint" class="quick-link">
-              <span class="quick-icon travel-quick"><el-icon><Location /></el-icon></span>
-              <span><strong>旅行足迹</strong><small>管理地点与到访记录</small></span>
-              <el-icon class="quick-arrow"><ArrowRight /></el-icon>
-            </RouterLink>
-            <RouterLink to="/diary" class="quick-link">
-              <span class="quick-icon diary-quick"><el-icon><Notebook /></el-icon></span>
-              <span><strong>写日记</strong><small>记录今天的文字与照片</small></span>
-              <el-icon class="quick-arrow"><ArrowRight /></el-icon>
-            </RouterLink>
-          </div>
-        </section>
 
         <footer class="page-footer"><span>LifeLog</span><span>记录生活，留住时间</span></footer>
       </div>

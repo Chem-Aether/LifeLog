@@ -1,4 +1,4 @@
-package com.lifelog.travel.train;
+package com.lifelog.travel.integration.spiderserver;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -18,7 +18,7 @@ public class SpiderTrainClient {
      * 创建车次服务客户端。
      * @param baseUrl 外部车次服务基础地址
      */
-    public SpiderTrainClient(@Value("${spiderserver.base-url:http://127.0.0.1:8082}") String baseUrl) {
+    public SpiderTrainClient(@Value("${spiderserver.base-url}") String baseUrl) {
         client = RestClient.builder().baseUrl(baseUrl).build();
     }
 
@@ -30,10 +30,12 @@ public class SpiderTrainClient {
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> stations(String trainNo, LocalDate date) {
+        // 发起HTTP请求
         Map<String, Object> response = client.get().uri(builder -> builder.path("/stations")
                         .queryParam("train_code", trainNo)
                         .queryParam("date", date.format(DateTimeFormatter.BASIC_ISO_DATE)).build())
                 .retrieve().body(new ParameterizedTypeReference<>() {});
+        // 解析返回Json
         Object data = response == null ? null : response.get("data");
         return data instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }

@@ -1,5 +1,7 @@
 package com.lifelog.travel.train;
 
+import com.lifelog.travel.integration.mapserver.RailwayRouteClient;
+import com.lifelog.travel.integration.spiderserver.SpiderTrainClient;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;

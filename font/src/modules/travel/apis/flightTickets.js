@@ -1,4 +1,5 @@
 import { travelRequest as request } from '@/utils/request.js'
+import { departureYearFilter, fetchAllPages } from './fetchAllPages.js'
 
 // 获取机票列表
 export const getFlightList = (params = {}) => {
@@ -32,6 +33,9 @@ export const getFlightList = (params = {}) => {
     return { data: [], page: { total: 0, records: [] } }
     })
 }
+
+export const getAllFlights = (year = 'all') =>
+    fetchAllPages(params => getFlightList({ ...departureYearFilter(year), ...params }))
 
 // 公共字段
 const flightTicketFields = (params) => ({

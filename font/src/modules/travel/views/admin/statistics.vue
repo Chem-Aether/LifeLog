@@ -125,15 +125,17 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import { getAllFootprints, getTickets, getTicketSummary } from '@/modules/travel/apis/travel.js'
+import { getAllFootprints } from '@/modules/travel/apis/travel.js'
+import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
+import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
+import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
+import { summarizeFlights, summarizeTrains } from '@/modules/travel/utils/travelMetrics.js'
 import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
 const selectedYear = ref('all')
 const loading = ref(false)
 const tickets = ref([])
 const footprints = ref([])
-const flightSummary = ref(null)
-const trainSummary = ref(null)
 const cityEl = ref(null)
 const aircraftEl = ref(null)
 const trainModelEl = ref(null)
@@ -143,7 +145,6 @@ const weekdayEl = ref(null)
 const trainTypeEl = ref(null)
 const airlineEl = ref(null)
 const charts = []
-let summaryRequestId = 0
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 const travelPalette = getCssThemePalette('travel', 5)
 
@@ -155,6 +156,10 @@ const years = computed(() => [...new Set([
 const activeTickets = computed(() => selectedYear.value === 'all'
   ? tickets.value
   : tickets.value.filter(ticket => ticketDate(ticket).startsWith(selectedYear.value)))
+const flightSummary = computed(() => summarizeFlights(activeTickets.value
+  .filter(ticket => ticket.ticketType === 'flight').map(ticket => ticket.record)))
+const trainSummary = computed(() => summarizeTrains(activeTickets.value
+  .filter(ticket => ticket.ticketType === 'train').map(ticket => ticket.record)))
 const activeFootprints = computed(() => {
   const records = footprints.value.filter(item => item.visitType !== 'transit')
   return selectedYear.value === 'all' ? records : records.filter(item => String(item.visitDate || '').startsWith(selectedYear.value))
@@ -260,7 +265,7 @@ const personalRecords = computed(() => {
       makeRecord('train-duration', '时长之最', best(trains, durationMinutes), durationFormatter)
     ],
     flight: [
-      makeRecord('flight-distance', '距离之最', best(flights, flightDistance), distanceFormatter, '机场坐标直线估算'),
+      makeRecord('flight-distance', '距离之最', best(flights, flightDistance), distanceFormatter),
       makeRecord('flight-duration', '时长之最', best(flights, durationMinutes), durationFormatter)
     ]
   }
@@ -292,6 +297,8 @@ function ticketDistance(ticket) {
 }
 
 function flightDistance(ticket) {
+  const recordedDistance = Number(ticket.record?.distanceKm)
+  if (Number.isFinite(recordedDistance) && recordedDistance > 0) return recordedDistance
   if ([ticket.fromLongitude, ticket.fromLatitude, ticket.toLongitude, ticket.toLatitude].some(value => value == null || value === '')) return 0
   const longitude1 = Number(ticket.fromLongitude)
   const latitude1 = Number(ticket.fromLatitude)
@@ -533,32 +540,17 @@ function paintCharts() {
   renderRank(aircraftEl.value, groupTop(aircraftCounts), '#4f8fc9')
 }
 
-async function loadSummaries() {
-  const requestId = ++summaryRequestId
-  try {
-    const [flights, trains] = await Promise.all([
-      getTicketSummary('flight', selectedYear.value),
-      getTicketSummary('train', selectedYear.value)
-    ])
-    if (requestId !== summaryRequestId) return
-    flightSummary.value = flights.data || null
-    trainSummary.value = trains.data || null
-  } catch {
-    if (requestId === summaryRequestId) {
-      flightSummary.value = null
-      trainSummary.value = null
-    }
-  }
-}
-
 async function loadData() {
   loading.value = true
-  const [ticketResult, footprintResult] = await Promise.allSettled([getTickets('all'), getAllFootprints()])
-  if (ticketResult.status === 'fulfilled') tickets.value = ticketResult.value.data || []
-  else ElMessage.error('旅行票据统计加载失败')
+  const [flightResult, trainResult, footprintResult] = await Promise.allSettled([
+    getAllFlights(), getAllTrains(), getAllFootprints()
+  ])
+  const flights = flightResult.status === 'fulfilled' ? flightResult.value : []
+  const trains = trainResult.status === 'fulfilled' ? trainResult.value : []
+  tickets.value = [...flights.map(toFlightTrip), ...trains.map(toTrainTrip)]
+  if (flightResult.status === 'rejected' || trainResult.status === 'rejected') ElMessage.error('旅行记录加载失败')
   if (footprintResult.status === 'fulfilled') footprints.value = footprintResult.value.data || []
   else ElMessage.error('足迹统计加载失败')
-  await loadSummaries()
   await nextTick()
   paintCharts()
   loading.value = false
@@ -567,7 +559,6 @@ async function loadData() {
 function resizeCharts() { charts.forEach(chart => chart.resize()) }
 
 watch(selectedYear, async () => {
-  await loadSummaries()
   await nextTick()
   paintCharts()
 })

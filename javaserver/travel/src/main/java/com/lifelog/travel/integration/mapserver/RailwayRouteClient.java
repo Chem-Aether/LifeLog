@@ -1,4 +1,4 @@
-package com.lifelog.travel.train;
+package com.lifelog.travel.integration.mapserver;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;

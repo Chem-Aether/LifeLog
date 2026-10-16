@@ -1,4 +1,5 @@
 import { travelRequest as request } from '@/utils/request.js'
+import { departureYearFilter, fetchAllPages } from './fetchAllPages.js'
 
 // 列表（支持分页/条件查询）
 export const getTrainList = (params = {}) =>
@@ -17,6 +18,9 @@ export const getTrainList = (params = {}) =>
     // 兜底：避免页面 map 报错
     return { data: [], page: { total: 0, records: [] } }
     })
+
+export const getAllTrains = (year = 'all') =>
+    fetchAllPages(params => getTrainList({ ...departureYearFilter(year), ...params }))
 
 // 获取车票基础信息（不含途经站明细）
 export const getTrainTicket = (trainId) => {

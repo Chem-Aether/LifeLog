@@ -18,8 +18,11 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { getAllFootprints, getTickets } from '@/modules/travel/apis/travel.js'
-import { getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
+import { getAllFootprints } from '@/modules/travel/apis/travel.js'
+import { getAirportsByIcao, getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
+import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
+import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
+import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
 import { mediaUrl } from '@/modules/travel/apis/media.js'
 import { useTravleStore } from '@/modules/travel/stores/TravelStore.js'
 import { MAP_BASE_URL } from '@/utils/request.js'
@@ -526,13 +529,25 @@ function stopTrainAnimation() {
 
 async function loadTravelData() {
   const results = await Promise.allSettled([
-    getTickets('flight', props.selectedYear),
-    getTickets('train', props.selectedYear),
+    getAllFlights(props.selectedYear),
+    getAllTrains(props.selectedYear),
     getAllFootprints(props.selectedYear)
   ])
   const value = index => results[index].status === 'fulfilled' ? results[index].value?.data || [] : []
-  flightRecords = value(0)
-  trainRecords = value(1)
+  const flights = results[0].status === 'fulfilled' ? results[0].value || [] : []
+  const trains = results[1].status === 'fulfilled' ? results[1].value || [] : []
+  const airportCodes = [...new Set(flights.flatMap(item => [item.departureIcao, item.arrivalIcao]).filter(Boolean))]
+  let airports = {}
+  if (airportCodes.length) {
+    try {
+      const response = await getAirportsByIcao(airportCodes)
+      airports = Object.fromEntries((response?.data || []).map(airport => [airport.icao, airport]))
+    } catch {
+      airports = {}
+    }
+  }
+  flightRecords = flights.map(record => toFlightTrip(record, airports))
+  trainRecords = trains.map(toTrainTrip)
   footprintRecords = value(2)
   if (String(props.selectedYear) === 'all') {
     const years = [...new Set([

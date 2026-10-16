@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @TableName("train_waypoint")
 public class TrainWaypoint {
     /** 途经站记录 ID。 */
-@TableId(value = "waypoint_id", type = IdType.AUTO)
+    @TableId(value = "waypoint_id", type = IdType.AUTO)
     private Long waypointId;
     /** 关联行程 ID。 */
     private Long trainId;
@@ -23,10 +23,10 @@ public class TrainWaypoint {
     /** 站名。 */
     private String stationName;
     /** 站点经度。 */
-@TableField(exist = false)
+    @TableField(exist = false)
     private BigDecimal longitude;
     /** 站点纬度。 */
-@TableField(exist = false)
+    @TableField(exist = false)
     private BigDecimal latitude;
     /** 到站时间。 */
     private LocalDateTime arrivalTime;

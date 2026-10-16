@@ -22,6 +22,7 @@ public class FootSpotService {
     private final FootSpotMapper mapper;
     private final GeoReferenceClient geoClient;
     private final ObjectMapper objectMapper;
+
     /** 创建足迹业务服务。 */
     public FootSpotService(FootSpotMapper mapper, GeoReferenceClient geoClient, ObjectMapper objectMapper) {
         this.mapper = mapper;
@@ -72,7 +73,9 @@ public class FootSpotService {
     /** 查询单条足迹并补全关联信息。 */
     public FootSpot findById(Long id) {
         FootSpot spot = mapper.selectRecordById(id);
-        if (spot == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
+        if (spot == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
+        }
         hydrate(spot);
         enrichRegions(List.of(spot));
         return spot;
@@ -80,11 +83,17 @@ public class FootSpotService {
 
     /** 批量反查足迹坐标并填充行政区层级信息。 */
     private void enrichRegions(List<FootSpot> spots) {
+        // 过滤经纬度非空点查询行政区
         List<GeoReferenceClient.GeoPoint> points = spots.stream()
                 .filter(item -> item.getLongitude() != null && item.getLatitude() != null)
-                .map(item -> new GeoReferenceClient.GeoPoint(String.valueOf(item.getFootprintId()), item.getLongitude().doubleValue(), item.getLatitude().doubleValue()))
+                .map(item -> new GeoReferenceClient.GeoPoint(
+                    String.valueOf(item.getFootprintId()), 
+                    item.getLongitude().doubleValue(), 
+                    item.getLatitude().doubleValue()
+                ))
                 .toList();
         Map<String, GeoReferenceClient.GeoLocation> regions = reverseGeocode(points);
+
         spots.forEach(item -> {
             GeoReferenceClient.GeoLocation location = regions.get(String.valueOf(item.getFootprintId()));
             List<GeoReferenceClient.GeoRegion> path = location == null || location.path() == null ? List.of() : location.path();
@@ -139,18 +148,29 @@ public class FootSpotService {
     /** 校验并更新足迹记录及其空间位置。 */
     @Transactional
     public FootSpot update(Long id, FootSpot spot) {
-        if (mapper.selectById(id) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
-        validate(spot); prepare(spot); spot.setFootprintId(id); mapper.updateById(spot); mapper.updateLocation(id, spot.getLongitude(), spot.getLatitude());
+        if (mapper.selectById(id) == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
+        }
+        validate(spot); prepare(spot); 
+        spot.setFootprintId(id); 
+        mapper.updateById(spot); 
+        mapper.updateLocation(id, spot.getLongitude(), spot.getLatitude());
         return hydrate(mapper.selectRecordById(id));
     }
 
     /** 删除指定足迹。 */
-    public void delete(Long id) { if (mapper.deleteById(id) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在"); }
+    public void delete(Long id) { 
+        if (mapper.deleteById(id) == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在"); 
+        }
+    }
 
     /** 批量删除去重后的有效足迹 ID。 */
     public int deleteBatch(List<Long> ids) {
         List<Long> validIds = ids == null ? List.of() : ids.stream().filter(Objects::nonNull).filter(id -> id > 0).distinct().toList();
-        if (validIds.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择有效的足迹记录");
+        if (validIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择有效的足迹记录");
+        }
         return mapper.delete(new LambdaQueryWrapper<FootSpot>().in(FootSpot::getFootprintId, validIds));
     }
 
@@ -176,7 +196,8 @@ public class FootSpotService {
             spot.setMediaIds(spot.getMediaIdsJson() == null ? List.of()
                     : objectMapper.readValue(spot.getMediaIdsJson(), new TypeReference<>() {}));
             return spot;
-        } catch (JsonProcessingException e) {
+        } 
+        catch (JsonProcessingException e) {
             throw new IllegalStateException("足迹图片列表数据损坏", e);
         }
     }

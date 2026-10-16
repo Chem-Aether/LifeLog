@@ -4,6 +4,8 @@ export const searchAirports = (keyword, limit = 20) => mapRequest.get('/api/airp
   params: { keyword, limit },
 })
 
+export const getAirportsByIcao = codes => mapRequest.post('/api/airports/by-codes', { codes })
+
 export const searchPoiCatalog = (keyword, limit = 20) => mapRequest.get('/api/pois/search', {
   params: { q: keyword, limit },
 })

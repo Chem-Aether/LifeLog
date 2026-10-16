@@ -51,7 +51,10 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { getTickets, getTicketSummary } from '@/modules/travel/apis/travel.js'
+import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
+import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
+import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
+import { summarizeFlights, summarizeTrains } from '@/modules/travel/utils/travelMetrics.js'
 
 const props = defineProps({
   mode: { type: String, required: true },
@@ -95,14 +98,14 @@ async function loadPanel() {
   loading.value = true
   selectedTicket.value = null
   try {
-    const [ticketResult, summaryResult] = await Promise.all([
-      getTickets(props.mode, props.selectedYear),
-      getTicketSummary(props.mode, props.selectedYear)
-    ])
+    const records = props.mode === 'flight'
+      ? await getAllFlights(props.selectedYear)
+      : await getAllTrains(props.selectedYear)
     if (currentRequest !== requestId) return
-    tickets.value = ticketResult.data || []
-    dashboard.value = summaryResult.data?.metrics || []
-    statistics.value = summaryResult.data?.distribution || []
+    tickets.value = props.mode === 'flight' ? records.map(toFlightTrip) : records.map(toTrainTrip)
+    const summary = props.mode === 'flight' ? summarizeFlights(records) : summarizeTrains(records)
+    dashboard.value = summary.metrics
+    statistics.value = summary.distribution
     applyRouteSelection()
   } catch {
     if (currentRequest !== requestId) return
