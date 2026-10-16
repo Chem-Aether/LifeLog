@@ -1,7 +1,6 @@
 package com.lifelog.bill.account;
 
 import org.apache.ibatis.annotations.Delete;
-import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -12,8 +11,13 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
+/** 定义账单账户及其交易记录的数据访问操作。 */
 @Mapper
 public interface BillAccountMapper {
+    /**
+     * 查询账户列表及实时余额。
+     * @return 账户数据列表
+     */
     @Select("""
             SELECT a.id, a.name, a.code, a.opening_balance AS "openingBalance",
                    a.opening_balance
@@ -23,29 +27,41 @@ public interface BillAccountMapper {
             """)
     List<Map<String, Object>> findAll();
 
+    /** 新增账户并返回数据库生成的 ID。 */
     @Select("INSERT INTO bill_account(name, code, opening_balance) VALUES (#{name}, #{code}, #{balance}) RETURNING id")
     Long insert(@Param("name") String name, @Param("code") String code, @Param("balance") BigDecimal balance);
 
+    /** 更新账户信息。 */
     @Update("UPDATE bill_account SET name=#{name}, code=#{code}, opening_balance=#{balance}, updated_at=now() WHERE id=#{id}")
     int update(@Param("id") long id, @Param("name") String name, @Param("code") String code, @Param("balance") BigDecimal balance);
 
+    /** 删除指定账户。 */
     @Delete("DELETE FROM bill_account WHERE id=#{id}")
     int delete(long id);
 
+    /** 判断账户是否存在。 */
     @Select("SELECT COUNT(*) FROM bill_account WHERE id=#{id}")
     int countById(long id);
 
+    /** 按指定排序和分页条件查询账户交易记录。 */
     @SelectProvider(type = Sql.class, method = "accountRecords")
     List<Map<String, Object>> findRecords(@Param("accountId") long accountId, @Param("sortBy") String sortBy,
                                           @Param("sortOrder") String sortOrder, @Param("limit") int limit,
                                           @Param("offset") long offset);
 
+    /** 统计账户关联的交易记录数量。 */
     @Select("SELECT COUNT(*) FROM bill_transaction WHERE from_account_id=#{accountId} OR to_account_id=#{accountId}")
     long countRecords(long accountId);
 
     final class Sql {
+        /** 创建账户交易记录 SQL 提供器。 */
         public Sql() {}
 
+        /**
+         * 生成账户交易记录查询 SQL，并限定排序字段与方向。
+         * @param params MyBatis 查询参数
+         * @return 查询 SQL
+         */
         public static String accountRecords(Map<String, Object> params) {
             String sortColumn = switch (String.valueOf(params.get("sortBy"))) {
                 case "amount" -> "t.amount";

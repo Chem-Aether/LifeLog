@@ -1,10 +1,7 @@
 package com.lifelog.auth.user;
 
 import com.lifelog.common.api.Result;
-import com.lifelog.auth.user.LoginRequest;
-import com.lifelog.auth.user.User;
 import com.lifelog.auth.captcha.CaptchaService;
-import com.lifelog.auth.user.UserService;
 import com.lifelog.auth.token.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

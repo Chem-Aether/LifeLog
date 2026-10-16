@@ -2,8 +2,8 @@ package com.lifelog.auth.user;
 
 import lombok.Data;
 
-@Data
 /** 封装登录或注册请求中的账号、密码及验证码信息。 */
+@Data
 public class LoginRequest {
     /** 用户账号。 */
     private String account;

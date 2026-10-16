@@ -2,7 +2,6 @@ package com.lifelog.travel.train;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lifelog.travel.train.TrainRouteSampleRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -15,18 +14,21 @@ import java.util.List;
 import java.util.Map;
 import java.time.LocalDate;
 
+/** 根据手动站点或外部时刻信息生成铁路线路轨迹。 */
 @Service
 public class TrainRouteSamplingService {
     private final SpiderTrainClient spiderClient;
     private final RailwayRouteClient railwayClient;
     private final ObjectMapper objectMapper;
 
+    /** 创建铁路路线采样服务。 */
     public TrainRouteSamplingService(SpiderTrainClient spiderClient, RailwayRouteClient railwayClient, ObjectMapper objectMapper) {
         this.spiderClient = spiderClient;
         this.railwayClient = railwayClient;
         this.objectMapper = objectMapper;
     }
 
+    /** 获取车次途经站、请求路线采样并返回可保存的轨迹信息。 */
     @SuppressWarnings("unchecked")
     public Map<String, Object> sample(TrainRouteSampleRequest request) {
         if (request == null) {

@@ -1,22 +1,12 @@
 package com.lifelog.travel.train;
 
 import com.lifelog.common.api.Result;
-import com.lifelog.travel.train.TrainRecordQueryDTO;
-import com.lifelog.travel.train.TrainRouteSampleRequest;
-import com.lifelog.travel.train.TrainRecord;
-import com.lifelog.travel.train.TrainTicketService;
-import com.lifelog.travel.train.TrainRouteSamplingService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
-/**
- * 车票接口（对外分开）：
- * - 列表只返回车票+途径站数量
- * - 详情不展开途径站（站点详情走独立接口）
- * - 保存接口支持同时传入 stations，后端事务原子保存
- */
+/** 提供铁路行程查询、维护和线路采样接口。 */
 @RestController
 @RequestMapping("/travel/trains")
 @Tag(name = "火车票管理接口", description = "列表/详情/保存/删除")
@@ -27,38 +17,45 @@ public class TrainTicketController {
     @Autowired
     private TrainRouteSamplingService trainRouteSamplingService;
 
+    /** 分页查询铁路行程。 */
     @GetMapping
     public Result list(TrainRecordQueryDTO dto) {
         return Result.success(trainTicketService.list(dto));
     }
 
+    /** 查询铁路行程详情及途经站。 */
     @GetMapping("/{trainId}")
     public Result get(@PathVariable Long trainId) {
         TrainRecord ticket = trainTicketService.get(trainId);
         return Result.success(ticket);
     }
 
+    /** 创建铁路行程。 */
     @PostMapping
     public Result add(@RequestBody TrainRecord record) {
         return Result.success(trainTicketService.save(record));
     }
 
+    /** 更新铁路行程及其线路数据。 */
     @PutMapping("/{trainId}")
     public Result update(@PathVariable Long trainId, @RequestBody TrainRecord record) {
         return Result.success(trainTicketService.update(trainId, record));
     }
 
+    /** 根据自动或手动途经站生成线路轨迹。 */
     @PostMapping("/route/sample")
     public Result sampleRoute(@RequestBody TrainRouteSampleRequest request) {
         return Result.success(trainRouteSamplingService.sample(request));
     }
 
+    /** 删除单条铁路行程。 */
     @DeleteMapping("/{trainId}")
     public Result delete(@PathVariable Long trainId) {
         trainTicketService.delete(trainId);
         return Result.success();
     }
 
+    /** 批量删除铁路行程。 */
     @DeleteMapping("/batch")
     public Result deleteBatch(@RequestBody List<Long> ids) {
         return Result.success(trainTicketService.deleteBatch(ids));

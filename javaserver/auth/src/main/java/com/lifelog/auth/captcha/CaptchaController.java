@@ -1,6 +1,5 @@
 package com.lifelog.auth.captcha;
 
-import com.lifelog.auth.captcha.CaptchaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

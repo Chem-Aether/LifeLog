@@ -1,6 +1,5 @@
 package com.lifelog.auth.captcha;
 
-import com.lifelog.auth.captcha.CaptchaUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.util.concurrent.ConcurrentHashMap;

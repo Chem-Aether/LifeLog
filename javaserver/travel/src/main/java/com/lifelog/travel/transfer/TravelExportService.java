@@ -4,6 +4,8 @@ import com.lifelog.travel.flight.FlightRecord;
 import com.lifelog.travel.flight.FlightRecordMapper;
 import com.lifelog.travel.footprint.FootSpot;
 import com.lifelog.travel.footprint.FootSpotMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
@@ -12,20 +14,28 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
 
+/** 将航班和足迹记录导出为 Excel 工作簿或空白模板。 */
 @Service
 public class TravelExportService {
     private final FlightRecordMapper flights;
     private final FootSpotMapper footprints;
+    private final ObjectMapper objectMapper;
 
-    public TravelExportService(FlightRecordMapper flights, FootSpotMapper footprints) {
+    /** 创建旅行数据导出服务。 */
+    public TravelExportService(FlightRecordMapper flights, FootSpotMapper footprints, ObjectMapper objectMapper) {
         this.flights = flights;
         this.footprints = footprints;
+        this.objectMapper = objectMapper;
     }
 
+    /** 导出指定类型的全部记录。 */
     public byte[] exportCategory(String type) throws IOException { return buildWorkbook(type, null, false); }
+    /** 导出指定类型的单条记录。 */
     public byte[] exportOne(String type, Long id) throws IOException { return buildWorkbook(type, id, false); }
+    /** 创建指定类型的空白导入模板。 */
     public byte[] exportTemplate(String type) throws IOException { return buildWorkbook(type, null, true); }
 
+    /** 生成包含机票或足迹数据的工作簿。 */
     private byte[] buildWorkbook(String type, Long id, boolean template) throws IOException {
         if (!"flight".equals(type) && !"footprint".equals(type)) throw new IllegalArgumentException("Excel 仅支持机票和足迹数据");
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
@@ -49,18 +59,29 @@ public class TravelExportService {
         }
     }
 
+    /** 将航班记录转换为 Excel 行数据。 */
     private List<?> flightRow(FlightRecord row) {
         return Arrays.asList(row.getFlightId(), row.getFlightNo(), row.getAirline(), row.getAircraftType(), row.getAircraftRegistration(),
                 row.getDepartureIcao(), row.getDepartureAirportName(), row.getDepartureTerminal(), row.getBoardingMethod(), row.getDepartureTime(),
                 row.getArrivalIcao(), row.getArrivalAirportName(), row.getArrivalTerminal(), row.getDeboardingMethod(), row.getArrivalTime(),
-                row.getStopoversJson(), row.getSeatNo(), row.getCabinClass(), row.getDistanceKm(), row.getNote());
+                stopoversJson(row.getStopovers()), row.getSeatNo(), row.getCabinClass(), row.getDistanceKm(), row.getNote());
     }
 
+    private String stopoversJson(List<Map<String, Object>> stopovers) {
+        try {
+            return objectMapper.writeValueAsString(stopovers == null ? List.of() : stopovers);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("经停机场数据无法导出", exception);
+        }
+    }
+
+    /** 将足迹记录转换为 Excel 行数据。 */
     private List<?> footprintRow(FootSpot row) {
         return Arrays.asList(row.getFootprintId(), row.getPlaceName(), row.getVisitType(), row.getVisitDate(), row.getLongitude(),
                 row.getLatitude(), row.getPoiReference(), row.getNote(), row.getMediaIdsJson());
     }
 
+    /** 写入表头和数据行，并设置列宽、筛选和冻结表头。 */
     private void writeSheet(Workbook workbook, String name, List<String> columns, List<? extends List<?>> rows, CellStyle style) {
         Sheet sheet = workbook.createSheet(name);
         Row header = sheet.createRow(0);

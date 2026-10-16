@@ -2,8 +2,6 @@ package com.lifelog.travel.transfer;
 
 import com.lifelog.travel.train.TrainGeoPackageService;
 import com.lifelog.travel.footprint.FootprintGeoPackageService;
-import com.lifelog.travel.transfer.TravelExportService;
-import com.lifelog.travel.transfer.TravelImportService;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,6 +13,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+/** 提供旅行数据的文件导出、模板下载和批量导入接口。 */
 @RestController
 @RequestMapping("/travel")
 public class TravelExportController {
@@ -26,6 +25,7 @@ public class TravelExportController {
     private final TrainGeoPackageService geoPackageService;
     private final FootprintGeoPackageService footprintGeoPackageService;
 
+    /** 创建旅行数据传输控制器。 */
     public TravelExportController(TravelExportService exportService, TravelImportService importService,
                                   TrainGeoPackageService geoPackageService,
                                   FootprintGeoPackageService footprintGeoPackageService) {
@@ -35,6 +35,7 @@ public class TravelExportController {
         this.footprintGeoPackageService = footprintGeoPackageService;
     }
 
+    /** 导出全部或指定类型、记录的旅行数据文件。 */
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@RequestParam(required = false) String type,
                                          @RequestParam(required = false) Long id,
@@ -61,6 +62,7 @@ public class TravelExportController {
         return attachment(data, ("flight".equals(type) ? "机票" : "足迹") + "-" + LocalDate.now() + ".xlsx", XLSX);
     }
 
+    /** 下载指定旅行类型的导入模板。 */
     @GetMapping("/export/template")
     public ResponseEntity<byte[]> template(@RequestParam String type) throws IOException {
         validateType(type);
@@ -68,6 +70,7 @@ public class TravelExportController {
         return attachment(exportService.exportTemplate(type), ("flight".equals(type) ? "机票" : "足迹") + "导入模板.xlsx", XLSX);
     }
 
+    /** 根据旅行类型和导入模式处理上传文件。 */
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Map<String, Object> importFile(@RequestPart("file") MultipartFile file,
                                          @RequestParam String type,
@@ -84,6 +87,7 @@ public class TravelExportController {
         return importService.importWorkbook(file, mode.equals("update"), type);
     }
 
+    /** 将机票和铁路、足迹数据打包为 ZIP 文件。 */
     private byte[] exportAllZip() throws IOException {
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream(); ZipOutputStream zip = new ZipOutputStream(bytes, java.nio.charset.StandardCharsets.UTF_8)) {
             addEntry(zip, "机票.xlsx", exportService.exportCategory("flight"));
@@ -94,17 +98,20 @@ public class TravelExportController {
         }
     }
 
+    /** 向 ZIP 文件添加一个条目。 */
     private void addEntry(ZipOutputStream zip, String name, byte[] bytes) throws IOException {
         zip.putNextEntry(new ZipEntry(name));
         zip.write(bytes);
         zip.closeEntry();
     }
 
+    /** 校验导入或导出类型是否受支持。 */
     private void validateType(String type) {
         if (!"flight".equals(type) && !"train".equals(type) && !"footprint".equals(type))
             throw new IllegalArgumentException("type 仅支持 flight、train、footprint");
     }
 
+    /** 创建带下载文件名和媒体类型的 HTTP 响应。 */
     private ResponseEntity<byte[]> attachment(byte[] data, String filename, MediaType mediaType) {
         ContentDisposition disposition = ContentDisposition.attachment().filename(filename, java.nio.charset.StandardCharsets.UTF_8).build();
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString()).contentType(mediaType).body(data);

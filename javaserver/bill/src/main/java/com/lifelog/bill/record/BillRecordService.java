@@ -15,18 +15,21 @@ import java.util.Map;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+/** 处理账单记录筛选、分页、导入导出及增删改业务。 */
 @Service
 public class BillRecordService {
     private final BillRecordMapper recordMapper;
     private final BillAccountMapper accountMapper;
     private final BillCategoryMapper categoryMapper;
 
+    /** 创建账单记录业务服务。 */
     public BillRecordService(BillRecordMapper recordMapper, BillAccountMapper accountMapper, BillCategoryMapper categoryMapper) {
         this.recordMapper = recordMapper;
         this.accountMapper = accountMapper;
         this.categoryMapper = categoryMapper;
     }
 
+    /** 按筛选条件查询全部匹配账单记录。 */
     public List<Map<String, Object>> list(String direction, Long accountId, Long categoryId,
                                           String keyword, String startTime, String endTime) {
         if (direction != null && !direction.isBlank()) requireDirection(direction);
@@ -35,6 +38,7 @@ public class BillRecordService {
                 timestamp(startTime), timestamp(endTime));
     }
 
+    /** 按条件分页查询账单，并返回记录总数。 */
     public Map<String, Object> page(String direction, Long accountId, Long categoryId, String keyword,
                                     String startTime, String endTime, int page, int pageSize,
                                     String sortBy, String sortOrder, boolean excludeTransfer) {
@@ -53,12 +57,14 @@ public class BillRecordService {
         return Map.of("records", records, "total", total, "page", page, "pageSize", pageSize);
     }
 
+    /** 查询单条账单记录。 */
     public Map<String, Object> getRecord(long id) {
         Map<String, Object> record = recordMapper.findRecordById(id);
         if (record == null) throw new ResponseStatusException(NOT_FOUND, "账单记录不存在");
         return record;
     }
 
+    /** 校验后在单个事务中批量导入账单记录。 */
     @Transactional
     public int importRecords(List<BillTransactionRequest> records) {
         if (records == null || records.isEmpty()) throw new ResponseStatusException(BAD_REQUEST, "导入文件没有账单记录");
@@ -77,6 +83,7 @@ public class BillRecordService {
         return records.size();
     }
 
+    /** 将筛选后的账单记录导出为 UTF-8 CSV。 */
     public byte[] exportRecords(String direction, Long accountId, Long categoryId, String keyword,
                                 String startTime, String endTime) {
         List<Map<String, Object>> rows = list(direction, accountId, categoryId, keyword, startTime, endTime);
@@ -98,6 +105,7 @@ public class BillRecordService {
         return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    /** 校验并创建账单记录。 */
     @Transactional
     public long create(BillTransactionRequest request) {
         validate(request);
@@ -106,6 +114,7 @@ public class BillRecordService {
         return recordMapper.insertReturningId(request);
     }
 
+    /** 校验并更新账单记录。 */
     @Transactional
     public void update(long id, BillTransactionRequest request) {
         validate(request);
@@ -114,10 +123,12 @@ public class BillRecordService {
         if (recordMapper.update(id, request) == 0) throw new ResponseStatusException(NOT_FOUND, "账单记录不存在");
     }
 
+    /** 删除指定账单记录。 */
     public void delete(long id) {
         if (recordMapper.delete(id) == 0) throw new ResponseStatusException(NOT_FOUND, "账单记录不存在");
     }
 
+    /** 校验账单引用的付款和收款账户是否存在。 */
     private void checkAccounts(BillTransactionRequest request) {
         for (Long id : new Long[]{request.fromAccountId(), request.toAccountId()}) {
             if (id != null && accountMapper.countById(id) == 0)
@@ -125,11 +136,13 @@ public class BillRecordService {
         }
     }
 
+    /** 校验账单引用的分类是否存在。 */
     private void checkCategory(Long id) {
         if (id != null && categoryMapper.countById(id) == 0)
             throw new ResponseStatusException(BAD_REQUEST, "所选分类不存在");
     }
 
+    /** 校验交易时间、金额及账户组合规则。 */
     private static void validate(BillTransactionRequest request) {
         if (request == null || request.occurredAt() == null) throw new ResponseStatusException(BAD_REQUEST, "交易时间不能为空");
         if (request.amount() == null || request.amount().signum() <= 0 || request.amount().scale() > 2)
@@ -140,19 +153,23 @@ public class BillRecordService {
             throw new ResponseStatusException(BAD_REQUEST, "出账与入账账户不能相同");
     }
 
+    /** 校验账单方向是否受支持。 */
     private static void requireDirection(String direction) {
         if (!List.of("income", "expense", "transfer").contains(direction))
             throw new ResponseStatusException(BAD_REQUEST, "账单方向无效");
     }
 
+    /** 将本地日期时间文本解析为 SQL 时间戳。 */
     private static Timestamp timestamp(String value) {
         return value == null || value.isBlank() ? null : Timestamp.valueOf(LocalDateTime.parse(value));
     }
 
+    /** 将空白字符串规范化为 {@code null}。 */
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
     }
 
+    /** 转义并包裹 CSV 字段，避免内容破坏列结构。 */
     private static String csvValue(Object value) {
         String text = value == null ? "" : value.toString();
         return "\"" + text.replace("\"", "\"\"") + "\"";

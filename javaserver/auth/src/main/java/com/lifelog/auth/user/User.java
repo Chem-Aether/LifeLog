@@ -5,12 +5,12 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+/** 映射系统用户表的实体。 */
 @Data
 @TableName("app_user")
-/** 映射系统用户表的实体。 */
 public class User {
-    @TableId(value = "user_id", type = IdType.AUTO)
     /** 用户 ID。 */
+@TableId(value = "user_id", type = IdType.AUTO)
     private Long userId;
     /** 登录账号。 */
     private String account;

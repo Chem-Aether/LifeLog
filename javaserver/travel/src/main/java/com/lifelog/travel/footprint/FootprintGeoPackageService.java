@@ -1,7 +1,5 @@
 package com.lifelog.travel.footprint;
 
-import com.lifelog.travel.footprint.FootSpot;
-import com.lifelog.travel.footprint.FootSpotMapper;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -20,24 +18,29 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+/** 将足迹导出为符合 GeoPackage 规范的点要素文件。 */
 @Service
 public class FootprintGeoPackageService {
     private static final int GPKG_APPLICATION_ID = 0x47504B47;
     private static final String WGS84_WKT = "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433],AUTHORITY[\"EPSG\",\"4326\"]]";
     private final FootSpotMapper footprints;
 
+    /** 创建足迹 GeoPackage 导出服务。 */
     public FootprintGeoPackageService(FootSpotMapper footprints) {
         this.footprints = footprints;
     }
 
+    /** 导出全部足迹记录。 */
     public byte[] exportAll() throws IOException {
         return export(null);
     }
 
+    /** 导出单条足迹记录。 */
     public byte[] exportOne(Long id) throws IOException {
         return export(id);
     }
 
+    /** 创建临时 GeoPackage、写入筛选后的足迹并读取文件字节。 */
     private byte[] export(Long id) throws IOException {
         Path temp = Files.createTempFile("lifelog-footprints-", ".gpkg");
         try {
@@ -57,6 +60,7 @@ public class FootprintGeoPackageService {
         }
     }
 
+    /** 创建 GeoPackage 元数据表及足迹要素表。 */
     private void createSchema(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute("PRAGMA application_id=" + GPKG_APPLICATION_ID);
@@ -77,6 +81,7 @@ public class FootprintGeoPackageService {
         }
     }
 
+    /** 批量写入足迹及点几何，并更新图层边界范围。 */
     private void insertRows(Connection connection, List<FootSpot> rows) throws SQLException {
         String sql = "INSERT INTO footprints (footprint_id,place_name,visit_type,visit_date,poi_reference,note,media_ids,longitude,latitude,geom) VALUES (?,?,?,?,?,?,?,?,?,?)";
         double minX = Double.POSITIVE_INFINITY;
@@ -121,6 +126,7 @@ public class FootprintGeoPackageService {
         }
     }
 
+    /** 编码 WGS84 点几何为 GeoPackage 二进制格式。 */
     private byte[] pointBlob(double longitude, double latitude) {
         ByteBuffer buffer = ByteBuffer.allocate(29).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put((byte) 'G').put((byte) 'P').put((byte) 0).put((byte) 1).putInt(4326);

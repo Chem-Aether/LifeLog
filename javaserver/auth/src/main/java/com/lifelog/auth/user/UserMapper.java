@@ -1,7 +1,6 @@
 package com.lifelog.auth.user;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.lifelog.auth.user.User;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;

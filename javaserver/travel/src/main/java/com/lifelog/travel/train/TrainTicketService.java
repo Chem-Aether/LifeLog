@@ -5,11 +5,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lifelog.travel.train.TrainRecordQueryDTO;
-import com.lifelog.travel.train.TrainRecord;
-import com.lifelog.travel.train.TrainWaypoint;
-import com.lifelog.travel.train.TrainRecordMapper;
-import com.lifelog.travel.train.TrainWaypointMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +13,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
+/** 处理铁路行程及途经站的查询、校验、持久化和里程计算。 */
 @Service
 public class TrainTicketService {
     private static final double EARTH_RADIUS_KM = 6371.0088;
@@ -30,12 +25,14 @@ public class TrainTicketService {
     private final TrainWaypointMapper waypointMapper;
     private final ObjectMapper objectMapper;
 
+    /** 创建铁路行程业务服务。 */
     public TrainTicketService(TrainRecordMapper mapper, TrainWaypointMapper waypointMapper, ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.waypointMapper = waypointMapper;
         this.objectMapper = objectMapper;
     }
 
+    /** 按条件分页查询铁路行程并加载途经站。 */
     public Object list(TrainRecordQueryDTO dto) {
         LambdaQueryWrapper<TrainRecord> query = new LambdaQueryWrapper<>();
         query.like(StringUtils.hasText(dto.getTrainNo()), TrainRecord::getTrainNo, dto.getTrainNo());
@@ -51,12 +48,14 @@ public class TrainTicketService {
         return result;
     }
 
+    /** 查询铁路行程详情及途经站。 */
     public TrainRecord get(Long id) {
         TrainRecord record = hydrate(mapper.selectRecordById(id));
         if (record == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "列车记录不存在");
         return record;
     }
 
+    /** 校验并事务性保存行程、线路和途经站。 */
     @Transactional
     public TrainRecord save(TrainRecord record) {
         validate(record);
@@ -68,6 +67,7 @@ public class TrainTicketService {
         return get(record.getTrainId());
     }
 
+    /** 校验并事务性更新行程、线路和途经站。 */
     @Transactional
     public TrainRecord update(Long id, TrainRecord record) {
         if (mapper.selectById(id) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "列车记录不存在");
@@ -80,22 +80,26 @@ public class TrainTicketService {
         return get(id);
     }
 
+    /** 删除指定铁路行程。 */
     public void delete(Long id) {
         if (mapper.deleteById(id) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "列车记录不存在");
     }
 
+    /** 批量删除去重后的有效行程 ID。 */
     public int deleteBatch(List<Long> ids) {
         List<Long> validIds = ids == null ? List.of() : ids.stream().filter(Objects::nonNull).filter(id -> id > 0).distinct().toList();
         if (validIds.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择有效的铁路行程");
         return mapper.delete(new LambdaQueryWrapper<TrainRecord>().in(TrainRecord::getTrainId, validIds));
     }
 
+    /** 为行程记录加载其途经站列表。 */
     public TrainRecord hydrate(TrainRecord record) {
         if (record == null) return null;
         record.setWaypoints(waypointMapper.selectByTrainId(record.getTrainId()));
         return record;
     }
 
+    /** 规范化途经站顺序和线路几何，并在缺少里程时计算里程。 */
     private void prepare(TrainRecord record) {
         if (record.getWaypoints() == null) record.setWaypoints(java.util.List.of());
         for (int i = 0; i < record.getWaypoints().size(); i++) record.getWaypoints().get(i).setSequence(i + 1);
@@ -103,6 +107,7 @@ public class TrainTicketService {
         updateMileage(record);
     }
 
+    /** 优先根据线路几何计算里程，缺失时使用途经站坐标计算。 */
     private void updateMileage(TrainRecord record) {
         if (record.getMileageKm() != null && record.getMileageKm().signum() > 0) return;
         Double routeDistance = routeDistanceKm(record.getRouteGeoJson());
@@ -116,6 +121,7 @@ public class TrainTicketService {
         }
     }
 
+    /** 从 LineString 或 MultiLineString GeoJSON 计算总里程。 */
     private Double routeDistanceKm(String routeGeoJson) {
         if (!StringUtils.hasText(routeGeoJson)) return null;
         try {
@@ -137,6 +143,7 @@ public class TrainTicketService {
         }
     }
 
+    /** 根据线路坐标序列计算球面距离。 */
     private Double lineDistanceKm(JsonNode coordinates) {
         if (!coordinates.isArray()) throw invalidRoute();
         JsonNode previous = null;
@@ -156,6 +163,7 @@ public class TrainTicketService {
         return segments == 0 ? null : total;
     }
 
+    /** 根据有序且具备坐标的途经站计算总里程。 */
     private Double waypointDistanceKm(List<TrainWaypoint> points) {
         List<TrainWaypoint> ordered = points.stream()
                 .filter(point -> point.getLongitude() != null && point.getLatitude() != null)
@@ -177,6 +185,7 @@ public class TrainTicketService {
         return total;
     }
 
+    /** 检查经纬度是否为有限值且处于有效范围。 */
     private void validateCoordinate(double longitude, double latitude) {
         if (!Double.isFinite(longitude) || !Double.isFinite(latitude)
                 || longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
@@ -184,6 +193,7 @@ public class TrainTicketService {
         }
     }
 
+    /** 使用 Haversine 公式计算两点之间的球面距离。 */
     private double greatCircleDistance(double lon1, double lat1, double lon2, double lat2) {
         double latitudeDelta = Math.toRadians(lat2 - lat1);
         double longitudeDelta = Math.toRadians(lon2 - lon1);
@@ -194,6 +204,7 @@ public class TrainTicketService {
         return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(Math.min(1, haversine)));
     }
 
+    /** 删除旧站点并按顺序写入新的途经站列表。 */
     private void replaceWaypoints(Long trainId, java.util.List<TrainWaypoint> waypoints) {
         waypointMapper.deleteByTrainId(trainId);
         for (int index = 0; index < waypoints.size(); index++) {
@@ -208,6 +219,7 @@ public class TrainTicketService {
         }
     }
 
+    /** 验证并规范化铁路线路 GeoJSON。 */
     private String normalizeRouteGeoJson(String value) {
         if (!StringUtils.hasText(value)) return null;
         try {
@@ -226,11 +238,13 @@ public class TrainTicketService {
         }
     }
 
+    /** 创建统一的线路几何参数错误。 */
     private ResponseStatusException invalidRoute() {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "轨迹必须是 LineString 或 MultiLineString Geometry");
     }
 
+    /** 校验车次、起终点及时间先后关系。 */
     private void validate(TrainRecord record) {
         if (record == null || !StringUtils.hasText(record.getTrainNo()) || !StringUtils.hasText(record.getStartStationName())
                 || !StringUtils.hasText(record.getEndStationName()) || record.getDepartureTime() == null) {

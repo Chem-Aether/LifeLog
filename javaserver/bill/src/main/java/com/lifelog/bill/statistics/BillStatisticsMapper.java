@@ -8,20 +8,31 @@ import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
 
+/** 定义账单统计所需的数据查询操作。 */
 @Mapper
 public interface BillStatisticsMapper {
+    /**
+     * 汇总指定时间范围内的收入、支出和转账金额。
+     * @param startTime 起始时间
+     * @param endTime 截止时间
+     * @return 收支统计映射
+     */
     @SelectProvider(type = Sql.class, method = "summary")
     Map<String, Object> summary(@Param("startTime") Timestamp startTime, @Param("endTime") Timestamp endTime);
 
+    /** 汇总各账户的收入和支出。 */
     @SelectProvider(type = Sql.class, method = "accountStatistics")
     List<Map<String, Object>> accountStatistics(@Param("startTime") Timestamp startTime, @Param("endTime") Timestamp endTime);
 
+    /** 查询时间范围内的每日收支。 */
     @SelectProvider(type = Sql.class, method = "dailyTimeline")
     List<Map<String, Object>> dailyTimeline(@Param("startTime") Timestamp startTime, @Param("endTime") Timestamp endTime);
 
+    /** 查询时间范围内的每月收支。 */
     @SelectProvider(type = Sql.class, method = "monthlyTimeline")
     List<Map<String, Object>> monthlyTimeline(@Param("startTime") Timestamp startTime, @Param("endTime") Timestamp endTime);
 
+    /** 按账单分类汇总金额。 */
     @SelectProvider(type = Sql.class, method = "categoryStatistics")
     List<Map<String, Object>> categoryStatistics(@Param("direction") String direction,
                                                  @Param("startTime") Timestamp startTime,
@@ -30,8 +41,14 @@ public interface BillStatisticsMapper {
                                                  @Param("parentCategoryId") Long parentCategoryId);
 
     final class Sql {
+        /** 创建统计查询 SQL 提供器。 */
         public Sql() {}
 
+        /**
+         * 生成收支概览查询 SQL。
+         * @param params 查询参数
+         * @return 查询 SQL
+         */
         public static String summary(Map<String, Object> params) {
             return """
                     SELECT COALESCE(SUM(amount) FILTER (WHERE from_account_id IS NULL),0) AS income,
@@ -41,6 +58,11 @@ public interface BillStatisticsMapper {
                     """ + dateFilter(params);
         }
 
+        /**
+         * 生成分账户收支统计 SQL。
+         * @param params 查询参数
+         * @return 查询 SQL
+         */
         public static String accountStatistics(Map<String, Object> params) {
             StringBuilder sql = new StringBuilder("""
                     SELECT a.id, a.name, a.code,
@@ -56,6 +78,11 @@ public interface BillStatisticsMapper {
             return sql.toString();
         }
 
+        /**
+         * 生成每日收支时间线 SQL。
+         * @param params 查询参数
+         * @return 查询 SQL
+         */
         public static String dailyTimeline(Map<String, Object> params) {
             String measures = "COALESCE(SUM(amount) FILTER (WHERE from_account_id IS NULL),0) AS income, "
                     + "COALESCE(SUM(amount) FILTER (WHERE to_account_id IS NULL),0) AS expense ";
@@ -64,6 +91,11 @@ public interface BillStatisticsMapper {
                     + "GROUP BY DATE_TRUNC('day', occurred_at) ORDER BY DATE_TRUNC('day', occurred_at)";
         }
 
+        /**
+         * 生成每月收支时间线 SQL。
+         * @param params 查询参数
+         * @return 查询 SQL
+         */
         public static String monthlyTimeline(Map<String, Object> params) {
             String measures = "COALESCE(SUM(amount) FILTER (WHERE from_account_id IS NULL),0) AS income, "
                     + "COALESCE(SUM(amount) FILTER (WHERE to_account_id IS NULL),0) AS expense ";
@@ -72,6 +104,11 @@ public interface BillStatisticsMapper {
                     + "GROUP BY DATE_TRUNC('month', occurred_at) ORDER BY DATE_TRUNC('month', occurred_at)";
         }
 
+        /**
+         * 生成按分类汇总金额的 SQL。
+         * @param params 查询参数
+         * @return 查询 SQL
+         */
         public static String categoryStatistics(Map<String, Object> params) {
             boolean detailed = Boolean.TRUE.equals(params.get("detailed")) || params.get("parentCategoryId") != null;
             String category = params.get("parentCategoryId") != null
@@ -85,6 +122,11 @@ public interface BillStatisticsMapper {
             return sql.append(detailed ? " GROUP BY c.id, c.name ORDER BY total_amount DESC" : " GROUP BY 1 ORDER BY total_amount DESC").toString();
         }
 
+        /**
+         * 根据起止时间生成 SQL 日期过滤片段。
+         * @param params 查询参数
+         * @return 日期过滤 SQL
+         */
         private static String dateFilter(Map<String, Object> params) {
             StringBuilder sql = new StringBuilder();
             if (params.get("startTime") != null) sql.append(" AND occurred_at >= #{startTime}");

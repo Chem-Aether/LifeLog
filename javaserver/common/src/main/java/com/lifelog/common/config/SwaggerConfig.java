@@ -8,8 +8,13 @@ import io.swagger.v3.oas.models.info.Info;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** 配置服务 API 文档及请求认证方案。 */
 @Configuration
 public class SwaggerConfig {
+    /**
+     * 创建包含 token 请求头认证定义的 OpenAPI 文档。
+     * @return OpenAPI 配置
+     */
     @Bean
     public OpenAPI lifeLogOpenApi() {
         return new OpenAPI().info(new Info()

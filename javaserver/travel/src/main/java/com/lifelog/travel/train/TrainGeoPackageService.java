@@ -2,18 +2,12 @@ package com.lifelog.travel.train;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lifelog.travel.train.TrainRecord;
-import com.lifelog.travel.train.TrainWaypoint;
-import com.lifelog.travel.train.TrainRecordMapper;
-import com.lifelog.travel.train.TrainWaypointMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
@@ -23,6 +17,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+/** 负责铁路行程 GeoPackage 的创建、导出、导入及几何编码。 */
 @Service
 public class TrainGeoPackageService {
     private static final int GPKG_APPLICATION_ID = 0x47504B47;
@@ -32,6 +27,7 @@ public class TrainGeoPackageService {
     private final TrainTicketService trainService;
     private final ObjectMapper objectMapper;
 
+    /** 创建铁路 GeoPackage 服务。 */
     public TrainGeoPackageService(TrainRecordMapper trains, TrainWaypointMapper waypoints,
                                   TrainTicketService trainService, ObjectMapper objectMapper) {
         this.trains = trains;
@@ -40,10 +36,14 @@ public class TrainGeoPackageService {
         this.objectMapper = objectMapper;
     }
 
+    /** 导出全部铁路行程及线路数据。 */
     public byte[] exportAll() throws IOException { return export(null, false); }
+    /** 导出指定铁路行程及线路数据。 */
     public byte[] exportOne(Long id) throws IOException { return export(id, false); }
+    /** 创建铁路行程导入模板。 */
     public byte[] exportTemplate() throws IOException { return export(null, true); }
 
+    /** 生成临时 GeoPackage，并写入行程、线路和途经站。 */
     private byte[] export(Long id, boolean template) throws IOException {
         Path temp = Files.createTempFile("lifelog-trains-", ".gpkg");
         try {
@@ -69,6 +69,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 创建 GeoPackage 元数据表及铁路属性、线路和途经站图层。 */
     private void createSchema(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute("PRAGMA application_id=" + GPKG_APPLICATION_ID);
@@ -95,6 +96,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 写入一个 GeoPackage 图层的元数据记录。 */
     private void addContents(PreparedStatement statement, String table, String type, String name,
                              String description, String timestamp, Integer srsId) throws SQLException {
         statement.setString(1, table); statement.setString(2, type); statement.setString(3, name);
@@ -103,6 +105,7 @@ public class TrainGeoPackageService {
         statement.executeUpdate();
     }
 
+    /** 批量写入铁路行程属性记录。 */
     private void insertRecords(Connection connection, List<TrainRecord> records) throws SQLException {
         String sql = "INSERT INTO train_records (train_id,train_no,train_type,train_model,start_station_name,departure_time,end_station_name,arrival_time,origin_station_name,terminal_station_name,carriage_no,seat_no,seat_type,mileage_km,route_source,route_captured_at,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -123,6 +126,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 将行程 GeoJSON 线路写入铁路轨迹图层。 */
     private void insertRoutes(Connection connection, List<TrainRecord> records) throws SQLException, IOException {
         try (PreparedStatement statement = connection.prepareStatement("INSERT INTO train_routes (train_id,geom) VALUES (?,?)")) {
             for (TrainRecord row : records) {
@@ -135,6 +139,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 将指定行程的途经站及其点几何写入 GeoPackage。 */
     private void insertWaypoints(Connection connection, Set<Long> trainIds) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("INSERT INTO train_waypoints (train_id,sequence,station_name,arrival_time,departure_time,longitude,latitude,geom) VALUES (?,?,?,?,?,?,?,?)")) {
             for (TrainWaypoint point : waypoints.selectAllRecords()) {
@@ -154,6 +159,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 校验并导入铁路 GeoPackage 文件。 */
     public Map<String, Object> importFile(MultipartFile file, boolean updateExisting) throws IOException {
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("请选择非空 GeoPackage 文件");
         Path temp = Files.createTempFile("lifelog-trains-import-", ".gpkg");
@@ -175,6 +181,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 确认 GeoPackage 中存在指定数据表。 */
     private void requireTable(Connection connection, String table) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")) {
             statement.setString(1, table);
@@ -184,6 +191,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 读取途经站记录并按行程 ID 分组。 */
     private Map<Long, List<TrainWaypoint>> readWaypoints(Connection connection) throws SQLException {
         Map<Long, List<TrainWaypoint>> result = new HashMap<>();
         if (!hasTable(connection, "train_waypoints")) return result;
@@ -207,6 +215,7 @@ public class TrainGeoPackageService {
         return result;
     }
 
+    /** 读取线路几何并转换为 GeoJSON。 */
     private Map<Long, String> readRoutes(Connection connection) throws SQLException, IOException {
         Map<Long, String> result = new HashMap<>();
         if (!hasTable(connection, "train_routes")) return result;
@@ -219,6 +228,7 @@ public class TrainGeoPackageService {
         return result;
     }
 
+    /** 检查 SQLite 文件中是否存在指定表。 */
     private boolean hasTable(Connection connection, String table) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")) {
             statement.setString(1, table);
@@ -226,6 +236,7 @@ public class TrainGeoPackageService {
         }
     }
 
+    /** 逐行校验并导入行程属性、线路和途经站，汇总错误信息。 */
     private Map<String, Object> importRecords(Connection connection, Map<Long, List<TrainWaypoint>> points,
                                                Map<Long, String> routeGeometries, boolean updateExisting) throws SQLException {
         int imported = 0;
@@ -251,7 +262,7 @@ public class TrainGeoPackageService {
                     record.setRouteCapturedAt(dateTime(rows.getString("route_captured_at"))); record.setNote(rows.getString("note"));
                     record.setRouteGeoJson(routeGeometries.get(sourceId)); record.setWaypoints(points.getOrDefault(sourceId, List.of()));
                     if (updateExisting) trainService.update(sourceId, record);
-                    else record = trainService.save(record);
+                    else trainService.save(record);
                     importedSourceIds.add(sourceId);
                     imported++;
                 } catch (Exception exception) {
@@ -266,14 +277,18 @@ public class TrainGeoPackageService {
         return report;
     }
 
+    /** 将可空对象转换为字符串。 */
     private String string(Object value) { return value == null ? null : value.toString(); }
+    /** 解析 ISO 本地日期时间文本。 */
     private LocalDateTime dateTime(String value) { return value == null || value.isBlank() ? null : LocalDateTime.parse(value); }
+    /** 获取异常链最深层的错误信息。 */
     private String rootMessage(Exception exception) {
         Throwable cause = exception;
         while (cause.getCause() != null) cause = cause.getCause();
         return cause.getMessage() == null ? "数据格式无效" : cause.getMessage();
     }
 
+    /** 解析并校验 LineString 或 MultiLineString GeoJSON。 */
     private JsonNode geometry(String geoJson) throws IOException {
         JsonNode node = objectMapper.readTree(geoJson);
         if (node.isTextual()) node = objectMapper.readTree(node.textValue());
@@ -283,6 +298,7 @@ public class TrainGeoPackageService {
         return node;
     }
 
+    /** 将 GeoJSON 几何转换为带 WGS84 标识头的 GeoPackage 几何字节。 */
     private byte[] gpkgGeometry(JsonNode geometry) throws IOException {
         byte[] wkb = writeWkb(geometry);
         ByteBuffer result = ByteBuffer.allocate(8 + wkb.length).order(ByteOrder.LITTLE_ENDIAN);
@@ -290,6 +306,7 @@ public class TrainGeoPackageService {
         return result.array();
     }
 
+    /** 将 GeoJSON 线路几何编码为 WKB。 */
     private byte[] writeWkb(JsonNode geometry) {
         String type = geometry.get("type").asText();
         if (type.equals("LineString")) return writeLine(geometry.get("coordinates"));
@@ -303,6 +320,7 @@ public class TrainGeoPackageService {
         return buffer.array();
     }
 
+    /** 将坐标序列编码为 WKB LineString。 */
     private byte[] writeLine(JsonNode coordinates) {
         if (!coordinates.isArray() || coordinates.size() < 2) throw new IllegalArgumentException("轨迹每段至少需要两个坐标点");
         ByteBuffer buffer = ByteBuffer.allocate(9 + coordinates.size() * 16).order(ByteOrder.LITTLE_ENDIAN);
@@ -311,6 +329,7 @@ public class TrainGeoPackageService {
         return buffer.array();
     }
 
+    /** 将 WGS84 点编码为 GeoPackage 点几何。 */
     private byte[] pointBlob(double longitude, double latitude) {
         ByteBuffer buffer = ByteBuffer.allocate(8 + 21).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put((byte) 'G').put((byte) 'P').put((byte) 0).put((byte) 1).putInt(4326);
@@ -318,6 +337,7 @@ public class TrainGeoPackageService {
         return buffer.array();
     }
 
+    /** 将 GeoPackage 线路几何解码为 GeoJSON 文本。 */
     private String geometryGeoJson(byte[] gpkg) throws IOException {
         if (gpkg.length < 13 || gpkg[0] != 'G' || gpkg[1] != 'P') throw new IllegalArgumentException("GeoPackage 几何头无效");
         int flags = Byte.toUnsignedInt(gpkg[3]);
@@ -329,6 +349,7 @@ public class TrainGeoPackageService {
         return objectMapper.writeValueAsString(geoJson);
     }
 
+    /** 从 GeoPackage 点几何中读取经纬度。 */
     private double[] pointCoordinates(byte[] gpkg) {
         if (gpkg.length < 29 || gpkg[0] != 'G' || gpkg[1] != 'P') throw new IllegalArgumentException("途经站点几何格式无效");
         int flags = Byte.toUnsignedInt(gpkg[3]);
@@ -342,6 +363,7 @@ public class TrainGeoPackageService {
         return new double[]{buffer.getDouble(), buffer.getDouble()};
     }
 
+    /** 递归解码 WKB LineString 或 MultiLineString。 */
     private JsonNode readWkb(ByteBuffer buffer) throws IOException {
         int byteOrder = Byte.toUnsignedInt(buffer.get());
         ByteOrder previous = buffer.order();

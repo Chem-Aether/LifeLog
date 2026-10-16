@@ -1,14 +1,12 @@
 package com.lifelog.auth.user;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.lifelog.auth.user.User;
-import com.lifelog.auth.user.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-@Service
 /** 处理用户认证、账号初始化和个人资料业务。 */
+@Service
 public class UserService extends ServiceImpl<UserMapper, User> {
     private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
     @Autowired

@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.lifelog.travel.integration.mapserver.GeoReferenceClient;
 import com.lifelog.travel.flight.FlightRecord;
 import com.lifelog.travel.flight.FlightRecordMapper;
-import com.lifelog.travel.flight.FlightRecordService;
 import com.lifelog.travel.train.TrainRecord;
 import com.lifelog.travel.train.TrainRecordMapper;
 import com.lifelog.travel.train.TrainTicketService;
@@ -21,21 +20,23 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/** 聚合火车和航班记录，生成票务列表及出行统计数据。 */
 @Service
 public class TravelTicketQueryService {
     private static final Logger log = LoggerFactory.getLogger(TravelTicketQueryService.class);
     private final TrainRecordMapper trainMapper;
     private final FlightRecordMapper flightMapper;
     private final TrainTicketService trainService;
-    private final FlightRecordService flightService;
     private final GeoReferenceClient geoClient;
 
+    /** 创建票务查询服务。 */
     public TravelTicketQueryService(TrainRecordMapper trainMapper, FlightRecordMapper flightMapper,
-                                    TrainTicketService trainService, FlightRecordService flightService, GeoReferenceClient geoClient) {
+                                    TrainTicketService trainService, GeoReferenceClient geoClient) {
         this.trainMapper = trainMapper; this.flightMapper = flightMapper; this.trainService = trainService;
-        this.flightService = flightService; this.geoClient = geoClient;
+        this.geoClient = geoClient;
     }
 
+    /** 查询指定旅行方式及年份的车票和机票，并按出发时间倒序排列。 */
     public List<Map<String,Object>> findTickets(String mode, Integer year) {
         validate(mode, year, true);
         List<Map<String,Object>> result = new ArrayList<>();
@@ -46,11 +47,13 @@ public class TravelTicketQueryService {
         return result;
     }
 
+    /** 查询铁路或航空票务统计摘要。 */
     public Map<String,Object> getTicketSummary(String mode, Integer year) {
         validate(mode, year, false);
         return "train".equals(mode) ? trainSummary(year) : flightSummary(year);
     }
 
+    /** 将铁路记录映射为票务列表项。 */
     private List<Map<String,Object>> trainTickets(Integer year) {
         return trainMapper.selectRecords(year).stream().map(trainService::hydrate).map(item -> {
             Map<String,Object> row = new LinkedHashMap<>();
@@ -73,13 +76,13 @@ public class TravelTicketQueryService {
         }).toList();
     }
 
+    /** 将航班记录映射为票务列表项，并补充机场坐标。 */
     private List<Map<String,Object>> flightTickets(Integer year) {
         LocalDateTime start = year == null ? null : LocalDateTime.of(year,1,1,0,0);
         List<FlightRecord> flights = flightMapper.selectList(Wrappers.<FlightRecord>lambdaQuery()
                 .ge(start != null, FlightRecord::getDepartureTime, start)
                 .lt(start != null, FlightRecord::getDepartureTime, start == null ? null : start.plusYears(1))
                 .orderByDesc(FlightRecord::getDepartureTime));
-        flights.forEach(flightService::hydrate);
         Set<String> codes = flights.stream().flatMap(item -> java.util.stream.Stream.of(item.getDepartureIcao(), item.getArrivalIcao()))
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         Map<String,GeoReferenceClient.GeoAirport> airports = lookupAirports(codes);
@@ -104,6 +107,7 @@ public class TravelTicketQueryService {
         }).toList();
     }
 
+    /** 批量查询机场信息；mapserver 不可用时返回空映射。 */
     private Map<String, GeoReferenceClient.GeoAirport> lookupAirports(Set<String> codes) {
         try {
             return geoClient.airportsByIcao(codes);
@@ -113,6 +117,7 @@ public class TravelTicketQueryService {
         }
     }
 
+    /** 汇总铁路里程、时长、次数、车站数及车型分布。 */
     private Map<String,Object> trainSummary(Integer year) {
         List<TrainRecord> rows = trainMapper.selectRecords(year).stream().map(trainService::hydrate).toList();
         long minutes = rows.stream().mapToLong(item -> minutes(item.getDepartureTime(), item.getArrivalTime())).sum();
@@ -122,6 +127,7 @@ public class TravelTicketQueryService {
         return summary(List.of(metric("里程", Math.round(mileage) + " km"), metric("时长", duration(minutes)), metric("次数", rows.size()), metric("车站", stations)), groups);
     }
 
+    /** 汇总航空里程、时长、次数、机场数及航司代码分布。 */
     private Map<String,Object> flightSummary(Integer year) {
         List<FlightRecord> rows = flightTicketsRaw(year);
         long minutes = rows.stream().mapToLong(item -> minutes(item.getDepartureTime(), item.getArrivalTime())).sum();
@@ -131,22 +137,27 @@ public class TravelTicketQueryService {
         return summary(List.of(metric("航程", Math.round(distance) + " km"), metric("航时", duration(minutes)), metric("航次", rows.size()), metric("航点", airports)), groups);
     }
 
+    /** 按年份查询原始航班记录。 */
     private List<FlightRecord> flightTicketsRaw(Integer year) {
         LocalDateTime start = year == null ? null : LocalDateTime.of(year,1,1,0,0);
         return flightMapper.selectList(Wrappers.<FlightRecord>lambdaQuery().ge(start != null, FlightRecord::getDepartureTime, start)
                 .lt(start != null, FlightRecord::getDepartureTime, start == null ? null : start.plusYears(1)));
     }
+    /** 组装统计指标和分组分布结果。 */
     private Map<String,Object> summary(List<Map<String,Object>> metrics, Map<String,Long> groups) {
         List<Map<String,Object>> distribution = groups.entrySet().stream().sorted(Map.Entry.<String,Long>comparingByValue().reversed())
                 .map(entry -> Map.<String,Object>of("name", entry.getKey(), "value", entry.getValue())).toList();
         return Map.of("metrics", metrics, "distribution", distribution);
     }
+    /** 校验旅行方式和年份范围。 */
     private void validate(String mode, Integer year, boolean all) {
         if (!(all ? Set.of("all","train","flight") : Set.of("train","flight")).contains(mode))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不支持的旅行模式");
         if (year != null && (year < 1900 || year > 2100)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "年份超出范围");
     }
+    /** 创建标签和值组成的详情项。 */
     private Map<String,Object> detail(String label, String value) { return Map.of("label", label, "value", Objects.toString(value, "")); }
+    /** 格式化经停机场名称和代码。 */
     private String formatStopovers(List<Map<String, Object>> stopovers) {
         if (stopovers == null) return "";
         return stopovers.stream().filter(Objects::nonNull).map(stopover -> {
@@ -158,11 +169,18 @@ public class TravelTicketQueryService {
             return airport.isBlank() ? icao : icao.isBlank() ? airport : airport + " (" + icao + ")";
         }).filter(value -> !value.isBlank()).collect(Collectors.joining("、"));
     }
+    /** 创建标签和值组成的统计指标。 */
     private Map<String,Object> metric(String label, Object value) { return Map.of("label", label, "value", value); }
+    /** 格式化日期时间供票据详情显示。 */
     private String format(LocalDateTime value) { return value == null ? "" : value.format(DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")); }
+    /** 计算两个日期时间之间的非负分钟数。 */
     private long minutes(LocalDateTime a, LocalDateTime b) { return a == null || b == null ? 0 : Math.max(0, ChronoUnit.MINUTES.between(a,b)); }
+    /** 将两端日期时间转换为时长文本。 */
     private String duration(LocalDateTime a, LocalDateTime b) { return duration(minutes(a,b)); }
+    /** 将分钟数格式化为小时和分钟。 */
     private String duration(long value) { return value / 60 + "h" + value % 60 + "m"; }
+    /** 提取航班号中的两位承运人前缀。 */
     private String airlinePrefix(String no) { return no == null || no.length() < 2 ? "其他" : no.substring(0,2); }
+    /** 提取车次首字母作为默认车型分组。 */
     private String trainPrefix(String no) { return no == null || no.isBlank() ? "其他" : no.substring(0,1).toUpperCase(); }
 }

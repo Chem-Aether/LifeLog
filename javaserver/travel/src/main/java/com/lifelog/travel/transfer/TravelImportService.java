@@ -17,18 +17,21 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+/** 解析旅行 Excel 文件并逐行导入航班或足迹数据。 */
 @Service
 public class TravelImportService {
     private final FlightRecordService flightService;
     private final FootSpotService footprintService;
     private final ObjectMapper objectMapper;
 
+    /** 创建旅行数据导入服务。 */
     public TravelImportService(FlightRecordService flightService, FootSpotService footprintService, ObjectMapper objectMapper) {
         this.flightService = flightService;
         this.footprintService = footprintService;
         this.objectMapper = objectMapper;
     }
 
+    /** 校验工作簿表头并导入记录，返回成功数及逐行错误。 */
     public Map<String, Object> importWorkbook(MultipartFile file, boolean updateExisting, String type) throws IOException {
         if (!"flight".equals(type) && !"footprint".equals(type)) throw new IllegalArgumentException("Excel 仅支持机票和足迹数据");
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("请选择非空 Excel 文件");
@@ -80,6 +83,7 @@ public class TravelImportService {
         return report;
     }
 
+    /** 将 Excel 行转换为航班记录。 */
     private FlightRecord readFlight(Row row, Map<String, Integer> h, DataFormatter formatter) throws IOException {
         FlightRecord record = new FlightRecord();
         record.setFlightNo(text(row, h, "航班号", formatter)); record.setAirline(text(row, h, "航空公司", formatter));
@@ -97,6 +101,7 @@ public class TravelImportService {
         return record;
     }
 
+    /** 解析 JSON 或分隔文本形式的经停机场列表。 */
     private List<Map<String, Object>> parseStopovers(String value) {
         if (value == null) return List.of();
         String plainValue = value.trim();
@@ -125,6 +130,7 @@ public class TravelImportService {
         return stopovers;
     }
 
+    /** 将 Excel 行转换为足迹记录。 */
     private FootSpot readFootprint(Row row, Map<String, Integer> h, DataFormatter formatter) {
         FootSpot spot = new FootSpot();
         spot.setPlaceName(text(row, h, "地点名称", formatter)); spot.setVisitType(text(row, h, "记录性质", formatter));
@@ -140,30 +146,36 @@ public class TravelImportService {
         return spot;
     }
 
+    /** 将工作表表头映射为列名和列索引。 */
     private Map<String, Integer> headers(Row row, DataFormatter formatter) {
         Map<String, Integer> result = new HashMap<>();
         for (Cell cell : row) result.put(formatter.formatCellValue(cell).trim(), cell.getColumnIndex());
         return result;
     }
+    /** 按列名读取并清理文本单元格。 */
     private String text(Row row, Map<String, Integer> columns, String name, DataFormatter formatter) {
         Integer index = columns.get(name);
         if (index == null || row.getCell(index) == null) return null;
         String value = formatter.formatCellValue(row.getCell(index)).trim();
         return value.isEmpty() ? null : value;
     }
+    /** 判断工作表行是否没有有效单元格内容。 */
     private boolean isBlank(Row row, DataFormatter formatter) {
         if (row == null) return true;
         for (Cell cell : row) if (!formatter.formatCellValue(cell).isBlank()) return false;
         return true;
     }
+    /** 读取并解析十进制数值单元格。 */
     private BigDecimal decimal(Row row, Map<String, Integer> columns, String name, DataFormatter formatter) {
         String value = text(row, columns, name, formatter);
         return value == null ? null : new BigDecimal(value.replace(",", ""));
     }
+    /** 读取并精确解析长整型单元格。 */
     private Long longValue(Row row, Map<String, Integer> columns, String name, DataFormatter formatter) {
         String value = text(row, columns, name, formatter);
         return value == null ? null : new BigDecimal(value).longValueExact();
     }
+    /** 解析支持多种分隔符的日期时间文本。 */
     private LocalDateTime dateTime(Row row, Map<String, Integer> columns, String name, DataFormatter formatter) {
         String value = text(row, columns, name, formatter);
         if (value == null) return null;
@@ -180,6 +192,7 @@ public class TravelImportService {
             throw new IllegalArgumentException("日期时间格式应为 yyyy-M-d HH:mm 或 yyyy-M-d-HH:mm[:ss]");
         }
     }
+    /** 解析 ISO 或年月日格式的日期文本。 */
     private LocalDate date(Row row, Map<String, Integer> columns, String name, DataFormatter formatter) {
         String value = text(row, columns, name, formatter);
         if (value == null) return null;
@@ -187,6 +200,7 @@ public class TravelImportService {
         try { return LocalDate.parse(normalized); }
         catch (Exception ignored) { return LocalDate.parse(normalized, DateTimeFormatter.ofPattern("yyyy-M-d")); }
     }
+    /** 获取异常链最深层的错误消息。 */
     private String rootMessage(Exception exception) {
         Throwable cause = exception;
         while (cause.getCause() != null) cause = cause.getCause();

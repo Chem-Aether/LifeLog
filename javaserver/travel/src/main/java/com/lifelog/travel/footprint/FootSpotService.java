@@ -15,18 +15,21 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
 
+/** 处理足迹查询、行政区反查、媒体数据转换及记录维护。 */
 @Service
 public class FootSpotService {
     private static final Logger log = LoggerFactory.getLogger(FootSpotService.class);
     private final FootSpotMapper mapper;
     private final GeoReferenceClient geoClient;
     private final ObjectMapper objectMapper;
+    /** 创建足迹业务服务。 */
     public FootSpotService(FootSpotMapper mapper, GeoReferenceClient geoClient, ObjectMapper objectMapper) {
         this.mapper = mapper;
         this.geoClient = geoClient;
         this.objectMapper = objectMapper;
     }
 
+    /** 查询足迹并补全媒体及行政区信息。 */
     public List<FootSpot> findAll(Integer year) {
         List<FootSpot> spots = mapper.selectRecords(year);
         spots.forEach(this::hydrate);
@@ -34,6 +37,7 @@ public class FootSpotService {
         return spots;
     }
 
+    /** 按条件分页查询足迹，并在行政区服务不可用时保留基本记录数据。 */
     public Map<String, Object> findPage(String visitType, String keyword, String region, int page, int pageSize,
                                         String sortBy, String sortOrder) {
         if (page < 1 || pageSize < 1 || pageSize > 100)
@@ -65,6 +69,7 @@ public class FootSpotService {
         return Map.of("records", records, "total", total, "page", page, "pageSize", pageSize);
     }
 
+    /** 查询单条足迹并补全关联信息。 */
     public FootSpot findById(Long id) {
         FootSpot spot = mapper.selectRecordById(id);
         if (spot == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
@@ -73,6 +78,7 @@ public class FootSpotService {
         return spot;
     }
 
+    /** 批量反查足迹坐标并填充行政区层级信息。 */
     private void enrichRegions(List<FootSpot> spots) {
         List<GeoReferenceClient.GeoPoint> points = spots.stream()
                 .filter(item -> item.getLongitude() != null && item.getLatitude() != null)
@@ -95,10 +101,12 @@ public class FootSpotService {
         });
     }
 
+    /** 将非空关键字转换为 SQL 模糊匹配形式。 */
     private String like(String value) {
         return StringUtils.hasText(value) ? "%" + value.trim() + "%" : null;
     }
 
+    /** 按行政区路径顺序拼接可读名称。 */
     private String formatRegionPath(List<GeoReferenceClient.GeoRegion> path) {
         StringBuilder name = new StringBuilder();
         String previous = null;
@@ -110,6 +118,7 @@ public class FootSpotService {
         return name.toString();
     }
 
+    /** 批量反查坐标；mapserver 不可用时返回空结果。 */
     private Map<String, GeoReferenceClient.GeoLocation> reverseGeocode(List<GeoReferenceClient.GeoPoint> points) {
         try {
             return geoClient.reverseGeocodeBatch(points);
@@ -119,6 +128,7 @@ public class FootSpotService {
         }
     }
 
+    /** 校验并创建足迹记录及其空间位置。 */
     @Transactional
     public FootSpot add(FootSpot spot) {
         validate(spot); prepare(spot); spot.setFootprintId(null);
@@ -126,6 +136,7 @@ public class FootSpotService {
         return hydrate(mapper.selectRecordById(spot.getFootprintId()));
     }
 
+    /** 校验并更新足迹记录及其空间位置。 */
     @Transactional
     public FootSpot update(Long id, FootSpot spot) {
         if (mapper.selectById(id) == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
@@ -133,14 +144,17 @@ public class FootSpotService {
         return hydrate(mapper.selectRecordById(id));
     }
 
+    /** 删除指定足迹。 */
     public void delete(Long id) { if (mapper.deleteById(id) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在"); }
 
+    /** 批量删除去重后的有效足迹 ID。 */
     public int deleteBatch(List<Long> ids) {
         List<Long> validIds = ids == null ? List.of() : ids.stream().filter(Objects::nonNull).filter(id -> id > 0).distinct().toList();
         if (validIds.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择有效的足迹记录");
         return mapper.delete(new LambdaQueryWrapper<FootSpot>().in(FootSpot::getFootprintId, validIds));
     }
 
+    /** 校验足迹必填项、坐标范围和媒体数量。 */
     private void validate(FootSpot spot) {
         if (spot == null || !StringUtils.hasText(spot.getPlaceName())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "地点名称不能为空");
         if (!"transit".equals(spot.getVisitType())) spot.setVisitType("travel");
@@ -155,6 +169,7 @@ public class FootSpotService {
         spot.setMediaIds(mediaIds);
     }
 
+    /** 将 JSONB 媒体字段解析为结构化 ID 列表。 */
     private FootSpot hydrate(FootSpot spot) {
         if (spot == null) return null;
         try {
@@ -166,6 +181,7 @@ public class FootSpotService {
         }
     }
 
+    /** 将媒体 ID 列表序列化为 JSONB 存储值。 */
     private void prepare(FootSpot spot) {
         try {
             spot.setMediaIdsJson(objectMapper.writeValueAsString(spot.getMediaIds()));

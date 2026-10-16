@@ -9,15 +9,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+/** 实现日记条目的查询、校验、持久化和关联数据管理。 */
 @Service
 public class DiaryEntryService {
     private static final Pattern MEDIA_ID = Pattern.compile("[0-9a-f]{32}");
     private final DiaryEntryMapper mapper;
 
+    /**
+     * 创建日记业务服务。
+     * @param mapper 日记数据访问组件
+     */
     public DiaryEntryService(DiaryEntryMapper mapper) {
         this.mapper = mapper;
     }
 
+    /**
+     * 按条件分页查询日记并附加标签和媒体关联。
+     * @param keyword 可选查询关键字
+     * @param year 可选年份
+     * @param page 页码，从 1 开始
+     * @param size 每页记录数
+     * @return 分页结果
+     */
     public Map<String, Object> list(String keyword, Integer year, int page, int size) {
         if (page < 1 || page > 100_000 || size < 1 || size > 100) throw badRequest("分页参数无效");
         String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
@@ -26,6 +39,12 @@ public class DiaryEntryService {
         return Map.of("items", items, "total", mapper.countEntries(normalizedKeyword, year), "page", page, "size", size);
     }
 
+    /**
+     * 查询单篇日记并附加其关联数据。
+     * @param id 日记 ID
+     * @return 日记详情
+     * @throws ResponseStatusException 日记不存在或请求无效时抛出
+     */
     public Map<String, Object> get(long id) {
         Map<String, Object> entry = mapper.findEntry(id);
         if (entry == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "日记不存在");
@@ -33,14 +52,29 @@ public class DiaryEntryService {
         return entry;
     }
 
+    /**
+     * 查询已有日记年份。
+     * @return 日记年份列表
+     */
     public List<Integer> years() {
         return mapper.findYears();
     }
 
+    /**
+     * 查询日记统计摘要。
+     * @param year 可选统计年份
+     * @return 统计摘要
+     */
     public Map<String, Object> summary(Integer year) {
         return mapper.summary(year);
     }
 
+    /**
+     * 校验并创建日记及关联数据。
+     * @param request 日记请求
+     * @return 新建日记详情
+     * @throws ResponseStatusException 请求数据无效时抛出
+     */
     @Transactional
     public Map<String, Object> create(DiaryEntryRequest request) {
         validate(request);
@@ -49,6 +83,13 @@ public class DiaryEntryService {
         return get(id);
     }
 
+    /**
+     * 校验并更新日记及其全部关联数据。
+     * @param id 日记 ID
+     * @param request 更新请求
+     * @return 更新后的日记详情
+     * @throws ResponseStatusException 日记不存在或请求数据无效时抛出
+     */
     @Transactional
     public Map<String, Object> update(long id, DiaryEntryRequest request) {
         validate(request);
@@ -57,10 +98,19 @@ public class DiaryEntryService {
         return get(id);
     }
 
+    /**
+     * 删除指定日记。
+     * @param id 日记 ID
+     * @throws ResponseStatusException 日记不存在时抛出
+     */
     public void delete(long id) {
         if (mapper.delete(id) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "日记不存在");
     }
 
+    /**
+     * 将标签和媒体关联批量填充到日记条目中。
+     * @param entries 待补充关联数据的日记列表
+     */
     private void attachRelations(List<Map<String, Object>> entries) {
         if (entries.isEmpty()) return;
         List<Long> ids = entries.stream().map(entry -> ((Number) entry.get("id")).longValue()).toList();
@@ -73,6 +123,11 @@ public class DiaryEntryService {
         }
     }
 
+    /**
+     * 校验日记主体及其标签、媒体标识。
+     * @param request 待校验的日记请求
+     * @throws ResponseStatusException 请求数据无效时抛出
+     */
     private static void validate(DiaryEntryRequest request) {
         if (request == null || request.title() == null || request.title().isBlank()) throw badRequest("标题不能为空");
         if (request.title().trim().length() > 200) throw badRequest("标题最多200个字符");
@@ -84,6 +139,12 @@ public class DiaryEntryService {
         normalizeMediaIds(request.mediaIds());
     }
 
+    /**
+     * 清理标签、去除重复项并校验标签长度。
+     * @param tags 原始标签列表
+     * @return 规范化后的标签列表
+     * @throws ResponseStatusException 标签数量或长度超限时抛出
+     */
     private static List<String> normalizeTags(List<String> tags) {
         if (tags == null) return List.of();
         if (tags.size() > 20) throw badRequest("每篇日记最多添加20个标签");
@@ -92,6 +153,12 @@ public class DiaryEntryService {
         }).toList();
     }
 
+    /**
+     * 清理媒体 ID 并校验其格式。
+     * @param mediaIds 原始媒体 ID 列表
+     * @return 规范化后的媒体 ID 列表
+     * @throws ResponseStatusException 媒体 ID 格式无效时抛出
+     */
     private static List<String> normalizeMediaIds(List<String> mediaIds) {
         if (mediaIds == null) return List.of();
         return mediaIds.stream().filter(id -> id != null && !id.isBlank()).distinct().peek(id -> {
@@ -99,6 +166,11 @@ public class DiaryEntryService {
         }).toList();
     }
 
+    /**
+     * 创建 HTTP 400 请求异常。
+     * @param message 面向调用方的错误说明
+     * @return 请求异常
+     */
     private static ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
