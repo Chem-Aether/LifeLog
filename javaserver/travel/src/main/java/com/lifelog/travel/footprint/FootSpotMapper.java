@@ -13,7 +13,7 @@ import java.util.Map;
 @Mapper
 public interface FootSpotMapper extends BaseMapper<FootSpot> {
     /** 根据 ID 查询足迹并读取经纬度及 JSON 数据。 */
-    @Select("SELECT footprint_id, place_name, visit_type, visit_date, poi_reference, note, media_ids::text AS \"mediaIdsJson\", " +
+    @Select("SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_ids::text AS \"mediaIdsJson\", " +
             "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint WHERE footprint_id = #{id}")
     FootSpot selectRecordById(@Param("id") Long id);
 
@@ -23,8 +23,8 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
     int updateLocation(@Param("id") Long id, @Param("longitude") java.math.BigDecimal longitude,
                        @Param("latitude") java.math.BigDecimal latitude);
 
-    /** 查询足迹记录，可按到访年份筛选。 */
-    @Select({"<script>", "SELECT footprint_id, place_name, visit_type, visit_date, poi_reference, note, media_ids::text AS \"mediaIdsJson\",",
+    /** 导出场景查询足迹记录，可按到访年份筛选。 */
+    @Select({"<script>", "SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_ids::text AS \"mediaIdsJson\",",
             "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint",
             "<if test='year != null'>WHERE visit_date &gt;= make_date(#{year},1,1) AND visit_date &lt; make_date(#{year}+1,1,1)</if>",
             "ORDER BY visit_date DESC NULLS LAST", "</script>"})
@@ -33,24 +33,28 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
     /** 分页查询足迹记录。 */
     @SelectProvider(type = Sql.class, method = "selectPage")
     List<FootSpot> selectPage(@Param("visitType") String visitType, @Param("keyword") String keyword,
+                              @Param("year") Integer year,
                               @Param("sortBy") String sortBy, @Param("sortOrder") String sortOrder,
                               @Param("limit") int limit, @Param("offset") long offset);
 
     /** 不分页查询足迹记录，用于行政区筛选等场景。 */
     @SelectProvider(type = Sql.class, method = "searchRecords")
     List<FootSpot> searchRecords(@Param("visitType") String visitType, @Param("keyword") String keyword,
+                                 @Param("year") Integer year,
                                  @Param("sortBy") String sortBy, @Param("sortOrder") String sortOrder);
 
     /** 统计符合条件的足迹记录数。 */
     @SelectProvider(type = Sql.class, method = "countRecords")
-    long countRecords(@Param("visitType") String visitType, @Param("keyword") String keyword);
+    long countRecords(@Param("visitType") String visitType, @Param("keyword") String keyword,
+                      @Param("year") Integer year);
 
     final class Sql {
         /** 根据筛选参数构造基础足迹查询语句。 */
         private static StringBuilder base(Map<String, Object> params) {
-            StringBuilder sql = new StringBuilder("SELECT footprint_id, place_name, visit_type, visit_date, poi_reference, note, media_ids::text AS \"mediaIdsJson\", ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint WHERE 1=1");
+            StringBuilder sql = new StringBuilder("SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_ids::text AS \"mediaIdsJson\", ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint WHERE 1=1");
             if (params.get("visitType") != null) sql.append(" AND visit_type=#{visitType}");
             if (params.get("keyword") != null) sql.append(" AND place_name ILIKE #{keyword}");
+            if (params.get("year") != null) sql.append(" AND visit_date >= make_date(#{year},1,1) AND visit_date < make_date(#{year}+1,1,1)");
             return sql;
         }
 
@@ -75,6 +79,7 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
             StringBuilder sql = new StringBuilder("SELECT count(*) FROM footprint WHERE 1=1");
             if (params.get("visitType") != null) sql.append(" AND visit_type=#{visitType}");
             if (params.get("keyword") != null) sql.append(" AND place_name ILIKE #{keyword}");
+            if (params.get("year") != null) sql.append(" AND visit_date >= make_date(#{year},1,1) AND visit_date < make_date(#{year}+1,1,1)");
             return sql.toString();
         }
 

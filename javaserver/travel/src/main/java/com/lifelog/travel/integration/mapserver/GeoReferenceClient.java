@@ -66,6 +66,19 @@ public class GeoReferenceClient {
                 .collect(Collectors.toMap(GeoLocation::id, Function.identity(), (left, right) -> left));
     }
 
+    /** 按缓存的行政区 ID 批量查询行政区祖先路径。 */
+    public Map<String, GeoPath> regionPaths(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) return Collections.emptyMap();
+        ApiResponse<Map<String, GeoPath>> response = restClient.post()
+                .uri("/api/regions/paths")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .body(Map.of("ids", ids))
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+        return response == null || response.data() == null ? Map.of() : response.data();
+    }
+
     /**
      * 从统一 API 响应中提取数据列表。
      * @param response mapserver API 响应
@@ -98,6 +111,9 @@ public class GeoReferenceClient {
     /** 坐标点的反向地理编码结果及其行政区路径。 */
     public record GeoLocation(String id, Double longitude, Double latitude, List<GeoRegion> path,
                               String dataVersion) {}
+
+    /** 行政区祖先路径查询结果。 */
+    public record GeoPath(List<GeoRegion> path, String dataVersion) {}
 
     /** mapserver 的通用 API 响应结构。 */
     private record ApiResponse<T>(String msg, T data) {}

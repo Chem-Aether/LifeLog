@@ -18,11 +18,12 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { getAllFootprints } from '@/modules/travel/apis/travel.js'
+import { getFootprints } from '@/modules/travel/apis/travel.js'
 import { getAirportsByIcao, getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
 import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
 import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
+import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
 import { mediaUrl } from '@/modules/travel/apis/media.js'
 import { useTravleStore } from '@/modules/travel/stores/TravelStore.js'
 import { MAP_BASE_URL } from '@/utils/request.js'
@@ -50,6 +51,9 @@ let flightRecords = []
 let trainRecords = []
 let footprintRecords = []
 let visibleFootprintRecords = []
+const loadedDataYears = { foot: null, flight: null, train: null }
+const pendingDataRequests = new Map()
+const knownTimelineYears = new Set()
 let footprintFeatures = EMPTY_COLLECTION
 let footprintMarkers = []
 let mapImageQueue = []
@@ -528,46 +532,61 @@ function stopTrainAnimation() {
 }
 
 async function loadTravelData() {
-  const results = await Promise.allSettled([
-    getAllFlights(props.selectedYear),
-    getAllTrains(props.selectedYear),
-    getAllFootprints(props.selectedYear)
-  ])
-  const value = index => results[index].status === 'fulfilled' ? results[index].value?.data || [] : []
-  const flights = results[0].status === 'fulfilled' ? results[0].value || [] : []
-  const trains = results[1].status === 'fulfilled' ? results[1].value || [] : []
-  const airportCodes = [...new Set(flights.flatMap(item => [item.departureIcao, item.arrivalIcao]).filter(Boolean))]
-  let airports = {}
-  if (airportCodes.length) {
-    try {
-      const response = await getAirportsByIcao(airportCodes)
-      airports = Object.fromEntries((response?.data || []).map(airport => [airport.icao, airport]))
-    } catch {
-      airports = {}
-    }
-  }
-  flightRecords = flights.map(record => toFlightTrip(record, airports))
-  trainRecords = trains.map(toTrainTrip)
-  footprintRecords = value(2)
-  if (String(props.selectedYear) === 'all') {
-    const years = [...new Set([
-      ...footprintRecords.map(item => item.visitDate),
-      ...flightRecords.map(item => getTicketTime(item, 'flight')),
-      ...trainRecords.map(item => getTicketTime(item, 'train'))
-    ].map(value => String(value || '').slice(0, 4)).filter(year => /^\d{4}$/.test(year)))]
-      .map(Number).sort((left, right) => left - right)
-    emit('footprint-timeline', years)
-  }
+  const year = String(props.selectedYear)
+  await Promise.allSettled(visibleLayers.value.map(layer => loadLayerData(layer, year)))
+  if (year !== String(props.selectedYear)) return
+  const dates = [
+    ...(visibleLayers.value.includes('foot') ? footprintRecords.map(item => item.visitDate) : []),
+    ...(visibleLayers.value.includes('flight') ? flightRecords.map(getTicketTime) : []),
+    ...(visibleLayers.value.includes('train') ? trainRecords.map(getTicketTime) : [])
+  ]
+  dates.map(value => String(value || '').slice(0, 4))
+    .filter(value => /^\d{4}$/.test(value)).forEach(value => knownTimelineYears.add(Number(value)))
+  emit('footprint-timeline', [...knownTimelineYears].sort((left, right) => left - right))
   await updateTravelDataByYear()
 }
 
-function getTicketTime(record, kind) {
-  const directValue = kind === 'flight'
-    ? record.departureTime || record.Time
-    : record.departureTime || record.Time
-  if (directValue) return directValue
-  const label = kind === 'flight' ? '起飞时间' : '发车时间'
-  return record.more?.find(item => item.label === label)?.value || ''
+function loadLayerData(layer, year) {
+  if (loadedDataYears[layer] === year) return Promise.resolve()
+  const key = `${layer}:${year}`
+  if (pendingDataRequests.has(key)) return pendingDataRequests.get(key)
+
+  const task = (async () => {
+    if (layer === 'foot') {
+      const response = await getFootprints(year === 'all' ? {} : { year })
+      if (String(props.selectedYear) !== year) return
+      footprintRecords = response?.data || []
+    } else if (layer === 'flight') {
+      const flights = await getAllFlights(year)
+      const airportCodes = [...new Set(flights.flatMap(item => [item.departureIcao, item.arrivalIcao])
+        .filter(Boolean).map(code => String(code).trim().toUpperCase()))]
+      let airports = {}
+      if (airportCodes.length) {
+        try {
+          const airportResponse = await getAirportsByIcao(airportCodes)
+          airports = Object.fromEntries((airportResponse?.data || []).map(airport => [
+            String(airport.icao || '').trim().toUpperCase(), airport
+          ]))
+        } catch {
+          airports = {}
+        }
+      }
+      if (String(props.selectedYear) !== year) return
+      flightRecords = flights.map(record => toFlightTrip(record, airports))
+    } else if (layer === 'train') {
+      const trains = await getAllTrains(year)
+      if (String(props.selectedYear) !== year) return
+      trainRecords = trains.map(toTrainTrip)
+    }
+    loadedDataYears[layer] = year
+  })().finally(() => pendingDataRequests.delete(key))
+
+  pendingDataRequests.set(key, task)
+  return task
+}
+
+function getTicketTime(record) {
+  return record.departureTime || ''
 }
 
 function filterByYear(records, timeGetter) {
@@ -584,34 +603,39 @@ function getPlaceKey(item) {
 async function updateTravelDataByYear() {
   const updateId = ++footprintUpdateId
   const year = String(props.selectedYear)
-  visibleFootprintRecords = year === 'all'
+  const showFootprints = visibleLayers.value.includes('foot')
+  visibleFootprintRecords = !showFootprints ? [] : year === 'all'
     ? footprintRecords
     : footprintRecords.filter(item => String(item.visitDate || '').startsWith(year))
-  flightFeatures = lineCollection(filterByYear(flightRecords, item => getTicketTime(item, 'flight')), 'flight')
-  trainFeatures = lineCollection(filterByYear(trainRecords, item => getTicketTime(item, 'train')), 'train')
+  flightFeatures = lineCollection(filterByYear(flightRecords, getTicketTime), 'flight')
+  trainFeatures = lineCollection(filterByYear(trainRecords, getTicketTime), 'train')
 
-  const travelCityIds = new Set(visibleFootprintRecords
-    .filter(item => item.visitType !== 'transit')
-    .map(item => item.cityRegionId).filter(Boolean))
-  const transitCityIds = new Set(visibleFootprintRecords
-    .filter(item => item.visitType === 'transit')
-    .map(item => item.cityRegionId).filter(Boolean))
+  const travelCityIds = new Set(visibleFootprintRecords.filter(item => item.visitType !== 'transit')
+    .map(item => getFootprintRegion(item).cityRegionId).filter(Boolean))
+  const transitCityIds = new Set(visibleFootprintRecords.filter(item => item.visitType === 'transit')
+    .map(item => getFootprintRegion(item).cityRegionId).filter(Boolean))
   const cityIds = [...new Set([...travelCityIds, ...transitCityIds])]
   let nextRegions = EMPTY_COLLECTION
-  try {
-    nextRegions = cityIds.length ? await getRegionBoundaries(cityIds) : EMPTY_COLLECTION
-    nextRegions = {
-      ...nextRegions,
-      features: (nextRegions.features || []).map(feature => {
-        const id = String(feature.properties?.id || feature.id || '')
-        return {
+  if (cityIds.length) {
+    try {
+      const boundaryData = await getRegionBoundaries(cityIds)
+      if (updateId !== footprintUpdateId) return
+      const featuresById = new Map((boundaryData.features || []).map(feature => [
+        String(feature.properties?.id || feature.id || ''), feature
+      ]))
+      nextRegions = {
+        type: 'FeatureCollection',
+        features: cityIds.map(id => featuresById.get(String(id))).filter(Boolean).map(feature => ({
           ...feature,
-          properties: { ...feature.properties, visitType: travelCityIds.has(id) ? 'travel' : 'transit' }
-        }
-      })
+          properties: {
+            ...feature.properties,
+            visitType: travelCityIds.has(String(feature.properties?.id || feature.id || '')) ? 'travel' : 'transit'
+          }
+        }))
+      }
+    } catch {
+      if (updateId !== footprintUpdateId) return
     }
-  } catch {
-    nextRegions = EMPTY_COLLECTION
   }
   if (updateId !== footprintUpdateId) return
 
@@ -696,7 +720,10 @@ onMounted(async () => {
   map.on('moveend', renderFootprintMarkers)
 })
 
-watch(visibleLayers, updateMode)
+watch(visibleLayers, () => {
+  updateMode()
+  loadTravelData()
+})
 watch(() => props.selectedYear, loadTravelData)
 
 onBeforeUnmount(() => {

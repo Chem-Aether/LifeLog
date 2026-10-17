@@ -1,15 +1,7 @@
 import { travelRequest as request } from '@/utils/request.js'
 
 
-const yearParams = year => year === 'all' ? {} : { year }
-
-export const getAllFootprints = (year = 'all') => request({
-    url: '/travel/footprints/all',
-    method: 'get',
-    params: yearParams(year)
-})
-
-export const getFootprintsPage = params => request({ url: '/travel/footprints', method: 'get', params })
+export const getFootprints = (params = {}) => request({ url: '/travel/footprints', method: 'get', params })
 export const getFootprintById = id => request({ url: `/travel/footprints/${id}`, method: 'get' })
 
 export const exportTravelData = (type, format) => request({

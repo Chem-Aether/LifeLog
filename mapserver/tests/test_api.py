@@ -120,6 +120,12 @@ def test_region_queries_and_boundaries():
     assert batch.status_code == 200
     assert batch.json()["data"][0]["id"] == "footprint:1"
 
+    paths = client.post("/api/regions/paths", json={"ids": ["CN:3:320102", "CN:3:320102"]})
+    assert paths.status_code == 200
+    assert [node["id"] for node in paths.json()["data"]["CN:3:320102"]["path"]] == [
+        "CN:0:CN", "CN:1:32", "CN:2:3201", "CN:3:320102"
+    ]
+
     poi = client.get("/api/pois/search", params={"q": "中山陵", "limit": 2})
     assert poi.status_code == 200
     assert poi.json()["data"][0]["nameZh"] == "中山陵"

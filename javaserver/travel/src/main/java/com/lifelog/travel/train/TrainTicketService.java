@@ -15,7 +15,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /** 处理铁路行程及途经站的查询、校验、持久化和里程计算。 */
 @Service
@@ -34,17 +36,16 @@ public class TrainTicketService {
 
     /** 按条件分页查询铁路行程并加载途经站。 */
     public Page<TrainRecord> list(TrainRecordQueryDTO dto) {
-        LambdaQueryWrapper<TrainRecord> query = new LambdaQueryWrapper<>();
-        query.like(StringUtils.hasText(dto.getTrainNo()), TrainRecord::getTrainNo, dto.getTrainNo());
-        query.like(StringUtils.hasText(dto.getStartStationName()), TrainRecord::getStartStationName, dto.getStartStationName());
-        query.like(StringUtils.hasText(dto.getEndStationName()), TrainRecord::getEndStationName, dto.getEndStationName());
-        query.ge(dto.getDepartureTimeStart() != null, TrainRecord::getDepartureTime, dto.getDepartureTimeStart());
-        query.le(dto.getDepartureTimeEnd() != null, TrainRecord::getDepartureTime, dto.getDepartureTimeEnd());
-        query.orderByDesc(TrainRecord::getDepartureTime);
         long page = dto.getPageNum() == null || dto.getPageNum() < 1 ? 1 : dto.getPageNum();
         long size = dto.getPageSize() == null || dto.getPageSize() < 1 ? 10 : Math.min(dto.getPageSize(), 100);
-        Page<TrainRecord> result = mapper.selectPage(new Page<>(page, size), query);
-        result.getRecords().replaceAll(record -> hydrate(mapper.selectRecordById(record.getTrainId())));
+        Page<TrainRecord> result = mapper.selectPageWithRoute(new Page<>(page, size), dto);
+        List<Long> trainIds = result.getRecords().stream().map(TrainRecord::getTrainId).toList();
+        if (trainIds.isEmpty()) return result;
+
+        Map<Long, List<TrainWaypoint>> waypointsByTrainId = waypointMapper.selectByTrainIds(trainIds).stream()
+                .collect(Collectors.groupingBy(TrainWaypoint::getTrainId));
+        result.getRecords().forEach(record -> record.setWaypoints(
+                waypointsByTrainId.getOrDefault(record.getTrainId(), List.of())));
         return result;
     }
 

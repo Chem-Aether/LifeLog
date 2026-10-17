@@ -17,7 +17,9 @@
 - spyderserver 仅用于在线查询 12306 车次信息，是可选依赖。仅按途经站查询或管理已有记录不需要爬虫服务。
 - 媒体文件由 mediaserver 保存；旅行记录如需关联图片只保存稳定的 `media_id`，不保存磁盘路径。
 
-服务启动时通过 Spring SQL 初始化执行 `src/main/resources/db/schema.sql`，创建当前版本所需的表结构。旧字段清理和跨版本迁移语句已移除；数据库结构变更需明确修改当前 schema，不隐式兼容旧版本。
+服务启动时通过 Spring SQL 初始化执行 `src/main/resources/db/schema.sql`，创建当前版本所需的表结构。数据库已使用 `location_type` 保存足迹地点类型，不再包含旧字段迁移或兼容逻辑；后续数据库结构变更应通过明确的版本化迁移管理。
+
+足迹行政区缓存首次启用后，可在 PostgreSQL、mapserver 均运行时执行 `python scripts/backfill_region_cache.py`，分批为已有坐标足迹缓存最细行政区 ID。脚本通过 `TRAVEL_DB_URL`、`TRAVEL_DB_USERNAME`、`TRAVEL_DB_PASSWORD` 和 `MAP_BASE_URL` 读取连接配置；缺省值与 `application.yml` 一致，可中断后重复执行。未匹配的记录保持 `region_id` 为空，再次执行时会重试。
 
 ## 数据交换
 

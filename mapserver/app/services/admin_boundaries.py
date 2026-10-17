@@ -41,12 +41,22 @@ def _path(connection, node_id):
     return list(reversed(chain))
 
 
-def region_record(node_id):
+@lru_cache(maxsize=5000)
+def _region_record_cached(node_id):
     with closing(_connect()) as connection:
         row = _record(connection, node_id)
         if not row:
             return None
         return {"path": [_node(item) for item in _path(connection, node_id)], "dataVersion": row["data_version"]}
+
+
+def region_record(node_id):
+    return _region_record_cached(str(node_id))
+
+
+def region_records(node_ids):
+    return {node_id: record for node_id in dict.fromkeys(str(value) for value in node_ids if value)
+            if (record := region_record(node_id)) is not None}
 
 
 def boundary_row(node_id):

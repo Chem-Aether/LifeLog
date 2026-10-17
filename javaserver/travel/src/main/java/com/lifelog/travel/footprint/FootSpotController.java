@@ -5,7 +5,9 @@ import com.lifelog.common.api.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 /** 提供旅行足迹的筛选、维护和批量删除接口。 */
@@ -16,24 +18,17 @@ public class FootSpotController {
     @Autowired
     private FootSpotService footSpotService;
 
-    /** 分页查询足迹，并支持地点、类型和行政区筛选。 */
+    /** 查询足迹；不传分页参数时返回全部记录，传入完整分页参数时返回分页结果。 */
     @GetMapping("/footprints")
-    @Operation(summary = "分页查询足迹")
-    public Result footprints(@RequestParam(required = false) String visitType,
-                             @RequestParam(required = false) String keyword,
-                             @RequestParam(required = false) String region,
-                             @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "10") int pageSize,
-                             @RequestParam(defaultValue = "visitDate") String sortBy,
-                             @RequestParam(defaultValue = "desc") String sortOrder) {
-        return Result.success(footSpotService.findPage(visitType, keyword, region, page, pageSize, sortBy, sortOrder));
-    }
-
-    /** 查询足迹记录，可按年份筛选。 */
-    @GetMapping("/footprints/all")
-    @Operation(summary = "查询全部足迹")
-    public Result allFootprints(@RequestParam(required = false) Integer year) {
-        return Result.success(footSpotService.findAll(year));
+    @Operation(summary = "查询足迹", description = "page 与 pageSize 均不传时返回全部记录；同时传入时分页")
+    public Result footprints(@ModelAttribute FootSpotQueryDTO query) {
+        if (query.getPage() == null && query.getPageSize() == null) {
+            return Result.success(footSpotService.findAll(query));
+        }
+        if (query.getPage() == null || query.getPageSize() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page 和 pageSize 必须同时提供");
+        }
+        return Result.success(footSpotService.findPage(query));
     }
 
     /** 查询单条足迹详情。 */

@@ -13,6 +13,10 @@ class IdsRequest(BaseModel):
     ids: list[str] = Field(default_factory=list, max_length=500, description="行政区节点 ID 列表，最多 500 项")
 
 
+class RegionIdsRequest(BaseModel):
+    ids: list[str] = Field(default_factory=list, max_length=500, description="需要查询祖先路径的行政区节点 ID，最多 500 项")
+
+
 class PointsRequest(BaseModel):
     points: list[dict] = Field(
         default_factory=list,

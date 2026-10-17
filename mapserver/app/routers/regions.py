@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Body, HTTPException, Path, Query
 
-from ..utils.models import IdsRequest, PointsRequest
+from ..utils.models import IdsRequest, PointsRequest, RegionIdsRequest
 from ..utils.responses import geojson, payload
 from ..services import admin_boundaries as regions
 
@@ -51,6 +51,11 @@ def boundaries(body: IdsRequest = Body(description="提交需要获取边界的�
     ids = list(dict.fromkeys(body.ids))
     features = [regions.boundary_feature(regions.boundary_row(node_id)) for node_id in ids]
     return geojson({"type": "FeatureCollection", "features": [feature for feature in features if feature]})
+
+
+@router.post("/paths", summary="批量查询行政区节点及其祖先路径")
+def paths(body: RegionIdsRequest = Body(description="提交足迹缓存的行政区节点 ID，批量返回对应路径；最多 500 项")):
+    return payload(regions.region_records(body.ids))
 
 
 @router.get("/{node_id}", summary="根据行政区 ID 查询行政区信息")

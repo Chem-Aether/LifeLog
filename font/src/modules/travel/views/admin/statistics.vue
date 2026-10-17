@@ -13,7 +13,7 @@
     </header>
 
     <section class="overview-section">
-      <header class="section-heading"><div><span class="eyebrow">PLACES & MOMENTS</span><h2>足迹与城市</h2></div><p>{{ periodLabel }} · 回看去过的城市与地点</p></header>
+      <header class="section-heading"><div><span class="eyebrow">PLACES & MOMENTS</span><h2>足迹与城市</h2></div><p>回看去过的城市与地点</p></header>
       <div class="metric-grid" aria-label="足迹关键指标">
         <article class="metric metric-days"><span>出行天数</span><strong>{{ stats.days }}</strong><small>有记录的日期</small></article>
         <article class="metric metric-places"><span>到访城市</span><strong>{{ stats.cities }}</strong><small>已标注城市</small></article>
@@ -28,9 +28,8 @@
     </section>
 
     <section class="calendar-section">
-      <header class="section-heading"><div><span class="eyebrow">TRAVEL CALENDAR</span><h2>出行日历</h2></div><p>{{ calendarCaption }}</p></header>
+      <header class="section-heading"><div><span class="eyebrow">TRAVEL CALENDAR</span><h2>出行日历</h2></div><p>每日出行记录</p></header>
       <article class="panel calendar-panel">
-        <header class="panel-heading calendar-heading"><div><h3>每日出行记录</h3><p>颜色区分足迹、铁路和航空；深浅代表当天记录数量</p></div></header>
         <div class="calendar-legend" aria-label="日历图例">
           <span><i class="legend-footprint" />足迹</span><span><i class="legend-train" />铁路</span><span><i class="legend-flight" />航空</span><span><i class="legend-mixed" />同日多类</span><span class="legend-intensity">颜色越深，记录越多</span>
         </div>
@@ -75,7 +74,7 @@
       </article>
     </section>
 
-    <header class="section-heading transport-heading"><div><span class="eyebrow">TRANSPORT BREAKDOWN</span><h2>交通方式分析</h2></div><p>铁路与航空分列对照</p></header>
+    <header class="section-heading transport-heading"><div><span class="eyebrow">TRANSPORT BREAKDOWN</span><h2>交通方式分析</h2></div></header>
     <section class="transport-grid">
       <article class="transport-column rail-column">
         <header class="transport-title"><div><span class="transport-icon rail-icon">铁</span><div><h2>铁路</h2><p>列车、车型与常到车站</p></div></div></header>
@@ -125,10 +124,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import { getAllFootprints } from '@/modules/travel/apis/travel.js'
+import { getFootprints } from '@/modules/travel/apis/travel.js'
 import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
 import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
+import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
 import { summarizeFlights, summarizeTrains } from '@/modules/travel/utils/travelMetrics.js'
 import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
@@ -172,7 +172,7 @@ const directions = computed(() => {
   }, null)
   const format = item => item ? {
     placeName: item.placeName || '未命名地点',
-    cityName: item.cityName || item.regionName || '城市未标注',
+    cityName: getFootprintRegion(item).cityName || '城市未标注',
     coordinate: `${Number(item.longitude).toFixed(2)}, ${Number(item.latitude).toFixed(2)}`
   } : { placeName: '暂无坐标记录', cityName: '', coordinate: '' }
   return {
@@ -189,7 +189,7 @@ const stats = computed(() => {
   const trains = activeTickets.value.filter(item => item.ticketType === 'train')
   const stations = new Set(trains.flatMap(ticket => ticketStationNames(ticket)))
   const airports = new Set(flights.flatMap(ticket => [ticket.From, ticket.To].map(normalizeName).filter(Boolean)))
-  const cities = new Set(activeFootprints.value.map(item => String(item.cityName || '').trim()).filter(Boolean))
+  const cities = new Set(activeFootprints.value.map(item => getFootprintRegion(item).cityName.trim()).filter(Boolean))
   const days = new Set([
     ...activeTickets.value.map(item => dateKey(ticketDate(item))),
     ...activeFootprints.value.map(item => dateKey(item.visitDate))
@@ -210,9 +210,7 @@ const stats = computed(() => {
   }
 })
 const calendarYear = computed(() => selectedYear.value === 'all' ? (years.value[0] || '') : String(selectedYear.value))
-const calendarCaption = computed(() => selectedYear.value === 'all'
-  ? `全部年份 · 日历展示最近有记录的 ${calendarYear.value || '—'} 年`
-  : `${calendarYear.value} 年 · 每格代表一天`)
+
 const calendarMonths = computed(() => {
   if (!calendarYear.value) return []
   const year = Number(calendarYear.value)
@@ -383,7 +381,7 @@ function currentRows() {
     date: dateKey(ticketDate(ticket)),
     ticket
   })).filter(item => item.date)
-  const places = activeFootprints.value.map(item => ({ city: String(item.cityName || '').trim() }))
+  const places = activeFootprints.value.map(item => ({ city: getFootprintRegion(item).cityName.trim() }))
   return { events, places }
 }
 
@@ -543,13 +541,15 @@ function paintCharts() {
 async function loadData() {
   loading.value = true
   const [flightResult, trainResult, footprintResult] = await Promise.allSettled([
-    getAllFlights(), getAllTrains(), getAllFootprints()
+    getAllFlights(), getAllTrains(), getFootprints()
   ])
   const flights = flightResult.status === 'fulfilled' ? flightResult.value : []
   const trains = trainResult.status === 'fulfilled' ? trainResult.value : []
   tickets.value = [...flights.map(toFlightTrip), ...trains.map(toTrainTrip)]
   if (flightResult.status === 'rejected' || trainResult.status === 'rejected') ElMessage.error('旅行记录加载失败')
-  if (footprintResult.status === 'fulfilled') footprints.value = footprintResult.value.data || []
+  if (footprintResult.status === 'fulfilled') {
+    footprints.value = footprintResult.value.data || []
+  }
   else ElMessage.error('足迹统计加载失败')
   await nextTick()
   paintCharts()
@@ -605,7 +605,6 @@ onBeforeUnmount(() => {
 .preference-chart { height:220px; }
 .calendar-section { margin-top:22px; }
 .calendar-panel { padding:15px 16px; }
-.calendar-heading { margin-bottom:12px; }
 .calendar-legend { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:7px 14px; margin-bottom:14px; }
 .calendar-legend > span { display:inline-flex; align-items:center; gap:5px; color:#7c8b95; font-size:10px; }
 .calendar-legend .legend-intensity { color:#a0abad; }

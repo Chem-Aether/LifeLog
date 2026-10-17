@@ -15,7 +15,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
 
-/** 处理足迹查询、行政区反查、媒体数据转换及记录维护。 */
+/** 处理足迹查询、行政区缓存和媒体数据转换及记录维护。 */
 @Service
 public class FootSpotService {
     private static final Logger log = LoggerFactory.getLogger(FootSpotService.class);
@@ -30,39 +30,54 @@ public class FootSpotService {
         this.objectMapper = objectMapper;
     }
 
-    /** 查询足迹并补全媒体及行政区信息。 */
-    public List<FootSpot> findAll(Integer year) {
-        List<FootSpot> spots = mapper.selectRecords(year);
+    /** 查询所有匹配足迹并补充媒体和行政区路径。 */
+    public List<FootSpot> findAll(FootSpotQueryDTO query) {
+        validateVisitType(query.getVisitType());
+        String type = StringUtils.hasText(query.getVisitType()) ? query.getVisitType() : null;
+        String sort = sortColumn(query.getSortBy());
+        String order = normalizeSortOrder(query.getSortOrder());
+        String regionKeyword = query.getRegion() == null ? "" : query.getRegion().trim().toLowerCase(Locale.ROOT);
+        List<FootSpot> spots = mapper.searchRecords(type, like(query.getKeyword()), query.getYear(), sort, order);
         spots.forEach(this::hydrate);
-        enrichRegions(spots);
-        return spots;
+        enrichCachedRegions(spots);
+        return spots.stream().filter(item -> regionKeyword.isEmpty()
+                || formatRegionPath(item.getRegionPaths()).toLowerCase(Locale.ROOT).contains(regionKeyword)).toList();
     }
 
     /** 按条件分页查询足迹，并在行政区服务不可用时保留基本记录数据。 */
-    public Map<String, Object> findPage(String visitType, String keyword, String region, int page, int pageSize,
-                                        String sortBy, String sortOrder) {
-        if (page < 1 || pageSize < 1 || pageSize > 100)
+    public Map<String, Object> findPage(FootSpotQueryDTO query) {
+        String visitType = query.getVisitType();
+        String keyword = query.getKeyword();
+        String region = query.getRegion();
+        Integer requestedPage = query.getPage();
+        Integer requestedPageSize = query.getPageSize();
+        String sortBy = query.getSortBy();
+        String sortOrder = query.getSortOrder();
+        if (requestedPage == null || requestedPageSize == null || requestedPage < 1
+                || requestedPageSize < 1 || requestedPageSize > 100)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分页参数无效");
-        if (StringUtils.hasText(visitType) && !List.of("travel", "transit").contains(visitType))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "记录性质无效");
+        int page = requestedPage;
+        int pageSize = requestedPageSize;
+        validateVisitType(visitType);
         String type = StringUtils.hasText(visitType) ? visitType : null;
         String placeKeyword = like(keyword);
+        Integer year = query.getYear();
         String regionKeyword = region == null ? "" : region.trim().toLowerCase(Locale.ROOT);
-        String sort = sortBy != null && List.of("placeName", "visitType", "visitDate").contains(sortBy) ? sortBy : "visitDate";
-        String order = "asc".equalsIgnoreCase(sortOrder) ? "asc" : "desc";
+        String sort = sortColumn(sortBy);
+        String order = normalizeSortOrder(sortOrder);
         List<FootSpot> records;
         long total;
         if (regionKeyword.isEmpty()) {
-            total = mapper.countRecords(type, placeKeyword);
-            records = mapper.selectPage(type, placeKeyword, sort, order, pageSize, (page - 1L) * pageSize);
+            total = mapper.countRecords(type, placeKeyword, year);
+            records = mapper.selectPage(type, placeKeyword, year, sort, order, pageSize, (page - 1L) * pageSize);
             records.forEach(this::hydrate);
-            enrichRegions(records);
+            enrichCachedRegions(records);
         } else {
-            records = mapper.searchRecords(type, placeKeyword, sort, order);
+            records = mapper.searchRecords(type, placeKeyword, year, sort, order);
             records.forEach(this::hydrate);
-            enrichRegions(records);
-            records = records.stream().filter(item -> item.getRegionName() != null
-                    && item.getRegionName().toLowerCase(Locale.ROOT).contains(regionKeyword)).toList();
+            enrichCachedRegions(records);
+            records = records.stream().filter(item -> formatRegionPath(item.getRegionPaths()).toLowerCase(Locale.ROOT)
+                    .contains(regionKeyword)).toList();
             total = records.size();
             int start = (int) Math.min((page - 1L) * pageSize, records.size());
             records = records.subList(start, Math.min(start + pageSize, records.size()));
@@ -77,37 +92,40 @@ public class FootSpotService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
         }
         hydrate(spot);
-        enrichRegions(List.of(spot));
+        enrichCachedRegions(List.of(spot));
         return spot;
     }
 
-    /** 批量反查足迹坐标并填充行政区层级信息。 */
-    private void enrichRegions(List<FootSpot> spots) {
-        // 过滤经纬度非空点查询行政区
-        List<GeoReferenceClient.GeoPoint> points = spots.stream()
-                .filter(item -> item.getLongitude() != null && item.getLatitude() != null)
-                .map(item -> new GeoReferenceClient.GeoPoint(
-                    String.valueOf(item.getFootprintId()), 
-                    item.getLongitude().doubleValue(), 
-                    item.getLatitude().doubleValue()
-                ))
-                .toList();
-        Map<String, GeoReferenceClient.GeoLocation> regions = reverseGeocode(points);
-
+    /** 按足迹缓存的行政区 ID 批量补充结构化路径。 */
+    private void enrichCachedRegions(List<FootSpot> spots) {
+        Map<String, List<RegionPathNodeDTO>> pathsById = findRegionPathsForIds(spots.stream()
+                .map(FootSpot::getRegionId).filter(StringUtils::hasText).distinct().toList());
         spots.forEach(item -> {
-            GeoReferenceClient.GeoLocation location = regions.get(String.valueOf(item.getFootprintId()));
-            List<GeoReferenceClient.GeoRegion> path = location == null || location.path() == null ? List.of() : location.path();
-            GeoReferenceClient.GeoRegion matched = path.isEmpty() ? null : path.get(path.size() - 1);
-            item.setRegionName(formatRegionPath(path));
-            GeoReferenceClient.GeoRegion city = path.stream().filter(region -> region.level() != null && region.level() == 2)
-                    .findFirst().orElse(matched != null && matched.level() != null && matched.level() > 0 ? matched : null);
-            item.setCityName(city == null ? null : city.name());
-            item.setCityRegionId(city == null ? null : city.id());
-            item.setProvinceName(path.stream().filter(region -> region.level() != null && region.level() == 1)
-                    .map(GeoReferenceClient.GeoRegion::name).findFirst().orElse(null));
-            item.setRegionCode(matched == null ? null : matched.regionCode());
-            item.setRegionId(matched == null ? null : matched.id());
+            item.setRegionPaths(pathsById.getOrDefault(item.getRegionId(), List.of()));
         });
+    }
+
+    private Map<String, List<RegionPathNodeDTO>> findRegionPathsForIds(List<String> ids) {
+        Map<String, List<RegionPathNodeDTO>> pathsById = new HashMap<>();
+        for (int start = 0; start < ids.size(); start += 500) {
+            try {
+                Map<String, GeoReferenceClient.GeoPath> paths = geoClient.regionPaths(ids.subList(start, Math.min(start + 500, ids.size())));
+                paths.forEach((id, result) -> {
+                    List<RegionPathNodeDTO> path = result.path() == null ? List.of() : result.path().stream()
+                            .map(region -> new RegionPathNodeDTO(region.id(), region.name(), region.level())).toList();
+                    pathsById.put(id, path);
+                });
+            } catch (RestClientException exception) {
+                log.warn("Mapserver unavailable; returning footprints without administrative paths", exception);
+                return pathsById;
+            }
+        }
+        return pathsById;
+    }
+
+    private String deepestRegionId(GeoReferenceClient.GeoLocation location) {
+        if (location == null || location.path() == null || location.path().isEmpty()) return null;
+        return location.path().get(location.path().size() - 1).id();
     }
 
     /** 将非空关键字转换为 SQL 模糊匹配形式。 */
@@ -115,11 +133,26 @@ public class FootSpotService {
         return StringUtils.hasText(value) ? "%" + value.trim() + "%" : null;
     }
 
+    private void validateVisitType(String visitType) {
+        if (StringUtils.hasText(visitType) && !List.of("travel", "transit").contains(visitType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "记录性质无效");
+        }
+    }
+
+    private String sortColumn(String sortBy) {
+        return sortBy != null && List.of("placeName", "visitType", "visitDate").contains(sortBy)
+                ? sortBy : "visitDate";
+    }
+
+    private String normalizeSortOrder(String sortOrder) {
+        return "asc".equalsIgnoreCase(sortOrder) ? "asc" : "desc";
+    }
+
     /** 按行政区路径顺序拼接可读名称。 */
-    private String formatRegionPath(List<GeoReferenceClient.GeoRegion> path) {
+    private String formatRegionPath(List<RegionPathNodeDTO> path) {
         StringBuilder name = new StringBuilder();
         String previous = null;
-        for (GeoReferenceClient.GeoRegion region : path) {
+        for (RegionPathNodeDTO region : path) {
             if (region.level() == null || region.level() == 0 || !StringUtils.hasText(region.name())) continue;
             if (!region.name().equals(previous)) name.append(region.name());
             previous = region.name();
@@ -140,22 +173,41 @@ public class FootSpotService {
     /** 校验并创建足迹记录及其空间位置。 */
     @Transactional
     public FootSpot add(FootSpot spot) {
-        validate(spot); prepare(spot); spot.setFootprintId(null);
+        validate(spot); prepare(spot); spot.setFootprintId(null); updateRegionCache(spot);
         mapper.insert(spot); mapper.updateLocation(spot.getFootprintId(), spot.getLongitude(), spot.getLatitude());
-        return hydrate(mapper.selectRecordById(spot.getFootprintId()));
+        return findById(spot.getFootprintId());
     }
 
     /** 校验并更新足迹记录及其空间位置。 */
     @Transactional
     public FootSpot update(Long id, FootSpot spot) {
-        if (mapper.selectById(id) == null) {
+        FootSpot existing = mapper.selectRecordById(id);
+        if (existing == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "足迹记录不存在");
         }
         validate(spot); prepare(spot); 
-        spot.setFootprintId(id); 
+        boolean coordinatesChanged = !Objects.equals(existing.getLongitude(), spot.getLongitude())
+                || !Objects.equals(existing.getLatitude(), spot.getLatitude());
+        spot.setFootprintId(id);
+        if (coordinatesChanged) updateRegionCache(spot);
+        else spot.setRegionId(existing.getRegionId());
         mapper.updateById(spot); 
         mapper.updateLocation(id, spot.getLongitude(), spot.getLatitude());
-        return hydrate(mapper.selectRecordById(id));
+        return findById(id);
+    }
+
+    private void updateRegionCache(FootSpot spot) {
+        if (spot.getLongitude() == null || spot.getLatitude() == null) {
+            spot.setRegionId(null);
+            return;
+        }
+        Map<String, GeoReferenceClient.GeoLocation> matches = reverseGeocode(List.of(new GeoReferenceClient.GeoPoint(
+                "footprint", spot.getLongitude().doubleValue(), spot.getLatitude().doubleValue())));
+        if (matches.containsKey("footprint")) {
+            spot.setRegionId(deepestRegionId(matches.get("footprint")));
+        } else {
+            spot.setRegionId(null);
+        }
     }
 
     /** 删除指定足迹。 */
@@ -177,7 +229,9 @@ public class FootSpotService {
     /** 校验足迹必填项、坐标范围和媒体数量。 */
     private void validate(FootSpot spot) {
         if (spot == null || !StringUtils.hasText(spot.getPlaceName())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "地点名称不能为空");
-        if (!"transit".equals(spot.getVisitType())) spot.setVisitType("travel");
+        if (!"travel".equals(spot.getVisitType()) && !"transit".equals(spot.getVisitType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "记录性质必须是 travel 或 transit");
+        }
         boolean longitude = spot.getLongitude() != null, latitude = spot.getLatitude() != null;
         if (longitude != latitude) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "经纬度必须同时填写或同时留空");
         if (longitude && (spot.getLongitude().doubleValue() < -180 || spot.getLongitude().doubleValue() > 180

@@ -23,14 +23,16 @@ public class FootSpot {
     private String visitType;
     /** 到访日期。 */
     private LocalDate visitDate;
+    /** 坐标反查得到的最细行政区节点 ID 缓存。 */
+    private String regionId;
     /** 经度，非数据库列，由地理位置字段解析。 */
     @TableField(exist = false)
     private BigDecimal longitude;
     /** 纬度，非数据库列，由地理位置字段解析。 */
     @TableField(exist = false)
     private BigDecimal latitude;
-    /** 关联的外部 POI 标识。 */
-    private String poiReference;
+    /** 地点类型，例如景点、餐厅或车站。 */
+    private String locationType;
     /** 足迹备注。 */
     private String note;
     /** 关联媒体 ID 列表。 */
@@ -40,22 +42,7 @@ public class FootSpot {
     @JsonIgnore
     @TableField(value = "media_ids", typeHandler = JsonbStringTypeHandler.class, jdbcType = JdbcType.OTHER)
     private String mediaIdsJson;
-    /** 最细匹配行政区名称路径。 */
+    /** 从根节点到最细匹配行政区的结构化路径。 */
     @TableField(exist = false)
-    private String regionName;
-    /** 最细匹配行政区本国代码。 */
-    @TableField(exist = false)
-    private String regionCode;
-    /** 匹配到的城市名称。 */
-    @TableField(exist = false)
-    private String cityName;
-    /** 匹配到的省级行政区名称。 */
-    @TableField(exist = false)
-    private String provinceName;
-    /** 最细匹配行政区 ID。 */
-    @TableField(exist = false)
-    private String regionId;
-    /** 匹配到的城市行政区 ID。 */
-    @TableField(exist = false)
-    private String cityRegionId;
+    private List<RegionPathNodeDTO> regionPaths;
 }

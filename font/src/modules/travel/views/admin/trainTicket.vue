@@ -3,7 +3,9 @@
     <header class="edit-header"><div><el-button text @click="requestClose">返回铁路记录</el-button><h1>{{ editItem?.trainId ? '编辑铁路行程' : '新增铁路行程' }}</h1></div><div class="edit-actions"><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button></div></header>
     <section class="edit-panel">
       <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form">
-        <div class="grid-form">
+        <section class="edit-section ticket-info-section">
+          <h2 class="section-title">票面信息</h2>
+          <div class="grid-form">
           <el-form-item label="车次"><el-input v-model="editItem.trainNo" @input="matchTrainType(editItem, $event)" /></el-form-item>
           <el-form-item label="列车类型"><el-select v-model="editItem.trainType" filterable allow-create default-first-option clearable placeholder="选择或输入列车类型"><el-option v-for="trainType in trainTypes" :key="trainType.label" :label="trainType.label" :value="trainType.label" /></el-select></el-form-item>
           <el-form-item label="车型"><el-input v-model="editItem.trainModel" /></el-form-item>
@@ -15,15 +17,28 @@
           <el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
           <el-form-item label="车厢号"><el-input v-model="editItem.carriageNo" /></el-form-item><el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item>
           <el-form-item label="座位等级"><el-select v-model="editItem.seatType" filterable allow-create default-first-option clearable placeholder="选择或输入座位等级" @change="rememberSeatType"><el-option v-for="seatType in seatTypeOptions" :key="seatType" :label="seatType" :value="seatType" /></el-select></el-form-item>
-          <el-form-item label="里程(km)"><el-input-number v-model="editItem.mileageKm" :min="0" :precision="2" /></el-form-item><el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
+            <el-form-item label="里程(km)"><el-input-number v-model="editItem.mileageKm" :min="0" :precision="2" /></el-form-item><el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
+          </div>
+        </section>
+        <div class="route-editor-grid">
+          <section class="edit-section waypoint-section">
+            <div class="section-title-row">
+              <h2 class="section-title">途经站 <span>{{ editItem.waypoints.length }} 站</span></h2>
+            </div>
+            <div class="waypoint-content">
+              <div class="add-waypoint"><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
+              <draggable v-model="editItem.waypoints" item-key="sequence" @end="waypointsChanged(editItem.waypoints, editItem)" handle=".drag-handle" class="waypoint-list"><template #item="{ element, index }"><div class="waypoint-row"><span class="drag-handle">☰</span><span class="waypoint-order">{{ index + 1 }}</span><el-autocomplete v-model="element.stationName" :fetch-suggestions="queryStation" @select="s => applyWaypoint(editItem, element, s)" /><el-button link type="danger" @click="delStation(editItem, element)">移除</el-button></div></template></draggable>
+              <el-empty v-if="!editItem.waypoints.length" description="暂无途经站" :image-size="56" />
+            </div>
+          </section>
+          <section class="edit-section route-section">
+            <h2 class="section-title">轨迹地图</h2>
+            <div class="route-actions"><el-input v-model="editItem.routeSource" placeholder="轨迹来源" /><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'auto')">按车次获取</el-button><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'manual')">按途经站生成</el-button><el-button v-if="editItem.routeGeoJson" type="primary" plain @click="editSavedRoute">调整乘坐区间</el-button><el-button v-if="editItem.routeGeoJson" type="danger" link @click="clearRoute(editItem)">移除轨迹</el-button><el-tag v-if="editItem.routeGeoJson" type="success">轨迹已载入</el-tag></div>
+            <TrainRoutePreview v-model="routePreviewVisible" :route-geo-json="pendingRoute.routeGeoJson" :stations="editItem.waypoints" @confirm="applyRouteSelection" @stations-change="applyWaypointCoordinates" />
+          </section>
         </div>
-        <el-divider content-position="left">途经站与轨迹</el-divider>
-        <draggable v-model="editItem.waypoints" item-key="sequence" @end="waypointsChanged(editItem.waypoints, editItem)" handle=".drag-handle" class="waypoint-list"><template #item="{ element, index }"><div class="waypoint-row"><span class="drag-handle">☰</span><span class="waypoint-order">{{ index + 1 }}</span><el-autocomplete v-model="element.stationName" :fetch-suggestions="queryStation" @select="s => applyWaypoint(editItem, element, s)" /><el-button link type="danger" @click="delStation(editItem, element)">移除</el-button></div></template></draggable>
-        <div class="add-waypoint"><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
-        <div class="route-actions"><el-input v-model="editItem.routeSource" placeholder="轨迹来源" /><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'auto')">按车次获取</el-button><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'manual')">按途经站生成</el-button><el-button v-if="editItem.routeGeoJson" type="primary" plain @click="editSavedRoute">编辑轨迹区间</el-button><el-button v-if="editItem.routeGeoJson" type="danger" link @click="clearRoute(editItem)">移除轨迹</el-button><el-tag v-if="editItem.routeGeoJson" type="success">轨迹已载入</el-tag></div>
       </el-form>
     </section>
-    <TrainRoutePreview v-model="routePreviewVisible" :route-geo-json="pendingRoute.routeGeoJson" :stations="pendingRoute.stations" @confirm="applyRouteSelection" />
   </div>
   <div v-else v-loading="saving || deleting || routeSampling" class="train-manage-page">
     <div class="page-title">铁路出行记录管理</div>
@@ -141,12 +156,6 @@
         @size-change="handlePageSizeChange"
       />
     </div>
-    <TrainRoutePreview
-        v-model="routePreviewVisible"
-        :route-geo-json="pendingRoute.routeGeoJson"
-        :stations="pendingRoute.stations"
-        @confirm="applyRouteSelection"
-    />
   </div>
 </template>
 
@@ -216,7 +225,7 @@ const editItem = ref(null)
 const tempStationName = ref('')
 const tempStationSuggestion = ref(null)
 const routePreviewVisible = ref(false)
-const pendingRoute = reactive({ item: null, routeGeoJson: '', stations: [] })
+const pendingRoute = reactive({ item: null, routeGeoJson: '' })
 const routeSampling = ref(false)
 let skipLeaveGuard = false
 
@@ -302,6 +311,11 @@ const beginEdit = (item, idx) => {
   editBackup.value = JSON.parse(JSON.stringify(source))
   editItem.value = source
   editItem.value.waypoints ||= []
+  pendingRoute.item = editItem.value
+  pendingRoute.routeGeoJson = editItem.value.routeGeoJson || ''
+  pendingRoute.trainType = editItem.value.trainType || ''
+  pendingRoute.routeSource = editItem.value.routeSource || ''
+  routePreviewVisible.value = false
 }
 const hasUnsavedChanges = () => JSON.stringify(editItem.value) !== JSON.stringify(editBackup.value)
 const requestClose = async () => {
@@ -420,10 +434,11 @@ const sampleRoute = async (item, mode) => {
     const timetable = new Map((data.timetable || []).map(station => [station.name, station]))
     pendingRoute.item = item
     pendingRoute.routeGeoJson = data.routeGeoJson || ''
-    pendingRoute.stations = (data.stations || []).map(station => {
+    item.waypoints = (data.stations || []).map(station => {
       const schedule = timetable.get(station.stationName) || {}
       return { ...station, arrivalTime: schedule.arrive || null, departureTime: schedule.depart || null }
     })
+    item.mileageKm = null
     pendingRoute.trainType = data.trainType || ''
     pendingRoute.routeSource = data.source || 'railway-network'
     routePreviewVisible.value = true
@@ -439,7 +454,6 @@ const editSavedRoute = () => {
   if (!editItem.value?.routeGeoJson) return
   pendingRoute.item = editItem.value
   pendingRoute.routeGeoJson = editItem.value.routeGeoJson
-  pendingRoute.stations = [...(editItem.value.waypoints || [])]
   pendingRoute.trainType = editItem.value.trainType || ''
   pendingRoute.routeSource = editItem.value.routeSource || 'manual-edit'
   routePreviewVisible.value = true
@@ -448,6 +462,7 @@ const applyRouteSelection = ({ routeGeoJson, waypoints, routeOrigin, routeTermin
   if (!pendingRoute.item) return
   pendingRoute.item.routeGeoJson = routeGeoJson
   pendingRoute.item.waypoints = waypoints
+  pendingRoute.routeGeoJson = routeGeoJson
   pendingRoute.item.mileageKm = null
   const first = waypoints[0]
   const last = waypoints.at(-1)
@@ -472,6 +487,11 @@ const applyWaypoint = (item, waypoint, station) => {
     latitude: station.latitude
   })
   item.mileageKm = null
+}
+const applyWaypointCoordinates = (waypoints) => {
+  if (!editItem.value) return
+  editItem.value.waypoints = waypoints.map((waypoint, index) => ({ ...waypoint, sequence: index + 1 }))
+  editItem.value.mileageKm = null
 }
 const waypointsChanged = (list, item) => {
   renumber(list)
@@ -498,7 +518,14 @@ const delStation = (item, el) => {
   item.waypoints.splice(item.waypoints.indexOf(el), 1)
   waypointsChanged(item.waypoints, item)
 }
-const clearRoute = (item) => { item.routeGeoJson = null; item.mileageKm = null }
+const clearRoute = (item) => {
+  item.routeGeoJson = null
+  item.mileageKm = null
+  if (item === editItem.value) {
+    pendingRoute.routeGeoJson = ''
+    routePreviewVisible.value = false
+  }
+}
 
 const handleDelete = async (idx) => {
   if (deleting.value || saving.value) return
@@ -581,6 +608,12 @@ const handlePageSizeChange = () => {
 .edit-header h1 { margin:6px 0 0; font-size:22px; font-weight:700; }
 .edit-actions { display:flex; align-items:center; gap:8px; }
 .edit-panel { padding:20px; background:#fff; border:1px solid #e5ebec; border-radius:7px; }
+.edit-section + .edit-section { margin-top:26px; padding-top:22px; border-top:1px solid #e7eded; }
+.section-title { margin:0 0 16px; color:#24393e; font-size:16px; font-weight:680; line-height:1.4; }
+.section-title span { margin-left:8px; color:#829398; font-size:13px; font-weight:500; }
+.route-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(440px,1fr)); align-items:start; gap:22px; margin-top:26px; padding-top:22px; border-top:1px solid #e7eded; }
+.route-editor-grid > .edit-section { min-width:0; }
+.route-editor-grid .edit-section + .edit-section { margin:0; padding:0; border:0; }
 .train-manage-page { width: 100%; margin: 0 auto; }
 .page-title { margin-bottom: 18px; color: #1d3035; font-size: 24px; font-weight: 720; line-height: 1.25; }
 .query-card { margin-bottom: 16px; }
@@ -605,13 +638,27 @@ const handlePageSizeChange = () => {
 .record-form :deep(.el-form-item) { margin-bottom: 10px; }
 .record-form :deep(.el-form-item__content > .el-input), .record-form :deep(.el-form-item__content > .el-autocomplete), .record-form :deep(.el-form-item__content > .el-date-editor), .record-form :deep(.el-form-item__content > .el-select), .record-form :deep(.el-form-item__content > .el-input-number) { width: 100%; }
 .wide-field { grid-column: 1 / -1; }
-.waypoint-list { display: grid; gap: 7px; max-height: 220px; overflow: auto; }
-.waypoint-row { display: grid; grid-template-columns: 22px 30px minmax(0, 1fr) 50px; align-items: center; gap: 8px; }
+.section-title-row { display:flex; align-items:center; gap:12px; min-height:32px; }
+.section-title-row .section-title { margin-bottom:0; }
+.waypoint-content { margin-top:16px; }
+.waypoint-list { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; max-height:520px; overflow-y:auto; overflow-x:hidden; padding-right:8px; scrollbar-width:thin; scrollbar-color:#b8c9cc transparent; }
+.waypoint-list::-webkit-scrollbar { width:8px; }
+.waypoint-list::-webkit-scrollbar-track { background:transparent; }
+.waypoint-list::-webkit-scrollbar-thumb { border:2px solid transparent; border-radius:8px; background:#b8c9cc; background-clip:padding-box; }
+.waypoint-list::-webkit-scrollbar-thumb:hover { background:#91a9ad; background-clip:padding-box; }
+.waypoint-row { display:grid; grid-template-columns:18px 26px minmax(0,1fr) 42px; align-items:center; gap:8px; min-width:0; min-height:44px; }
+.waypoint-row :deep(.el-input__wrapper) { min-height:40px; }
 .drag-handle { color: #718187; cursor: grab; }
 .waypoint-order { color: #718187; text-align: center; font-size: 13px; }
-.add-waypoint, .route-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.add-waypoint, .route-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 0; }
 .add-waypoint :deep(.el-autocomplete) { flex: 1; min-width: 180px; }
+.add-waypoint { margin-top:0; margin-bottom:16px; }
 .route-actions > :deep(.el-input) { flex: 1 1 150px; max-width: 240px; }
+.route-section > .section-title { display:flex; align-items:center; min-height:32px; margin-bottom:16px; }
+@media (max-width: 960px) {
+  .route-editor-grid { grid-template-columns:minmax(0, 1fr); }
+  .route-editor-grid .edit-section + .edit-section { padding-top:20px; border-top:1px solid #e7eded; }
+}
 @media (max-width: 760px) {
   .page-title { font-size: 21px; margin-bottom: 16px; }
   .tool-bar { align-items: stretch; flex-direction: column; }

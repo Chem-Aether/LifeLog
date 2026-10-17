@@ -10,8 +10,8 @@ function duration(departure, arrival) {
 const details = entries => entries.map(([label, value]) => ({ label, value: text(value) }))
 
 export function toFlightTrip(record, airports = {}) {
-  const fromAirport = airports[record.departureIcao]
-  const toAirport = airports[record.arrivalIcao]
+  const fromAirport = airports[String(record.departureIcao || '').trim().toUpperCase()]
+  const toAirport = airports[String(record.arrivalIcao || '').trim().toUpperCase()]
   return {
     record,
     ticketType: 'flight',

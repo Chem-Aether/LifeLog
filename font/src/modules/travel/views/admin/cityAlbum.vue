@@ -88,8 +88,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowRight, Location, Picture, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getAllFootprints } from '@/modules/travel/apis/travel.js'
+import { getFootprints } from '@/modules/travel/apis/travel.js'
 import { mediaUrl } from '@/modules/travel/apis/media.js'
+import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
 
 const records = ref([])
 const loading = ref(false)
@@ -105,15 +106,17 @@ const cities = computed(() => {
   const query = searchText.value.trim().toLocaleLowerCase()
   const groups = new Map()
   const matchingRecords = records.value.filter(item => {
+    const region = getFootprintRegion(item)
     if (item.visitType === 'transit') return false
     if (selectedYear.value !== 'all' && !String(item.visitDate || '').startsWith(selectedYear.value)) return false
     if (!query) return true
-    return `${item.cityName || ''} ${item.provinceName || ''} ${item.placeName || ''} ${item.regionName || ''}`.toLocaleLowerCase().includes(query)
+    return `${region.cityName} ${region.provinceName} ${item.placeName || ''} ${region.regionName}`.toLocaleLowerCase().includes(query)
   })
 
   for (const item of matchingRecords) {
-    const provinceName = String(item.provinceName || '').trim()
-    const cityName = String(item.cityName || '').trim()
+    const region = getFootprintRegion(item)
+    const provinceName = String(region.provinceName || '').trim()
+    const cityName = String(region.cityName || '').trim()
     const name = cityName || '未标注城市'
     const key = cityName ? `${provinceName}:${cityName}` : 'unknown-city'
     if (!groups.has(key)) {
@@ -130,7 +133,7 @@ const cities = computed(() => {
         mediaId,
         url,
         placeName: item.placeName || '未命名地点',
-        regionName: item.regionName || '',
+        regionName: region.regionName,
         visitDate: item.visitDate || '',
       })
     }
@@ -161,7 +164,7 @@ watch(activeCity, city => { if (city) activeCityKey.value = city.key }, { immedi
 onMounted(async () => {
   loading.value = true
   try {
-    const response = await getAllFootprints()
+    const response = await getFootprints()
     records.value = response.data || []
   } catch (error) {
     ElMessage.error(error?.response?.data?.message || '旅行足迹加载失败')

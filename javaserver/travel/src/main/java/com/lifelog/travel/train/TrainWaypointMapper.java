@@ -18,6 +18,16 @@ public interface TrainWaypointMapper extends BaseMapper<TrainWaypoint> {
             "WHERE train_id = #{trainId} ORDER BY sequence")
     List<TrainWaypoint> selectByTrainId(@Param("trainId") Long trainId);
 
+    /** 按多个行程 ID 批量查询途经站并按行程和站序排列。 */
+    @Select({"<script>",
+            "SELECT waypoint_id, train_id, sequence, station_name, arrival_time, departure_time,",
+            "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM train_waypoint",
+            "WHERE train_id IN",
+            "<foreach collection='trainIds' item='trainId' open='(' separator=',' close=')'>#{trainId}</foreach>",
+            "ORDER BY train_id, sequence",
+            "</script>"})
+    List<TrainWaypoint> selectByTrainIds(@Param("trainIds") List<Long> trainIds);
+
     /** 查询全部列车途经站并按行程和站序排列。 */
     @Select("SELECT waypoint_id, train_id, sequence, station_name, arrival_time, departure_time, " +
             "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM train_waypoint ORDER BY train_id, sequence")

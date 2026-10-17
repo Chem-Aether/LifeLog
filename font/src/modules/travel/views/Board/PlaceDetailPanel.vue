@@ -24,13 +24,13 @@
         </template>
       </div>
       <div class="place-title">
-        <div><h3>{{ place.placeName || '未命名地点' }}</h3><p>{{ place.regionName || '地区未知' }}</p></div>
+        <div><h3>{{ place.placeName || '未命名地点' }}</h3><p>{{ regionName }}</p></div>
         <el-tag :type="place.visitType === 'transit' ? 'warning' : 'success'" effect="dark">
           {{ place.visitType === 'transit' ? '途经地' : '旅行地' }}
         </el-tag>
       </div>
       <el-descriptions :column="1" border class="place-fields">
-        <el-descriptions-item label="地点类型">{{ place.poiReference || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="地点类型">{{ place.locationType || '-' }}</el-descriptions-item>
         <el-descriptions-item label="到访日期">{{ place.visitDate || '未记录' }}</el-descriptions-item>
         <el-descriptions-item label="地图坐标">{{ coordinateText }}</el-descriptions-item>
       </el-descriptions>
@@ -46,11 +46,13 @@
 import { computed, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { mediaUrl } from '@/modules/travel/apis/media.js'
+import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
 
 const props = defineProps({ place: { type: Object, default: null } })
 defineEmits(['close'])
 const activeIndex = ref(0)
 const imageFailed = ref(false)
+const regionName = computed(() => getFootprintRegion(props.place).regionName || '地区未知')
 const imageUrls = computed(() => (Array.isArray(props.place?.mediaIds) ? props.place.mediaIds : [])
   .slice(0, 9).map(mediaUrl).filter(Boolean))
 const coverUrl = computed(() => imageUrls.value[activeIndex.value] || '')

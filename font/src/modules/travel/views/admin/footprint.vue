@@ -1,7 +1,7 @@
 <template>
   <div v-if="isEditing" v-loading="saving || uploadingCover" class="travel-edit-page">
     <header class="edit-header"><div><el-button text @click="requestClose">返回足迹管理</el-button><h1>{{ form.footprintId ? '编辑足迹' : '新增足迹' }}</h1></div><div class="edit-actions"><el-button :disabled="saving || uploadingCover" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" :disabled="uploadingCover" @click="save">保存并点亮</el-button></div></header>
-    <section class="edit-panel"><el-form label-width="90px"><el-form-item label="地图选点"><FootprintMapPicker :longitude="form.longitude" :latitude="form.latitude" @pick="handleMapPick" @clear="clearMapPoint" /></el-form-item><el-form-item label="当前地区"><div class="region-result"><span>{{ selectedRegionName || '选点后自动识别' }}</span></div></el-form-item><div class="field-grid"><el-form-item label="记录性质" required><el-radio-group v-model="form.visitType"><el-radio-button value="travel">旅行地点</el-radio-button><el-radio-button value="transit">途经城市</el-radio-button></el-radio-group></el-form-item><el-form-item label="地点名称" required><el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" /></el-form-item><el-form-item label="到访日期"><el-date-picker v-model="form.visitDate" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable placeholder="选择日期" style="width:100%" /></el-form-item></div><el-form-item label="旅行心得"><el-input v-model="form.note" type="textarea" :rows="4" placeholder="记录这次旅行的见闻、感受或特别回忆" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="旅行图片"><MediaUploadEditor v-model="coverItems" :upload="uploadTravelMedia" :before-remove="beforeRemoveCover" :url-for="mediaUrl" :multiple="true" :max-count="9" :disabled="saving" @busy-change="uploadingCover = $event" /></el-form-item></el-form></section>
+    <section class="edit-panel"><el-form label-width="90px"><el-form-item label="地图选点"><FootprintMapPicker :longitude="form.longitude" :latitude="form.latitude" @pick="handleMapPick" @clear="clearMapPoint" /></el-form-item><el-form-item label="当前地区"><div class="region-result"><span>{{ selectedRegionName || '选点后自动识别' }}</span></div></el-form-item><div class="field-grid"><el-form-item label="记录性质" required><el-radio-group v-model="form.visitType"><el-radio-button value="travel">旅行地点</el-radio-button><el-radio-button value="transit">途经城市</el-radio-button></el-radio-group></el-form-item><el-form-item label="地点名称" required><el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" /></el-form-item><el-form-item label="地点类型"><el-input v-model="form.locationType" placeholder="例如：景点、餐厅、车站" maxlength="100" /></el-form-item><el-form-item label="到访日期"><el-date-picker v-model="form.visitDate" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable placeholder="选择日期" style="width:100%" /></el-form-item></div><el-form-item label="旅行心得"><el-input v-model="form.note" type="textarea" :rows="4" placeholder="记录这次旅行的见闻、感受或特别回忆" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="旅行图片"><MediaUploadEditor v-model="coverItems" :upload="uploadTravelMedia" :before-remove="beforeRemoveCover" :url-for="mediaUrl" :multiple="true" :max-count="9" :disabled="saving" @busy-change="uploadingCover = $event" /></el-form-item></el-form></section>
   </div>
   <div v-else v-loading="loading || saving || deleting" class="footprint-page">
     <div class="page-header">
@@ -46,8 +46,11 @@
       @selection-change="selectedRows = $event"
     >
       <el-table-column type="selection" width="48" />
-      <el-table-column prop="regionName" label="点亮地区" min-width="220" />
+      <el-table-column label="点亮地区" min-width="220">
+        <template #default="scope">{{ getFootprintRegion(scope.row).regionName }}</template>
+      </el-table-column>
       <el-table-column prop="placeName" label="地点名称" min-width="180" sortable="custom" />
+      <el-table-column prop="locationType" label="地点类型" min-width="120" />
       <el-table-column prop="visitType" label="记录性质" width="110" sortable="custom">
         <template #default="scope">
           <el-tag :type="scope.row.visitType === 'transit' ? 'info' : 'success'">
@@ -92,8 +95,9 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addFootprint, deleteFootprint, deleteFootprints, getFootprintById, getFootprintsPage, updateFootprint } from '@/modules/travel/apis/travel.js'
+import { addFootprint, deleteFootprint, deleteFootprints, getFootprintById, getFootprints, updateFootprint } from '@/modules/travel/apis/travel.js'
 import { deleteTravelMedia, mediaUrl, uploadTravelMedia } from '@/modules/travel/apis/media.js'
+import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
 import MediaUploadEditor from '@/components/MediaUploadEditor.vue'
 import FootprintMapPicker from '@/modules/travel/components/FootprintMapPicker.vue'
 import TravelDataTools from '@/modules/travel/components/TravelDataTools.vue'
@@ -125,6 +129,7 @@ let lastEditId = String(route.params.id || '')
 const form = reactive({
   footprintId: null,
   placeName: '',
+  locationType: '',
   visitType: 'travel',
   visitDate: null,
   longitude: null,
@@ -171,7 +176,7 @@ async function loadRows() {
   const sequence = ++loadSequence
   loading.value = true
   try {
-    const res = await getFootprintsPage({
+    const res = await getFootprints({
       region: regionFilter.value.trim() || undefined,
       keyword: placeFilter.value.trim() || undefined,
       visitType: visitTypeFilter.value === 'all' ? undefined : visitTypeFilter.value,
@@ -220,6 +225,7 @@ function resetForm() {
   Object.assign(form, {
     footprintId: null,
     placeName: '',
+    locationType: '',
     visitType: 'travel',
     visitDate: null,
     longitude: null,
@@ -245,6 +251,7 @@ function openEditData(row) {
   Object.assign(form, {
     footprintId: row.footprintId,
     placeName: row.placeName,
+    locationType: row.locationType || '',
     visitType: row.visitType || 'travel',
     visitDate: row.visitDate || null,
     longitude: row.longitude == null ? null : Number(row.longitude),
@@ -256,6 +263,7 @@ function openEditData(row) {
   pendingMediaDeletion.value = new Set()
   editSnapshot.value = JSON.stringify({
     placeName: form.placeName.trim(),
+    locationType: form.locationType.trim() || null,
     visitType: form.visitType,
     visitDate: form.visitDate,
     longitude: form.longitude,
@@ -263,7 +271,7 @@ function openEditData(row) {
     note: form.note.trim() || null,
     mediaIds: form.mediaIds
   })
-  selectedRegionName.value = row.regionName || ''
+    selectedRegionName.value = getFootprintRegion(row).regionName
 }
 
 async function beforeRemoveCover(mediaId) {
@@ -278,7 +286,7 @@ async function beforeRemoveCover(mediaId) {
 function hasUnsavedChanges() {
   return isEditing.value && editSnapshot.value !== snapshotForm()
 }
-function snapshotForm() { return JSON.stringify({ placeName: form.placeName.trim(), visitType: form.visitType, visitDate: form.visitDate || null, longitude: form.longitude, latitude: form.latitude, note: form.note.trim() || null, mediaIds: form.mediaIds }) }
+function snapshotForm() { return JSON.stringify({ placeName: form.placeName.trim(), locationType: form.locationType.trim() || null, visitType: form.visitType, visitDate: form.visitDate || null, longitude: form.longitude, latitude: form.latitude, note: form.note.trim() || null, mediaIds: form.mediaIds }) }
 async function requestClose() {
   if (saving.value || uploadingCover.value) return
   if (hasUnsavedChanges()) { try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) } catch { return } }
@@ -312,6 +320,7 @@ async function save() {
 
   const payload = {
     placeName: form.placeName.trim(),
+    locationType: form.locationType.trim() || null,
     visitType: form.visitType,
     visitDate: form.visitDate || null,
     longitude: form.longitude,
