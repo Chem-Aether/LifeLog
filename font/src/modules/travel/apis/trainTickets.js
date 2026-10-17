@@ -60,11 +60,3 @@ export const deleteTrainTickets = (ids) => request({
     method: 'DELETE',
     data: ids
 })
-
-export const sampleTrainRoute = (data) => {
-    return request({
-        url: '/travel/trains/route/sample',
-        method: 'POST',
-        data
-    })
-}

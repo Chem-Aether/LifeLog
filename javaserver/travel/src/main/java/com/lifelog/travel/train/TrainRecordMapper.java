@@ -18,8 +18,7 @@ public interface TrainRecordMapper extends BaseMapper<TrainRecord> {
             "end_station_name AS \"endStationName\", arrival_time AS \"arrivalTime\",",
             "origin_station_name AS \"originStationName\", terminal_station_name AS \"terminalStationName\",",
             "carriage_no AS \"carriageNo\", seat_no AS \"seatNo\", seat_type AS \"seatType\", mileage_km AS \"mileageKm\",",
-            "ST_AsGeoJSON(route_geometry) AS \"routeGeoJson\", route_source AS \"routeSource\",",
-            "route_captured_at AS \"routeCapturedAt\", note FROM train_record",
+            "ST_AsGeoJSON(route_geometry) AS \"routeGeoJson\", note FROM train_record",
             "<where>",
             "<if test='dto.trainNo != null and dto.trainNo != \"\"'>AND train_no LIKE CONCAT('%', #{dto.trainNo}, '%')</if>",
             "<if test='dto.startStationName != null and dto.startStationName != \"\"'>AND start_station_name LIKE CONCAT('%', #{dto.startStationName}, '%')</if>",
@@ -34,7 +33,7 @@ public interface TrainRecordMapper extends BaseMapper<TrainRecord> {
     /** 根据行程 ID 查询记录并读取线路 GeoJSON。 */
     @Select("SELECT train_id, train_no, train_type, train_model, start_station_name, departure_time, " +
             "end_station_name, arrival_time, origin_station_name, terminal_station_name, carriage_no, seat_no, seat_type, mileage_km, " +
-            "ST_AsGeoJSON(route_geometry) AS route_geo_json, route_source, route_captured_at, note " +
+            "ST_AsGeoJSON(route_geometry) AS route_geo_json, note " +
             "FROM train_record WHERE train_id = #{id}")
     TrainRecord selectRecordById(@Param("id") Long id);
 
@@ -46,7 +45,7 @@ public interface TrainRecordMapper extends BaseMapper<TrainRecord> {
     /** 查询铁路行程，可按发车年份筛选。 */
     @Select({"<script>", "SELECT train_id, train_no, train_type, train_model, start_station_name, departure_time,",
             "end_station_name, arrival_time, origin_station_name, terminal_station_name, carriage_no, seat_no, seat_type, mileage_km,",
-            "ST_AsGeoJSON(route_geometry) AS route_geo_json, route_source, route_captured_at, note FROM train_record",
+            "ST_AsGeoJSON(route_geometry) AS route_geo_json, note FROM train_record",
             "<if test='year != null'>WHERE departure_time &gt;= make_date(#{year},1,1) AND departure_time &lt; make_date(#{year}+1,1,1)</if>",
             "ORDER BY departure_time DESC", "</script>"})
     List<TrainRecord> selectRecords(@Param("year") Integer year);

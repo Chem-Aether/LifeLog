@@ -19,10 +19,11 @@ CREATE TABLE IF NOT EXISTS train_record (
     origin_station_name VARCHAR(100), terminal_station_name VARCHAR(100),
     carriage_no VARCHAR(30), seat_no VARCHAR(30), seat_type VARCHAR(50), mileage_km NUMERIC(10,2),
     route_geometry geometry(MultiLineString,4326),
-    route_source VARCHAR(100), route_captured_at TIMESTAMP, note TEXT,
+    note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_train_time CHECK (arrival_time IS NULL OR arrival_time >= departure_time)
 );
+ALTER TABLE train_record DROP COLUMN IF EXISTS route_source, DROP COLUMN IF EXISTS route_captured_at;
 
 CREATE INDEX IF NOT EXISTS idx_train_number ON train_record (train_no);
 CREATE INDEX IF NOT EXISTS idx_train_route_geometry ON train_record USING GIST (route_geometry);

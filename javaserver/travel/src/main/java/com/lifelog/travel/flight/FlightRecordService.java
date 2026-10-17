@@ -41,6 +41,15 @@ public class FlightRecordService {
         return mapper.selectPage(new Page<>(page, size), query);
     }
 
+    /** 按 ID 查询航班记录。 */
+    public FlightRecord get(Long id) {
+        FlightRecord record = mapper.selectById(id);
+        if (record == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "航班记录不存在");
+        }
+        return record;
+    }
+
     /**
      * 校验并创建航班记录。
      * @param record 航班数据

@@ -157,6 +157,9 @@ def test_railway_route_sampling_uses_local_network():
     result = response.json()["data"]
     assert result["geometry"]["type"] == "MultiLineString"
     assert len(result["geometry"]["coordinates"][0]) > 2
+    assert len(result["routeSegments"]) == 1
+    assert result["routeSegments"][0]["candidates"]
+    assert len(result["routeSegments"][0]["defaultCoordinates"]) > 2
     assert [station["stationName"] for station in result["stations"]] == ["南京南", "南京"]
     assert result["unmatchedStations"] == []
 

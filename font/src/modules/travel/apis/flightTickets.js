@@ -37,6 +37,11 @@ export const getFlightList = (params = {}) => {
 export const getAllFlights = (year = 'all') =>
     fetchAllPages(params => getFlightList({ ...departureYearFilter(year), ...params }))
 
+export const getFlightTicketById = (id) => request({
+    url: `/travel/flights/${id}`,
+    method: 'GET'
+})
+
 // 公共字段
 const flightTicketFields = (params) => ({
     flightNo: params.flightNo,

@@ -143,7 +143,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getFlightList, deleteFlightTicketById, deleteFlightTickets, insertFlightTicket, updateFlightTicketById } from '@/modules/travel/apis/flightTickets.js'
+import { getFlightList, getFlightTicketById, deleteFlightTicketById, deleteFlightTickets, insertFlightTicket, updateFlightTicketById } from '@/modules/travel/apis/flightTickets.js'
 import { useResourceSearch } from '@/modules/travel/composables/useResourceSearch.js'
 import TravelDataTools from '@/modules/travel/components/TravelDataTools.vue'
 import TravelRecordExportButton from '@/modules/travel/components/TravelRecordExportButton.vue'
@@ -216,25 +216,38 @@ const editItem = ref(null)
 // 后端分页信息（total/size/current/records...）
 const pageInfo = ref({ total: 0 })
 
-onMounted(async () => {
-  if (isEditing.value) {
-    currentPage.value = Math.max(1, Number(route.query.page) || 1)
-    await loadData()
-    const row = route.params.id ? flightList.value.find(item => String(item.flightId) === String(route.params.id)) : null
-    if (route.params.id && !row) { ElMessage.error('航班记录不存在'); router.replace('/travel/admin/flightTicket'); return }
-    beginEdit(row, row ? flightList.value.indexOf(row) : 0)
+const loadEditRecord = async () => {
+  currentPage.value = Math.max(1, Number(route.query.page) || 1)
+  await loadData()
+  const id = route.params.id
+  if (!id) {
+    beginEdit(null, 0)
     return
   }
-  await loadData()
+  loading.value = true
+  try {
+    const response = await getFlightTicketById(id)
+    const record = response?.data || response
+    if (!record?.flightId) throw new Error('航班记录不存在')
+    fillAirportDisplays([record])
+    const index = flightList.value.findIndex(item => String(item.flightId) === String(id))
+    beginEdit(record, index)
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || error?.message || '航班记录加载失败')
+    router.replace('/travel/admin/flightTicket')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(async () => {
+  if (isEditing.value) await loadEditRecord()
+  else await loadData()
 })
 
 watch(() => route.fullPath, async () => {
   if (!isEditing.value) { cancelEdit(); return }
-  currentPage.value = Math.max(1, Number(route.query.page) || 1)
-  await loadData()
-  const row = route.params.id ? flightList.value.find(item => String(item.flightId) === String(route.params.id)) : null
-  if (route.params.id && !row) { ElMessage.error('航班记录不存在'); router.replace('/travel/admin/flightTicket'); return }
-  beginEdit(row, row ? flightList.value.indexOf(row) : 0)
+  await loadEditRecord()
 })
 
 // 用 ICAO 回填显示文本（列表加载/刷新时）

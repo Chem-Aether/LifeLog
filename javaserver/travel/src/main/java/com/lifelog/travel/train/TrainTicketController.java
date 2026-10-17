@@ -14,9 +14,6 @@ public class TrainTicketController {
 
     @Autowired
     private TrainTicketService trainTicketService;
-    @Autowired
-    private TrainRouteSamplingService trainRouteSamplingService;
-
     /** 分页查询铁路行程。 */
     @GetMapping
     public Result list(TrainRecordQueryDTO dto) {
@@ -40,12 +37,6 @@ public class TrainTicketController {
     @PutMapping("/{trainId}")
     public Result update(@PathVariable Long trainId, @RequestBody TrainRecord record) {
         return Result.success(trainTicketService.update(trainId, record));
-    }
-
-    /** 根据自动或手动途经站生成线路轨迹。 */
-    @PostMapping("/route/sample")
-    public Result sampleRoute(@RequestBody TrainRouteSampleRequest request) {
-        return Result.success(trainRouteSamplingService.sample(request));
     }
 
     /** 删除单条铁路行程。 */

@@ -17,6 +17,10 @@ export const MAP_BASE_URL = normalizeBaseUrl(
   import.meta.env.VITE_MAP_BASE_URL,
   'VITE_MAP_BASE_URL',
 )
+export const SPIDER_BASE_URL = normalizeBaseUrl(
+  import.meta.env.VITE_SPIDER_BASE_URL,
+  'VITE_SPIDER_BASE_URL',
+)
 export const MEDIA_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_MEDIA_BASE_URL, 'VITE_MEDIA_BASE_URL')
 
 const attachInterceptors = (service) => {
@@ -76,6 +80,7 @@ export const billRequest = createRequest(BILL_BASE_URL)
 export const travelRequest = createRequest(TRAVEL_BASE_URL)
 export const diaryRequest = createRequest(DIARY_BASE_URL)
 export const mapRequest = createRequest(MAP_BASE_URL)
+export const spiderRequest = createRequest(SPIDER_BASE_URL)
 export const mediaRequest = createRequest(MEDIA_BASE_URL)
 
 export default authRequest

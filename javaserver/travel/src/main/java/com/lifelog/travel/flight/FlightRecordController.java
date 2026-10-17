@@ -29,6 +29,12 @@ public class FlightRecordController {
         return Result.success(flightRecordService.list(dto));
     }
 
+    /** 按 ID 查询航班记录详情。 */
+    @GetMapping("/{id}")
+    public Result get(@PathVariable Long id) {
+        return Result.success(flightRecordService.get(id));
+    }
+
     /**
      * 创建航班记录。
      * @param flightRecord 航班记录数据

@@ -45,10 +45,6 @@ public class TrainRecord {
     /** 铁路线路 GeoJSON 几何。 */
     @TableField(exist = false)
     private String routeGeoJson;
-    /** 线路数据来源。 */
-    private String routeSource;
-    /** 线路采集时间。 */
-    private LocalDateTime routeCapturedAt;
     /** 行程备注。 */
     private String note;
 }

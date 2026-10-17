@@ -77,7 +77,7 @@ public class TrainGeoPackageService {
             statement.execute("CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT NOT NULL, srs_id INTEGER NOT NULL PRIMARY KEY, organization TEXT NOT NULL, organization_coordsys_id INTEGER NOT NULL, definition TEXT NOT NULL, description TEXT)");
             statement.execute("CREATE TABLE gpkg_contents (table_name TEXT NOT NULL PRIMARY KEY, data_type TEXT NOT NULL, identifier TEXT UNIQUE, description TEXT DEFAULT '', last_change DATETIME NOT NULL, min_x DOUBLE, min_y DOUBLE, max_x DOUBLE, max_y DOUBLE, srs_id INTEGER, FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id))");
             statement.execute("CREATE TABLE gpkg_geometry_columns (table_name TEXT NOT NULL, column_name TEXT NOT NULL, geometry_type_name TEXT NOT NULL, srs_id INTEGER NOT NULL, z TINYINT NOT NULL, m TINYINT NOT NULL, PRIMARY KEY (table_name, column_name), FOREIGN KEY (table_name) REFERENCES gpkg_contents(table_name), FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id))");
-            statement.execute("CREATE TABLE train_records (train_id INTEGER PRIMARY KEY, train_no TEXT NOT NULL, train_type TEXT, train_model TEXT, start_station_name TEXT NOT NULL, departure_time TEXT NOT NULL, end_station_name TEXT NOT NULL, arrival_time TEXT, origin_station_name TEXT, terminal_station_name TEXT, carriage_no TEXT, seat_no TEXT, seat_type TEXT, mileage_km REAL, route_source TEXT, route_captured_at TEXT, note TEXT)");
+            statement.execute("CREATE TABLE train_records (train_id INTEGER PRIMARY KEY, train_no TEXT NOT NULL, train_type TEXT, train_model TEXT, start_station_name TEXT NOT NULL, departure_time TEXT NOT NULL, end_station_name TEXT NOT NULL, arrival_time TEXT, origin_station_name TEXT, terminal_station_name TEXT, carriage_no TEXT, seat_no TEXT, seat_type TEXT, mileage_km REAL, note TEXT)");
             statement.execute("CREATE TABLE train_routes (fid INTEGER PRIMARY KEY AUTOINCREMENT, train_id INTEGER NOT NULL UNIQUE, geom GEOMETRY NOT NULL, FOREIGN KEY (train_id) REFERENCES train_records(train_id))");
             statement.execute("CREATE TABLE train_waypoints (fid INTEGER PRIMARY KEY AUTOINCREMENT, train_id INTEGER NOT NULL, sequence INTEGER NOT NULL, station_name TEXT NOT NULL, arrival_time TEXT, departure_time TEXT, longitude REAL, latitude REAL, geom POINT, FOREIGN KEY (train_id) REFERENCES train_records(train_id))");
             statement.execute("INSERT INTO gpkg_spatial_ref_sys VALUES ('Undefined Cartesian', -1, 'NONE', -1, 'undefined', 'undefined Cartesian coordinate reference system')");
@@ -107,7 +107,7 @@ public class TrainGeoPackageService {
 
     /** 批量写入铁路行程属性记录。 */
     private void insertRecords(Connection connection, List<TrainRecord> records) throws SQLException {
-        String sql = "INSERT INTO train_records (train_id,train_no,train_type,train_model,start_station_name,departure_time,end_station_name,arrival_time,origin_station_name,terminal_station_name,carriage_no,seat_no,seat_type,mileage_km,route_source,route_captured_at,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO train_records (train_id,train_no,train_type,train_model,start_station_name,departure_time,end_station_name,arrival_time,origin_station_name,terminal_station_name,carriage_no,seat_no,seat_type,mileage_km,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             for (TrainRecord row : records) {
                 if (row.getTrainId() == null) throw new SQLException("列车记录缺少 train_id，无法导出 GeoPackage");
@@ -119,8 +119,7 @@ public class TrainGeoPackageService {
                 statement.setString(9, row.getOriginStationName()); statement.setString(10, row.getTerminalStationName());
                 statement.setString(11, row.getCarriageNo()); statement.setString(12, row.getSeatNo());
                 statement.setString(13, row.getSeatType()); statement.setObject(14, row.getMileageKm());
-                statement.setString(15, row.getRouteSource());
-                statement.setString(16, string(row.getRouteCapturedAt())); statement.setString(17, row.getNote()); statement.addBatch();
+                statement.setString(15, row.getNote()); statement.addBatch();
             }
             statement.executeBatch();
         }
@@ -242,7 +241,7 @@ public class TrainGeoPackageService {
         int imported = 0;
         List<String> errors = new ArrayList<>();
         Set<Long> importedSourceIds = new HashSet<>();
-        String sql = "SELECT train_id,train_no,train_type,train_model,start_station_name,departure_time,end_station_name,arrival_time,origin_station_name,terminal_station_name,carriage_no,seat_no,seat_type,mileage_km,route_source,route_captured_at,note FROM train_records ORDER BY train_id";
+        String sql = "SELECT train_id,train_no,train_type,train_model,start_station_name,departure_time,end_station_name,arrival_time,origin_station_name,terminal_station_name,carriage_no,seat_no,seat_type,mileage_km,note FROM train_records ORDER BY train_id";
         try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
             int rowNumber = 1;
             while (rows.next()) {
@@ -258,8 +257,7 @@ public class TrainGeoPackageService {
                     record.setTerminalStationName(rows.getString("terminal_station_name")); record.setCarriageNo(rows.getString("carriage_no"));
                     record.setSeatNo(rows.getString("seat_no")); record.setSeatType(rows.getString("seat_type"));
                     record.setMileageKm(rows.getBigDecimal("mileage_km"));
-                    record.setRouteSource(rows.getString("route_source"));
-                    record.setRouteCapturedAt(dateTime(rows.getString("route_captured_at"))); record.setNote(rows.getString("note"));
+                    record.setNote(rows.getString("note"));
                     record.setRouteGeoJson(routeGeometries.get(sourceId)); record.setWaypoints(points.getOrDefault(sourceId, List.of()));
                     if (updateExisting) trainService.update(sourceId, record);
                     else trainService.save(record);

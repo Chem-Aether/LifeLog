@@ -1,5 +1,5 @@
 <template>
-  <div v-if="isEditing" v-loading="saving || routeSampling" class="travel-edit-page">
+  <div v-if="isEditing" v-loading="saving || routeSampling || stationQuerying" class="travel-edit-page">
     <header class="edit-header"><div><el-button text @click="requestClose">返回铁路记录</el-button><h1>{{ editItem?.trainId ? '编辑铁路行程' : '新增铁路行程' }}</h1></div><div class="edit-actions"><el-button :disabled="saving" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button></div></header>
     <section class="edit-panel">
       <el-form v-if="editItem" :model="editItem" label-position="top" class="record-form">
@@ -26,15 +26,17 @@
               <h2 class="section-title">途经站 <span>{{ editItem.waypoints.length }} 站</span></h2>
             </div>
             <div class="waypoint-content">
-              <div class="add-waypoint"><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
+              <div class="add-waypoint"><el-button class="fetch-stations-button" type="primary" :loading="stationQuerying" :disabled="routeSampling" @click="fetchTrainStations(editItem)">按车次采样</el-button><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
               <draggable v-model="editItem.waypoints" item-key="sequence" @end="waypointsChanged(editItem.waypoints, editItem)" handle=".drag-handle" class="waypoint-list"><template #item="{ element, index }"><div class="waypoint-row"><span class="drag-handle">☰</span><span class="waypoint-order">{{ index + 1 }}</span><el-autocomplete v-model="element.stationName" :fetch-suggestions="queryStation" @select="s => applyWaypoint(editItem, element, s)" /><el-button link type="danger" @click="delStation(editItem, element)">移除</el-button></div></template></draggable>
               <el-empty v-if="!editItem.waypoints.length" description="暂无途经站" :image-size="56" />
             </div>
           </section>
           <section class="edit-section route-section">
             <h2 class="section-title">轨迹地图</h2>
-            <div class="route-actions"><el-input v-model="editItem.routeSource" placeholder="轨迹来源" /><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'auto')">按车次获取</el-button><el-button :loading="routeSampling" @click="sampleRoute(editItem, 'manual')">按途经站生成</el-button><el-button v-if="editItem.routeGeoJson" type="primary" plain @click="editSavedRoute">调整乘坐区间</el-button><el-button v-if="editItem.routeGeoJson" type="danger" link @click="clearRoute(editItem)">移除轨迹</el-button><el-tag v-if="editItem.routeGeoJson" type="success">轨迹已载入</el-tag></div>
-            <TrainRoutePreview v-model="routePreviewVisible" :route-geo-json="pendingRoute.routeGeoJson" :stations="editItem.waypoints" @confirm="applyRouteSelection" @stations-change="applyWaypointCoordinates" />
+            <div v-if="editItem.routeGeoJson" class="route-actions"><el-button type="primary" plain @click="editSavedRoute">调整区间</el-button><el-button type="danger" link @click="clearRoute(editItem)">移除轨迹</el-button><el-tag type="success">轨迹已载入</el-tag></div>
+            <TrainRoutePreview v-model="routePreviewVisible" :route-geo-json="pendingRoute.routeGeoJson" :route-segments="pendingRoute.routeSegments" :stations="editItem.waypoints" @confirm="applyRouteSelection" @stations-change="applyWaypointCoordinates">
+              <template #route-action><el-button class="generate-route-button" :loading="routeSampling" :disabled="stationQuerying" type="primary" @click="sampleRoute(editItem)">轨迹生成</el-button></template>
+            </TrainRoutePreview>
           </section>
         </div>
       </el-form>
@@ -173,8 +175,9 @@ import {
   updateTrainTicket,
   deleteTrainTicket,
   deleteTrainTickets,
-  sampleTrainRoute
 } from '@/modules/travel/apis/trainTickets.js'
+import { getTrainRouteStations } from '@/modules/travel/apis/spider.js'
+import { sampleRailwayRoute } from '@/modules/travel/apis/railway.js'
 import { useResourceSearch } from '@/modules/travel/composables/useResourceSearch.js'
 import { defaultSeatTypes, trainTypes } from '@/modules/travel/stores/trainOptions.js'
 
@@ -225,8 +228,9 @@ const editItem = ref(null)
 const tempStationName = ref('')
 const tempStationSuggestion = ref(null)
 const routePreviewVisible = ref(false)
-const pendingRoute = reactive({ item: null, routeGeoJson: '' })
+const pendingRoute = reactive({ item: null, routeGeoJson: '', routeSegments: [] })
 const routeSampling = ref(false)
+const stationQuerying = ref(false)
 let skipLeaveGuard = false
 
 // 备份编辑前的数据，用于取消编辑时回滚
@@ -307,14 +311,14 @@ const handleEdit = (item, idx) => {
 }
 const beginEdit = (item, idx) => {
   editIndex.value = idx
-  const source = item ? JSON.parse(JSON.stringify(item)) : { trainId: null, trainNo: '', trainType: '', trainModel: '', startStationName: '', endStationName: '', originStationName: '', terminalStationName: '', departureTime: '', arrivalTime: '', carriageNo: '', seatNo: '', seatType: '二等座', mileageKm: null, waypoints: [], routeGeoJson: null, routeSource: '', note: '' }
+  const source = item ? JSON.parse(JSON.stringify(item)) : { trainId: null, trainNo: '', trainType: '', trainModel: '', startStationName: '', endStationName: '', originStationName: '', terminalStationName: '', departureTime: '', arrivalTime: '', carriageNo: '', seatNo: '', seatType: '二等座', mileageKm: null, waypoints: [], routeGeoJson: null, note: '' }
   editBackup.value = JSON.parse(JSON.stringify(source))
   editItem.value = source
   editItem.value.waypoints ||= []
   pendingRoute.item = editItem.value
   pendingRoute.routeGeoJson = editItem.value.routeGeoJson || ''
+  pendingRoute.routeSegments = []
   pendingRoute.trainType = editItem.value.trainType || ''
-  pendingRoute.routeSource = editItem.value.routeSource || ''
   routePreviewVisible.value = false
 }
 const hasUnsavedChanges = () => JSON.stringify(editItem.value) !== JSON.stringify(editBackup.value)
@@ -414,37 +418,75 @@ const renumber = (list) => {
   list.forEach((s, i) => s.sequence = i + 1)
 }
 
-const sampleRoute = async (item, mode) => {
+const fetchTrainStations = async item => {
   const trainNo = item.trainNo?.trim()
-  if (mode === 'auto' && !trainNo) {
+  if (!trainNo) {
     ElMessage.warning('请先填写车次')
     return
   }
+  const now = new Date()
+  const date = item.departureTime?.slice(0, 10) || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  stationQuerying.value = true
+  try {
+    const res = await getTrainRouteStations({ trainNo, date })
+    const data = res.data || {}
+    const stations = (data.stations || []).filter(station => station?.name?.trim())
+    if (stations.length < 2) {
+      ElMessage.warning('该车次没有返回足够的途经站')
+      return
+    }
+    item.waypoints = stations.map((station, index) => ({
+      stationName: station.name.trim(),
+      arrivalTime: station.arrive || null,
+      departureTime: station.depart || null,
+      longitude: null,
+      latitude: null,
+      sequence: index + 1
+    }))
+    item.trainType = data.train_type || item.trainType
+    item.routeGeoJson = null
+    item.mileageKm = null
+    pendingRoute.item = item
+    pendingRoute.routeGeoJson = ''
+    pendingRoute.routeSegments = []
+    pendingRoute.trainType = item.trainType || ''
+    ElMessage.success(`已获取 ${stations.length} 个途经站，请检查站序后生成轨迹`)
+  } catch (error) {
+    const message = error?.code === 'ECONNABORTED'
+      ? '车次途经站查询超时，请稍后重试'
+      : error?.response?.data?.msg || error?.response?.data?.detail || '车次途经站查询失败'
+    ElMessage.error(message)
+  } finally {
+    stationQuerying.value = false
+  }
+}
+const sampleRoute = async item => {
+  const trainNo = item.trainNo?.trim() || ''
   const stationNames = (item.waypoints || []).map(station => station.stationName?.trim()).filter(Boolean)
-  if (mode === 'manual' && stationNames.length < 2) {
-    ElMessage.warning('请先按顺序填写至少两个途经站')
+  if (stationNames.length < 2) {
+    ElMessage.warning('请先获取或填写至少两个有序途经站')
     return
   }
-  const now = new Date()
-  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   routeSampling.value = true
   try {
-    const res = await sampleTrainRoute({ mode, trainNo: trainNo || '', date, stations: stationNames })
-    const data = res.data || {}
-    const timetable = new Map((data.timetable || []).map(station => [station.name, station]))
+    const data = await sampleRailwayRoute({ trainCode: trainNo, stations: stationNames })
+    const existingStations = new Map((item.waypoints || []).map(station => [station.stationName.replace(/\s+/g, '').replace(/站$/, ''), station]))
     pendingRoute.item = item
     pendingRoute.routeGeoJson = data.routeGeoJson || ''
-    item.waypoints = (data.stations || []).map(station => {
-      const schedule = timetable.get(station.stationName) || {}
-      return { ...station, arrivalTime: schedule.arrive || null, departureTime: schedule.depart || null }
+    pendingRoute.routeSegments = data.routeSegments || []
+    item.waypoints = (data.stations || []).map((station, index) => {
+      const key = station.stationName.replace(/\s+/g, '').replace(/站$/, '')
+      const existing = existingStations.get(key) || {}
+      return { ...existing, ...station, arrivalTime: existing.arrivalTime || null, departureTime: existing.departureTime || null, sequence: index + 1 }
     })
     item.mileageKm = null
-    pendingRoute.trainType = data.trainType || ''
-    pendingRoute.routeSource = data.source || 'railway-network'
+    pendingRoute.trainType = item.trainType || ''
     routePreviewVisible.value = true
     if (data.unmatchedStations?.length) ElMessage.warning(`铁路网未匹配：${data.unmatchedStations.join('、')}`)
   } catch (error) {
-    const message = error?.response?.data?.msg || error?.response?.data?.detail || '轨迹采样失败'
+    const message = error?.code === 'ECONNABORTED'
+      ? '轨迹计算超时，请稍后重试'
+      : error?.response?.data?.msg || error?.response?.data?.detail || '轨迹采样失败'
     ElMessage.error(message)
   } finally {
     routeSampling.value = false
@@ -454,8 +496,8 @@ const editSavedRoute = () => {
   if (!editItem.value?.routeGeoJson) return
   pendingRoute.item = editItem.value
   pendingRoute.routeGeoJson = editItem.value.routeGeoJson
+  pendingRoute.routeSegments = []
   pendingRoute.trainType = editItem.value.trainType || ''
-  pendingRoute.routeSource = editItem.value.routeSource || 'manual-edit'
   routePreviewVisible.value = true
 }
 const applyRouteSelection = ({ routeGeoJson, waypoints, routeOrigin, routeTerminal }) => {
@@ -471,7 +513,6 @@ const applyRouteSelection = ({ routeGeoJson, waypoints, routeOrigin, routeTermin
   pendingRoute.item.originStationName = routeOrigin.stationName
   pendingRoute.item.terminalStationName = routeTerminal.stationName
   pendingRoute.item.trainType = pendingRoute.trainType || pendingRoute.item.trainType
-  pendingRoute.item.routeSource = pendingRoute.routeSource
   pendingRoute.item.departureTime = first.departureTime || first.arrivalTime || pendingRoute.item.departureTime
   pendingRoute.item.arrivalTime = last.arrivalTime || last.departureTime || pendingRoute.item.arrivalTime
   routePreviewVisible.value = false
@@ -638,7 +679,7 @@ const handlePageSizeChange = () => {
 .record-form :deep(.el-form-item) { margin-bottom: 10px; }
 .record-form :deep(.el-form-item__content > .el-input), .record-form :deep(.el-form-item__content > .el-autocomplete), .record-form :deep(.el-form-item__content > .el-date-editor), .record-form :deep(.el-form-item__content > .el-select), .record-form :deep(.el-form-item__content > .el-input-number) { width: 100%; }
 .wide-field { grid-column: 1 / -1; }
-.section-title-row { display:flex; align-items:center; gap:12px; min-height:32px; }
+.section-title-row { display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:32px; }
 .section-title-row .section-title { margin-bottom:0; }
 .waypoint-content { margin-top:16px; }
 .waypoint-list { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; max-height:520px; overflow-y:auto; overflow-x:hidden; padding-right:8px; scrollbar-width:thin; scrollbar-color:#b8c9cc transparent; }
@@ -651,9 +692,9 @@ const handlePageSizeChange = () => {
 .drag-handle { color: #718187; cursor: grab; }
 .waypoint-order { color: #718187; text-align: center; font-size: 13px; }
 .add-waypoint, .route-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 0; }
-.add-waypoint :deep(.el-autocomplete) { flex: 1; min-width: 180px; }
+.add-waypoint :deep(.el-autocomplete) { flex: 1 1 120px; min-width: 100px; }
 .add-waypoint { margin-top:0; margin-bottom:16px; }
-.route-actions > :deep(.el-input) { flex: 1 1 150px; max-width: 240px; }
+.fetch-stations-button { flex:0 0 auto; }
 .route-section > .section-title { display:flex; align-items:center; min-height:32px; margin-bottom:16px; }
 @media (max-width: 960px) {
   .route-editor-grid { grid-template-columns:minmax(0, 1fr); }
@@ -668,6 +709,8 @@ const handlePageSizeChange = () => {
   .grid-form, .record-form .grid-form { grid-template-columns: 1fr; }
   .waypoint-row { grid-template-columns: 20px 24px minmax(0, 1fr) 42px; }
   .record-form .grid-form { grid-template-columns: 1fr; }
+  .section-title-row { align-items:flex-start; }
+  .section-title-row :deep(.el-button) { flex-shrink:0; }
   .pagination-bar { justify-content: flex-start; overflow-x: auto; }
   .pagination-bar :deep(.el-pagination) { flex-wrap: nowrap; min-width: max-content; }
 }
