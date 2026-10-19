@@ -62,16 +62,24 @@
     </section>
 
     <section class="compass-section">
-      <header class="section-heading"><div><span class="eyebrow">FOUR DIRECTIONS</span><h2>足迹方位</h2></div><p>按地点坐标寻找旅行版图的四个方向</p></header>
-      <article class="compass-card">
-        <div class="compass-layout">
-          <div class="compass-point direction-north"><span class="direction-label">北 · 最北</span><strong>{{ directions.north.placeName }}</strong><small>{{ directions.north.cityName }} · {{ directions.north.coordinate }}</small></div>
-          <div class="compass-point direction-east"><span class="direction-label">东 · 最东</span><strong>{{ directions.east.placeName }}</strong><small>{{ directions.east.cityName }} · {{ directions.east.coordinate }}</small></div>
-          <div class="compass-point direction-south"><span class="direction-label">南 · 最南</span><strong>{{ directions.south.placeName }}</strong><small>{{ directions.south.cityName }} · {{ directions.south.coordinate }}</small></div>
-          <div class="compass-point direction-west"><span class="direction-label">西 · 最西</span><strong>{{ directions.west.placeName }}</strong><small>{{ directions.west.cityName }} · {{ directions.west.coordinate }}</small></div>
-          <div class="compass-center"><span class="compass-rose"><i></i></span><strong>{{ directions.count }}</strong><small>个有坐标足迹</small></div>
-        </div>
-      </article>
+      <div class="footprint-insights-grid">
+        <article class="compass-panel">
+          <header class="panel-heading"><div><h3>足迹方位</h3><p>按地点坐标寻找旅行版图的四个方向</p></div></header>
+          <div class="compass-card">
+            <div class="compass-layout">
+              <div class="compass-point direction-north"><span class="direction-label">北 · 最北</span><strong>{{ directions.north.placeName }}</strong><small>{{ directions.north.cityName }} · {{ directions.north.coordinate }}</small></div>
+              <div class="compass-point direction-east"><span class="direction-label">东 · 最东</span><strong>{{ directions.east.placeName }}</strong><small>{{ directions.east.cityName }} · {{ directions.east.coordinate }}</small></div>
+              <div class="compass-point direction-south"><span class="direction-label">南 · 最南</span><strong>{{ directions.south.placeName }}</strong><small>{{ directions.south.cityName }} · {{ directions.south.coordinate }}</small></div>
+              <div class="compass-point direction-west"><span class="direction-label">西 · 最西</span><strong>{{ directions.west.placeName }}</strong><small>{{ directions.west.cityName }} · {{ directions.west.coordinate }}</small></div>
+              <div class="compass-center"><span class="compass-rose"><i></i></span><strong>{{ directions.count }}</strong><small>个有坐标足迹</small></div>
+            </div>
+          </div>
+        </article>
+        <article class="panel category-panel">
+          <header class="panel-heading"><div><h3>地点类型</h3><p>旅行地点分类记录次数</p></div></header>
+          <div ref="locationTypeEl" class="chart category-chart" aria-label="地点类型统计" />
+        </article>
+      </div>
     </section>
 
     <header class="section-heading transport-heading"><div><span class="eyebrow">TRANSPORT BREAKDOWN</span><h2>交通方式分析</h2></div></header>
@@ -129,6 +137,7 @@ import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
 import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
 import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
+import { footprintCategoryOptions, getFootprintCategory } from '@/modules/travel/stores/footprintCategories.js'
 import { summarizeFlights, summarizeTrains } from '@/modules/travel/utils/travelMetrics.js'
 import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
@@ -137,6 +146,7 @@ const loading = ref(false)
 const tickets = ref([])
 const footprints = ref([])
 const cityEl = ref(null)
+const locationTypeEl = ref(null)
 const aircraftEl = ref(null)
 const trainModelEl = ref(null)
 const seasonEl = ref(null)
@@ -381,7 +391,10 @@ function currentRows() {
     date: dateKey(ticketDate(ticket)),
     ticket
   })).filter(item => item.date)
-  const places = activeFootprints.value.map(item => ({ city: getFootprintRegion(item).cityName.trim() }))
+  const places = activeFootprints.value.map(item => ({
+    city: getFootprintRegion(item).cityName.trim(),
+    locationType: item.locationType
+  }))
   return { events, places }
 }
 
@@ -440,8 +453,23 @@ function renderRank(element, data, color, unit = '次') {
     grid: { top: 5, right: 35, bottom: 8, left: 8, containLabel: true },
     xAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf1f2' } }, axisLabel: { fontSize: 10 } },
     yAxis: { type: 'category', data: rows.map(item => item.name), axisTick: { show: false }, axisLine: { show: false }, axisLabel: { width: 110, overflow: 'truncate', fontSize: 11, color: '#52666d' } },
-    series: [{ type: 'bar', data: rows.map(item => item.value), barMaxWidth: 17, itemStyle: { color, borderRadius: [0, 3, 3, 0] }, label: { show: true, position: 'right', color: '#63767d', fontSize: 10 } }]
+    series: [{
+      type: 'bar',
+      data: rows.map(item => ({
+        value: item.value,
+        itemStyle: { color: Array.isArray(color) ? color[stablePaletteIndex(item.name, color.length)] : color }
+      })),
+      barMaxWidth: 17,
+      itemStyle: { borderRadius: [0, 3, 3, 0] },
+      label: { show: true, position: 'right', color: '#63767d', fontSize: 10 }
+    }]
   })
+}
+
+function stablePaletteIndex(value, length) {
+  let hash = 0
+  for (const character of String(value)) hash = (hash * 31 + character.codePointAt(0)) >>> 0
+  return hash % length
 }
 
 function renderPreferenceRadar(element, indicators, values, colors, palette) {
@@ -510,11 +538,14 @@ function paintCharts() {
   if (!cityEl.value) return
   const { events, places } = currentRows()
   const cityCounts = new Map()
+  const locationTypeCounts = new Map()
   const aircraftCounts = new Map()
   const trainModelCounts = new Map()
   for (const item of places) {
     const city = item.city || '未标注城市'
     cityCounts.set(city, (cityCounts.get(city) || 0) + 1)
+    const category = getFootprintCategory(item.locationType) || getFootprintCategory('other_place')
+    locationTypeCounts.set(category.value, (locationTypeCounts.get(category.value) || 0) + 1)
   }
   for (const event of events) {
     if (event.type === 'flight') {
@@ -528,7 +559,8 @@ function paintCharts() {
       trainModelCounts.set(model, (trainModelCounts.get(model) || 0) + 1)
     }
   }
-  renderRank(cityEl.value, groupTop(cityCounts), '#319889')
+  renderRank(cityEl.value, groupTop(cityCounts), travelPalette)
+  renderLocationTypeStats(locationTypeEl.value, locationTypeCounts)
   renderTravelPreferences(events)
   const trainTypeCounts = new Map((trainSummary.value?.distribution || []).map(item => [item.name || '其他', Number(item.value) || 0]))
   const airlineCounts = new Map((flightSummary.value?.distribution || []).map(item => [item.name || '其他', Number(item.value) || 0]))
@@ -536,6 +568,30 @@ function paintCharts() {
   renderRank(trainModelEl.value, groupTop(trainModelCounts), '#7a8f62')
   renderRank(airlineEl.value, groupTop(airlineCounts), '#258b88')
   renderRank(aircraftEl.value, groupTop(aircraftCounts), '#4f8fc9')
+}
+
+function renderLocationTypeStats(element, counts) {
+  const ranked = groupTop(counts, Number.MAX_SAFE_INTEGER)
+  const visible = ranked.slice(0, 8).map(item => {
+    const category = getFootprintCategory(item.name)
+    const categoryIndex = footprintCategoryOptions.findIndex(option => option.value === item.name)
+    return {
+      ...item,
+      name: category?.label || '其他地点',
+      color: travelPalette[categoryIndex < 0 ? 0 : categoryIndex % travelPalette.length]
+    }
+  })
+  const remaining = ranked.slice(8).reduce((total, item) => total + item.value, 0)
+  if (remaining) visible.push({ name: '其余类型', value: remaining, color: '#87949a' })
+  const rows = visible.slice().reverse()
+  makeChart(element, {
+    ...baseOption(),
+    tooltip: { ...baseOption().tooltip, trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => `${params[0]?.name}<br/>${params[0]?.value ?? 0} 个地点` },
+    grid: { top: 5, right: 42, bottom: 8, left: 8, containLabel: true },
+    xAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#edf1f2' } }, axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'category', data: rows.map(item => item.name), axisTick: { show: false }, axisLine: { show: false }, axisLabel: { width: 90, overflow: 'truncate', fontSize: 10, color: '#52666d' } },
+    series: [{ type: 'bar', data: rows.map(item => ({ value: item.value, itemStyle: { color: item.color } })), barMaxWidth: 16, itemStyle: { borderRadius: [0, 3, 3, 0] }, label: { show: true, position: 'right', color: '#63767d', fontSize: 10 } }]
+  })
 }
 
 async function loadData() {
@@ -623,7 +679,11 @@ onBeforeUnmount(() => {
 .calendar-day.is-flight.level-1 { background:#e0edf5; }.calendar-day.is-flight.level-2 { background:#b8d4e5; }.calendar-day.is-flight.level-3 { background:#83b5d4; }.calendar-day.is-flight.level-4 { background:#4f8fc9; }
 .calendar-empty { margin:25px 0; color:#9aa6a9; font-size:12px; text-align:center; }
 .compass-section { margin-top:22px; }
-.compass-card { padding:14px 18px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+.footprint-insights-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:11px; }
+.compass-panel { min-width:0; padding:14px 16px 11px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+.compass-card { padding:8px 2px 0; }
+.category-panel { min-width:0; }
+.category-chart { height:238px; }
 .compass-layout { display:grid; max-width:820px; grid-template-columns:minmax(0,1fr) 112px minmax(0,1fr); grid-template-rows:auto minmax(82px,auto) auto; grid-template-areas:". north ." "west center east" ". south ."; align-items:center; gap:8px 16px; margin:auto; }
 .compass-point { display:flex; min-width:0; flex-direction:column; gap:3px; padding:5px 8px; }
 .compass-point strong,.compass-point small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -696,6 +756,7 @@ onBeforeUnmount(() => {
   .transport-record > strong { font-size:13px; }
   .transport-record > small { font-size:8px; }
   .compass-card { padding:10px 6px; }
+  .footprint-insights-grid { grid-template-columns:minmax(0,1fr); gap:8px; }
   .compass-layout { grid-template-columns:minmax(0,1fr) 56px minmax(0,1fr); grid-template-rows:auto minmax(68px,auto) auto; gap:6px 3px; }
   .compass-point { gap:2px; padding:4px 2px; }
   .compass-point strong { font-size:11px; }

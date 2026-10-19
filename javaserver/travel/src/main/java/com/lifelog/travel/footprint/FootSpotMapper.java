@@ -32,20 +32,23 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
 
     /** 分页查询足迹记录。 */
     @SelectProvider(type = Sql.class, method = "selectPage")
-    List<FootSpot> selectPage(@Param("visitType") String visitType, @Param("keyword") String keyword,
+    List<FootSpot> selectPage(@Param("visitType") String visitType, @Param("locationType") String locationType,
+                              @Param("keyword") String keyword,
                               @Param("year") Integer year,
                               @Param("sortBy") String sortBy, @Param("sortOrder") String sortOrder,
                               @Param("limit") int limit, @Param("offset") long offset);
 
     /** 不分页查询足迹记录，用于行政区筛选等场景。 */
     @SelectProvider(type = Sql.class, method = "searchRecords")
-    List<FootSpot> searchRecords(@Param("visitType") String visitType, @Param("keyword") String keyword,
+    List<FootSpot> searchRecords(@Param("visitType") String visitType, @Param("locationType") String locationType,
+                                 @Param("keyword") String keyword,
                                  @Param("year") Integer year,
                                  @Param("sortBy") String sortBy, @Param("sortOrder") String sortOrder);
 
     /** 统计符合条件的足迹记录数。 */
     @SelectProvider(type = Sql.class, method = "countRecords")
-    long countRecords(@Param("visitType") String visitType, @Param("keyword") String keyword,
+    long countRecords(@Param("visitType") String visitType, @Param("locationType") String locationType,
+                      @Param("keyword") String keyword,
                       @Param("year") Integer year);
 
     final class Sql {
@@ -53,6 +56,7 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
         private static StringBuilder base(Map<String, Object> params) {
             StringBuilder sql = new StringBuilder("SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_ids::text AS \"mediaIdsJson\", ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint WHERE 1=1");
             if (params.get("visitType") != null) sql.append(" AND visit_type=#{visitType}");
+            if (params.get("locationType") != null) sql.append(" AND location_type=#{locationType}");
             if (params.get("keyword") != null) sql.append(" AND place_name ILIKE #{keyword}");
             if (params.get("year") != null) sql.append(" AND visit_date >= make_date(#{year},1,1) AND visit_date < make_date(#{year}+1,1,1)");
             return sql;
@@ -78,6 +82,7 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
         public static String countRecords(Map<String, Object> params) {
             StringBuilder sql = new StringBuilder("SELECT count(*) FROM footprint WHERE 1=1");
             if (params.get("visitType") != null) sql.append(" AND visit_type=#{visitType}");
+            if (params.get("locationType") != null) sql.append(" AND location_type=#{locationType}");
             if (params.get("keyword") != null) sql.append(" AND place_name ILIKE #{keyword}");
             if (params.get("year") != null) sql.append(" AND visit_date >= make_date(#{year},1,1) AND visit_date < make_date(#{year}+1,1,1)");
             return sql.toString();
@@ -88,6 +93,7 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
             return switch (String.valueOf(value)) {
                 case "placeName" -> "place_name";
                 case "visitType" -> "visit_type";
+                case "locationType" -> "location_type";
                 default -> "visit_date";
             };
         }

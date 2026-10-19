@@ -1,9 +1,5 @@
 import { spiderRequest } from '@/utils/request.js'
 
-export const getTrainRouteStations = ({ trainNo, date }) => spiderRequest.get('/stations', {
-  params: {
-    train_code: trainNo,
-    date: date.replaceAll('-', ''),
-  },
+export const getTrainTimetable = ({ trainNo }) => spiderRequest.get(`/trains/${encodeURIComponent(trainNo)}`, {
   timeout: 30000,
 })

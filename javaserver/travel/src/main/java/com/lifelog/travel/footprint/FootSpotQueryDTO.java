@@ -11,6 +11,8 @@ public class FootSpotQueryDTO {
     private String visitType;
     /** 地点名称关键字。 */
     private String keyword;
+    /** 地点分类编码。 */
+    private String locationType;
     /** 行政区名称关键字。 */
     private String region;
     /** 页码。 */

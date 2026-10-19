@@ -27,3 +27,5 @@ desktop/release/
 **/__pycache__/
 **/*.py[cod]
 **/.pytest_cache/
+
+/outputs/

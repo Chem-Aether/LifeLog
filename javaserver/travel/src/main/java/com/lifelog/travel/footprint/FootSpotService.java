@@ -34,10 +34,11 @@ public class FootSpotService {
     public List<FootSpot> findAll(FootSpotQueryDTO query) {
         validateVisitType(query.getVisitType());
         String type = StringUtils.hasText(query.getVisitType()) ? query.getVisitType() : null;
+        String locationType = StringUtils.hasText(query.getLocationType()) ? query.getLocationType() : null;
         String sort = sortColumn(query.getSortBy());
         String order = normalizeSortOrder(query.getSortOrder());
         String regionKeyword = query.getRegion() == null ? "" : query.getRegion().trim().toLowerCase(Locale.ROOT);
-        List<FootSpot> spots = mapper.searchRecords(type, like(query.getKeyword()), query.getYear(), sort, order);
+        List<FootSpot> spots = mapper.searchRecords(type, locationType, like(query.getKeyword()), query.getYear(), sort, order);
         spots.forEach(this::hydrate);
         enrichCachedRegions(spots);
         return spots.stream().filter(item -> regionKeyword.isEmpty()
@@ -47,6 +48,7 @@ public class FootSpotService {
     /** 按条件分页查询足迹，并在行政区服务不可用时保留基本记录数据。 */
     public Map<String, Object> findPage(FootSpotQueryDTO query) {
         String visitType = query.getVisitType();
+        String locationType = StringUtils.hasText(query.getLocationType()) ? query.getLocationType() : null;
         String keyword = query.getKeyword();
         String region = query.getRegion();
         Integer requestedPage = query.getPage();
@@ -68,12 +70,12 @@ public class FootSpotService {
         List<FootSpot> records;
         long total;
         if (regionKeyword.isEmpty()) {
-            total = mapper.countRecords(type, placeKeyword, year);
-            records = mapper.selectPage(type, placeKeyword, year, sort, order, pageSize, (page - 1L) * pageSize);
+            total = mapper.countRecords(type, locationType, placeKeyword, year);
+            records = mapper.selectPage(type, locationType, placeKeyword, year, sort, order, pageSize, (page - 1L) * pageSize);
             records.forEach(this::hydrate);
             enrichCachedRegions(records);
         } else {
-            records = mapper.searchRecords(type, placeKeyword, year, sort, order);
+            records = mapper.searchRecords(type, locationType, placeKeyword, year, sort, order);
             records.forEach(this::hydrate);
             enrichCachedRegions(records);
             records = records.stream().filter(item -> formatRegionPath(item.getRegionPaths()).toLowerCase(Locale.ROOT)
@@ -140,7 +142,7 @@ public class FootSpotService {
     }
 
     private String sortColumn(String sortBy) {
-        return sortBy != null && List.of("placeName", "visitType", "visitDate").contains(sortBy)
+        return sortBy != null && List.of("placeName", "visitType", "visitDate", "locationType").contains(sortBy)
                 ? sortBy : "visitDate";
     }
 

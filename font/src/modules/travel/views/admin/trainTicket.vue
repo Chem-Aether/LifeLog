@@ -11,10 +11,10 @@
           <el-form-item label="车型"><el-input v-model="editItem.trainModel" /></el-form-item>
           <el-form-item label="始发站"><el-autocomplete v-model="editItem.originStationName" :fetch-suggestions="queryStation" /></el-form-item>
           <el-form-item label="发站"><el-autocomplete v-model="editItem.startStationName" :fetch-suggestions="queryStation" @select="s => applyStation(editItem, s, 'start')" /></el-form-item>
-          <el-form-item label="发车时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
+          <el-form-item label="发车时间"><el-date-picker v-model="editItem.departureTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable placeholder="未查到时刻，可手动填写" /></el-form-item>
           <el-form-item label="终点站"><el-autocomplete v-model="editItem.terminalStationName" :fetch-suggestions="queryStation" /></el-form-item>
           <el-form-item label="到站"><el-autocomplete v-model="editItem.endStationName" :fetch-suggestions="queryStation" @select="s => applyStation(editItem, s, 'end')" /></el-form-item>
-          <el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable /></el-form-item>
+          <el-form-item label="到达时间"><el-date-picker v-model="editItem.arrivalTime" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm" editable placeholder="未查到时刻，可手动填写" /></el-form-item>
           <el-form-item label="车厢号"><el-input v-model="editItem.carriageNo" /></el-form-item><el-form-item label="座位号"><el-input v-model="editItem.seatNo" /></el-form-item>
           <el-form-item label="座位等级"><el-select v-model="editItem.seatType" filterable allow-create default-first-option clearable placeholder="选择或输入座位等级" @change="rememberSeatType"><el-option v-for="seatType in seatTypeOptions" :key="seatType" :label="seatType" :value="seatType" /></el-select></el-form-item>
             <el-form-item label="里程(km)"><el-input-number v-model="editItem.mileageKm" :min="0" :precision="2" /></el-form-item><el-form-item label="备注" class="wide-field"><el-input v-model="editItem.note" type="textarea" :rows="2" /></el-form-item>
@@ -26,7 +26,7 @@
               <h2 class="section-title">途经站 <span>{{ editItem.waypoints.length }} 站</span></h2>
             </div>
             <div class="waypoint-content">
-              <div class="add-waypoint"><el-button class="fetch-stations-button" type="primary" :loading="stationQuerying" :disabled="routeSampling" @click="fetchTrainStations(editItem)">按车次采样</el-button><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
+      <div class="add-waypoint"><el-button class="fetch-stations-button" type="primary" :loading="stationQuerying" :disabled="routeSampling" @click="fetchTrainStations(editItem)">按车次采样</el-button><el-autocomplete v-model="tempStationName" :fetch-suggestions="queryStation" placeholder="搜索途经站" @select="s => tempStationSuggestion = s" /><el-button @click="confirmAddStation(editItem)">添加站点</el-button></div>
               <draggable v-model="editItem.waypoints" item-key="sequence" @end="waypointsChanged(editItem.waypoints, editItem)" handle=".drag-handle" class="waypoint-list"><template #item="{ element, index }"><div class="waypoint-row"><span class="drag-handle">☰</span><span class="waypoint-order">{{ index + 1 }}</span><el-autocomplete v-model="element.stationName" :fetch-suggestions="queryStation" @select="s => applyWaypoint(editItem, element, s)" /><el-button link type="danger" @click="delStation(editItem, element)">移除</el-button></div></template></draggable>
               <el-empty v-if="!editItem.waypoints.length" description="暂无途经站" :image-size="56" />
             </div>
@@ -176,7 +176,7 @@ import {
   deleteTrainTicket,
   deleteTrainTickets,
 } from '@/modules/travel/apis/trainTickets.js'
-import { getTrainRouteStations } from '@/modules/travel/apis/spider.js'
+import { getTrainTimetable } from '@/modules/travel/apis/spider.js'
 import { sampleRailwayRoute } from '@/modules/travel/apis/railway.js'
 import { useResourceSearch } from '@/modules/travel/composables/useResourceSearch.js'
 import { defaultSeatTypes, trainTypes } from '@/modules/travel/stores/trainOptions.js'
@@ -418,32 +418,56 @@ const renumber = (list) => {
   list.forEach((s, i) => s.sequence = i + 1)
 }
 
+const normalizeStationName = name => name?.replace(/\s+/g, '').replace(/站$/, '')
+const findJourneyWaypoint = (item, stationName) => {
+  const name = normalizeStationName(stationName)
+  if (!name) return null
+  return item.waypoints?.find(waypoint => normalizeStationName(waypoint.stationName) === name) || null
+}
+const syncJourneyTimes = item => {
+  const boardingStation = findJourneyWaypoint(item, item.startStationName)
+  const alightingStation = findJourneyWaypoint(item, item.endStationName)
+  const departureTime = boardingStation?.departureTime || boardingStation?.arrivalTime
+  const arrivalTime = alightingStation?.arrivalTime || alightingStation?.departureTime
+  if (departureTime) item.departureTime = departureTime
+  if (arrivalTime) item.arrivalTime = arrivalTime
+}
+
 const fetchTrainStations = async item => {
   const trainNo = item.trainNo?.trim()
   if (!trainNo) {
     ElMessage.warning('请先填写车次')
     return
   }
-  const now = new Date()
-  const date = item.departureTime?.slice(0, 10) || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   stationQuerying.value = true
   try {
-    const res = await getTrainRouteStations({ trainNo, date })
+    const res = await getTrainTimetable({ trainNo })
     const data = res.data || {}
     const stations = (data.stations || []).filter(station => station?.name?.trim())
     if (stations.length < 2) {
       ElMessage.warning('该车次没有返回足够的途经站')
       return
     }
-    item.waypoints = stations.map((station, index) => ({
-      stationName: station.name.trim(),
-      arrivalTime: station.arrive || null,
-      departureTime: station.depart || null,
-      longitude: null,
-      latitude: null,
-      sequence: index + 1
-    }))
-    item.trainType = data.train_type || item.trainType
+    const existingStations = new Map((item.waypoints || []).map(station => [
+      station.stationName?.replace(/\s+/g, '').replace(/站$/, ''), station
+    ]))
+    item.waypoints = stations.map((station, index) => {
+      const stationName = station.name.trim()
+      const existing = existingStations.get(stationName.replace(/\s+/g, '').replace(/站$/, '')) || {}
+      return {
+        ...existing,
+        stationName,
+        arrivalTime: existing.arrivalTime || station.arrive || null,
+        departureTime: existing.departureTime || station.depart || null,
+        longitude: existing.longitude ?? null,
+        latitude: existing.latitude ?? null,
+        sequence: index + 1
+      }
+    })
+    item.trainModel = item.trainModel?.trim() || data.train_model || item.trainModel
+    item.originStationName = item.originStationName?.trim() || data.start || item.originStationName
+    item.terminalStationName = item.terminalStationName?.trim() || data.end || item.terminalStationName
+    syncJourneyTimes(item)
     item.routeGeoJson = null
     item.mileageKm = null
     pendingRoute.item = item
@@ -461,7 +485,6 @@ const fetchTrainStations = async item => {
   }
 }
 const sampleRoute = async item => {
-  const trainNo = item.trainNo?.trim() || ''
   const stationNames = (item.waypoints || []).map(station => station.stationName?.trim()).filter(Boolean)
   if (stationNames.length < 2) {
     ElMessage.warning('请先获取或填写至少两个有序途经站')
@@ -469,7 +492,7 @@ const sampleRoute = async item => {
   }
   routeSampling.value = true
   try {
-    const data = await sampleRailwayRoute({ trainCode: trainNo, stations: stationNames })
+    const data = await sampleRailwayRoute(stationNames, { trainCode: item.trainNo })
     const existingStations = new Map((item.waypoints || []).map(station => [station.stationName.replace(/\s+/g, '').replace(/站$/, ''), station]))
     pendingRoute.item = item
     pendingRoute.routeGeoJson = data.routeGeoJson || ''
@@ -483,6 +506,7 @@ const sampleRoute = async item => {
     pendingRoute.trainType = item.trainType || ''
     routePreviewVisible.value = true
     if (data.unmatchedStations?.length) ElMessage.warning(`铁路网未匹配：${data.unmatchedStations.join('、')}`)
+    else if (data.source === '12306-map-line') ElMessage.success('已载入 12306 提供的列车实际线路')
   } catch (error) {
     const message = error?.code === 'ECONNABORTED'
       ? '轨迹计算超时，请稍后重试'
@@ -500,12 +524,25 @@ const editSavedRoute = () => {
   pendingRoute.trainType = editItem.value.trainType || ''
   routePreviewVisible.value = true
 }
-const applyRouteSelection = ({ routeGeoJson, waypoints, routeOrigin, routeTerminal }) => {
+const alignTimetableTimeToJourneyDate = (time, timetableDeparture, journeyDeparture) => {
+  if (!time || !journeyDeparture) return time
+  const sampleTimeDate = Date.parse(`${time.slice(0, 10)}T00:00:00Z`)
+  const journeyDate = new Date(`${journeyDeparture.slice(0, 10)}T00:00:00Z`)
+  if (!Number.isFinite(sampleTimeDate) || !Number.isFinite(journeyDate.getTime())) return time
+  const sampleDepartureDate = timetableDeparture
+    ? Date.parse(`${timetableDeparture.slice(0, 10)}T00:00:00Z`)
+    : sampleTimeDate
+  if (!Number.isFinite(sampleDepartureDate)) return time
+  const dayOffset = Math.round((sampleTimeDate - sampleDepartureDate) / 86400000)
+  journeyDate.setUTCDate(journeyDate.getUTCDate() + dayOffset)
+  return `${journeyDate.toISOString().slice(0, 10)}T${time.slice(11)}`
+}
+const applyRouteSelection = ({ routeGeoJson, mileageKm, waypoints, routeOrigin, routeTerminal }) => {
   if (!pendingRoute.item) return
   pendingRoute.item.routeGeoJson = routeGeoJson
   pendingRoute.item.waypoints = waypoints
   pendingRoute.routeGeoJson = routeGeoJson
-  pendingRoute.item.mileageKm = null
+  pendingRoute.item.mileageKm = mileageKm
   const first = waypoints[0]
   const last = waypoints.at(-1)
   pendingRoute.item.startStationName = first.stationName
@@ -513,13 +550,24 @@ const applyRouteSelection = ({ routeGeoJson, waypoints, routeOrigin, routeTermin
   pendingRoute.item.originStationName = routeOrigin.stationName
   pendingRoute.item.terminalStationName = routeTerminal.stationName
   pendingRoute.item.trainType = pendingRoute.trainType || pendingRoute.item.trainType
-  pendingRoute.item.departureTime = first.departureTime || first.arrivalTime || pendingRoute.item.departureTime
-  pendingRoute.item.arrivalTime = last.arrivalTime || last.departureTime || pendingRoute.item.arrivalTime
+  const timetableDeparture = first.departureTime || first.arrivalTime
+  const timetableArrival = last.arrivalTime || last.departureTime
+  if (!pendingRoute.item.departureTime && timetableDeparture) {
+    pendingRoute.item.departureTime = timetableDeparture
+  }
+  if (!pendingRoute.item.arrivalTime && timetableArrival) {
+    pendingRoute.item.arrivalTime = alignTimetableTimeToJourneyDate(
+      timetableArrival,
+      timetableDeparture,
+      pendingRoute.item.departureTime
+    )
+  }
   routePreviewVisible.value = false
   ElMessage.success(`已保留所选区间，并补全 ${waypoints.length} 个途经站`)
 }
 const applyStation = (item, station, type) => {
   item[`${type}StationName`] = station.name
+  syncJourneyTimes(item)
 }
 const applyWaypoint = (item, waypoint, station) => {
   Object.assign(waypoint, {

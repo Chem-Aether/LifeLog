@@ -11,9 +11,15 @@
   "storage": {
     "data_dir": "data",
     "railway_network": "data/china_railway_network.gpkg",
+    "railway_routing": "data/china_railway_routing.gpkg",
     "admin_boundaries": "data/admin_boundaries.gpkg",
     "airports": "data/airports.gpkg",
     "poi": "data/poi.gpkg"
+  },
+  "integrations": {
+    "spyderserver": {
+      "base_url": "http://127.0.0.1:8082"
+    }
   },
   "tiles": {
     "cache_size": 512,

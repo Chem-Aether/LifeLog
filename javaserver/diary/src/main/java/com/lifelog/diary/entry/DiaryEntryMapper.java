@@ -35,7 +35,8 @@ public class DiaryEntryMapper {
         MapSqlParameterSource params = new MapSqlParameterSource();
         StringBuilder sql = new StringBuilder("""
                 SELECT e.diary_id AS id, e.title, e.content, e.entry_date AS "entryDate",
-                       e.mood, e.location, e.created_at AS "createdAt", e.updated_at AS "updatedAt"
+                       e.mood, e.weather_code AS "weatherCode", e.location,
+                       e.created_at AS "createdAt", e.updated_at AS "updatedAt"
                 FROM diary_entry e
                 WHERE 1=1
                 """);
@@ -66,7 +67,8 @@ public class DiaryEntryMapper {
      */
     public Map<String, Object> findEntry(long id) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT diary_id AS id, title, content, entry_date AS "entryDate", mood, location,
+                SELECT diary_id AS id, title, content, entry_date AS "entryDate", mood,
+                       weather_code AS "weatherCode", location,
                        created_at AS "createdAt", updated_at AS "updatedAt"
                 FROM diary_entry WHERE diary_id=:id
                 """, Map.of("id", id));
@@ -108,8 +110,8 @@ public class DiaryEntryMapper {
      */
     public long insert(DiaryEntryRequest request) {
         return jdbc.queryForObject("""
-                INSERT INTO diary_entry(title, content, entry_date, mood, location)
-                VALUES (:title, :content, :entryDate, :mood, :location) RETURNING diary_id
+                INSERT INTO diary_entry(title, content, entry_date, mood, weather_code, location)
+                VALUES (:title, :content, :entryDate, :mood, :weatherCode, :location) RETURNING diary_id
                 """, entryParams(request), Long.class);
     }
 
@@ -123,7 +125,7 @@ public class DiaryEntryMapper {
         MapSqlParameterSource params = entryParams(request).addValue("id", id);
         return jdbc.update("""
                 UPDATE diary_entry SET title=:title, content=:content, entry_date=:entryDate,
-                       mood=:mood, location=:location, updated_at=CURRENT_TIMESTAMP
+                       mood=:mood, weather_code=:weatherCode, location=:location, updated_at=CURRENT_TIMESTAMP
                 WHERE diary_id=:id
                 """, params);
     }
@@ -207,6 +209,7 @@ public class DiaryEntryMapper {
                 .addValue("content", request.content() == null ? "" : request.content().trim())
                 .addValue("entryDate", request.entryDate())
                 .addValue("mood", request.mood() == null ? "" : request.mood())
+                .addValue("weatherCode", request.weatherCode())
                 .addValue("location", request.location() == null ? "" : request.location().trim());
     }
 }

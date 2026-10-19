@@ -11,6 +11,7 @@
 | `data/world.pmtiles`、`data/china.pmtiles` | 矢量地图瓦片 | 前端底图 |
 | `data/admin_boundaries.gpkg` | 行政区树节点及边界 | 地区识别、范围显示 |
 | `data/china_railway_network.gpkg` | 铁路线路及站点空间数据 | 铁路路线与站点检索 |
+| `data/china_railway_routing.gpkg` | 保留 OSM 节点拓扑的轨道边、节点及车站 | 铁路寻路、QGIS 检查和编辑 |
 | `data/airports.gpkg` | 机场点数据 | 航班机场识别 |
 | `data/poi.gpkg` | POI 数据与检索索引 | 地点搜索 |
 
@@ -27,11 +28,19 @@ python -m venv .venv
 .\.venv\Scripts\python.exe main.py
 ```
 
-默认地址为 `http://127.0.0.1:8765`，接口文档为 `/docs`。常用配置包括 `MAP_HOST`、`MAP_PORT`、`MAP_DATA_DIR`、`MAP_CONFIG`，以及各数据文件路径环境变量；完整配置以 `config/application.json` 和 `app/settings.py` 为准。
+默认地址为 `http://127.0.0.1:8765`，接口文档为 `/docs`。常用配置包括 `MAP_HOST`、`MAP_PORT`、`MAP_DATA_DIR`、`MAP_CONFIG`、`SPYDERSERVER_BASE_URL`，以及各数据文件路径环境变量；完整配置以 `config/application.json` 和 `app/settings.py` 为准。
+
+从全国 OSM PBF 构建铁路寻路 GeoPackage：
+
+```powershell
+python scripts/extract_railway_routing.py --pbf data/source/osm/china-260919.osm.pbf
+```
+
+脚本会显示实时对象处理进度。生成文件包含可在 QGIS 中查看/编辑的 `railway_edges`、`railway_nodes`、`railway_stations` 图层，以及铁路关系属性表。新文件完整生成后才会替换目标文件；可通过 `MAP_RAILWAY_ROUTING` 修改寻路数据位置。
 
 ## 接口范围
 
-主要接口包括 `/api/tiles`、`/api/regions`（`/reverse`、`/reverse/batch`、`/search`、`/{node_id}`、`/boundaries`）。行政区详情、搜索和经纬度反查统一返回祖先到目标节点的 `path` 数组。其他接口包括 `/api/pois`、`/api/airports` 和 `/api/railway`。mapserver 不负责车票、航班、足迹的 CRUD；这些记录属于 `travel` 模块。
+主要接口包括 `/api/tiles`、`/api/regions`（`/reverse`、`/reverse/batch`、`/search`、`/{node_id}`、`/boundaries`）。行政区详情、搜索和经纬度反查统一返回祖先到目标节点的 `path` 数组。其他接口包括 `/api/pois`、`/api/airports` 和 `/api/railway`。铁路轨迹采样在提供车次号和日期时先通过独立 integration 向 spyderserver 请求 12306 实际地图线；不可用时再运行 mapserver 自己的 OSM 铁路寻路。两个服务仅通过 HTTP 数据契约交互，不共享代码或内部模型。mapserver 不负责车票、航班、足迹的 CRUD；这些记录属于 `travel` 模块。
 
 ## 数据来源与署名
 

@@ -24,14 +24,13 @@ import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
 import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
 import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
-import { mediaUrl } from '@/modules/travel/apis/media.js'
 import { useTravleStore } from '@/modules/travel/stores/TravelStore.js'
+import { footprintCategoryOptions, getFootprintCategoryIcon } from '@/modules/travel/stores/footprintCategories.js'
 import { MAP_BASE_URL } from '@/utils/request.js'
 
 const EMPTY_COLLECTION = { type: 'FeatureCollection', features: [] }
+const FOOTPRINT_MIN_ZOOM = 5.5
 const FOOTPRINT_DETAIL_ZOOM = 9
-const MAX_PHOTO_MARKERS = 120
-const MAX_MAP_IMAGE_REQUESTS = 8
 const props = defineProps({
   selectedYear: {
     type: [String, Number],
@@ -55,10 +54,9 @@ const loadedDataYears = { foot: null, flight: null, train: null }
 const pendingDataRequests = new Map()
 const knownTimelineYears = new Set()
 let footprintFeatures = EMPTY_COLLECTION
-let footprintMarkers = []
-let mapImageQueue = []
-let activeMapImageRequests = 0
+const footprintIconLoads = new Map()
 let footprintUpdateId = 0
+let travelLayersPromise
 let planeAnimationFrame = 0
 let lastPlaneFrame = 0
 let trainAnimationFrame = 0
@@ -270,6 +268,12 @@ function addPlaneIcon() {
 
 function addTravelLayers() {
   if (map.getSource('explored-cities')) return
+  if (!travelLayersPromise) travelLayersPromise = buildTravelLayers()
+  return travelLayersPromise
+}
+
+async function buildTravelLayers() {
+  await ensureFootprintIcons(visibleFootprintRecords)
   addPlaneIcon()
   map.addSource('explored-cities', { type: 'geojson', data: exploredRegions })
   map.addSource('travel-lines', { type: 'geojson', data: EMPTY_COLLECTION })
@@ -293,7 +297,7 @@ function addTravelLayers() {
   map.addLayer({ id: 'train-dot-glow', type: 'circle', source: 'animated-train-dots', paint: { 'circle-radius': 8, 'circle-color': '#59d8ff', 'circle-opacity': 0.2, 'circle-blur': 0.8 } })
   map.addLayer({ id: 'train-moving-dots', type: 'circle', source: 'animated-train-dots', paint: { 'circle-radius': 3.2, 'circle-color': '#d8fbff', 'circle-stroke-color': '#188ca4', 'circle-stroke-width': 1.2 } })
   map.addLayer({
-    id: 'footprint-clusters', type: 'circle', source: 'footprint-points', maxzoom: FOOTPRINT_DETAIL_ZOOM,
+    id: 'footprint-clusters', type: 'circle', source: 'footprint-points', minzoom: FOOTPRINT_MIN_ZOOM, maxzoom: FOOTPRINT_DETAIL_ZOOM,
     filter: ['has', 'point_count'],
     paint: {
       'circle-color': '#37e6a5',
@@ -303,13 +307,15 @@ function addTravelLayers() {
     }
   })
   map.addLayer({
-    id: 'footprint-cluster-count', type: 'symbol', source: 'footprint-points', maxzoom: FOOTPRINT_DETAIL_ZOOM,
+    id: 'footprint-cluster-count', type: 'symbol', source: 'footprint-points', minzoom: FOOTPRINT_MIN_ZOOM, maxzoom: FOOTPRINT_DETAIL_ZOOM,
     filter: ['has', 'point_count'],
     layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 10 },
     paint: { 'text-color': '#eafff7', 'text-halo-color': '#124d3e', 'text-halo-width': 1 }
   })
   map.addLayer({
     id: 'footprint-single-points', type: 'circle', source: 'footprint-points',
+    minzoom: FOOTPRINT_MIN_ZOOM,
+    maxzoom: FOOTPRINT_DETAIL_ZOOM,
     filter: ['!', ['has', 'point_count']],
     paint: {
       'circle-radius': 6,
@@ -317,8 +323,47 @@ function addTravelLayers() {
       'circle-stroke-color': '#07141d', 'circle-stroke-width': 2
     }
   })
-  renderFootprintMarkers()
+  map.addLayer({
+    id: 'footprint-category-icons', type: 'symbol', source: 'footprint-points', minzoom: FOOTPRINT_DETAIL_ZOOM,
+    filter: ['!', ['has', 'point_count']],
+    layout: {
+      'icon-image': ['get', 'iconKey'],
+      'icon-size': 0.9,
+      'icon-anchor': 'center',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true
+    }
+  })
   updateMode()
+}
+
+async function ensureFootprintIcons(records) {
+  const categories = new Map(records.map(item => {
+    const category = getFootprintCategoryIcon(item.locationType)
+    return [category.icon, category]
+  }))
+  for (const fallback of footprintCategoryOptions.filter(item => item.value === 'other_place')) {
+    categories.set(fallback.icon, fallback)
+  }
+  await Promise.all([...categories.values()].map(async category => {
+    if (map.hasImage(category.icon)) return
+    if (!footprintIconLoads.has(category.icon)) {
+      footprintIconLoads.set(category.icon, (async () => {
+        const image = new Image()
+        image.src = category.iconUrl
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.naturalWidth
+        canvas.height = image.naturalHeight
+        const context = canvas.getContext('2d', { willReadFrequently: true })
+        context.drawImage(image, 0, 0)
+        if (!map.hasImage(category.icon)) {
+          map.addImage(category.icon, context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio: 2 })
+        }
+      })())
+    }
+    await footprintIconLoads.get(category.icon)
+  }))
 }
 
 function validCoordinates(item) {
@@ -326,83 +371,6 @@ function validCoordinates(item) {
   const longitude = Number(item.longitude)
   const latitude = Number(item.latitude)
   return Number.isFinite(longitude) && Number.isFinite(latitude) && longitude >= -180 && longitude <= 180 && latitude >= -90 && latitude <= 90
-}
-
-function clearFootprintMarkers() {
-  footprintMarkers.forEach(marker => marker.remove())
-  footprintMarkers = []
-  mapImageQueue = []
-}
-
-function renderFootprintMarkers() {
-  if (!map) return
-  clearFootprintMarkers()
-  if (!visibleLayers.value.includes('foot') || map.getZoom() < FOOTPRINT_DETAIL_ZOOM) return
-
-  const bounds = map.getBounds()
-  const center = map.project(map.getCenter())
-  const photoRecords = visibleFootprintRecords
-    .filter(item => item.visitType !== 'transit' && validCoordinates(item) && item.mediaIds?.[0])
-    .filter(item => bounds.contains([Number(item.longitude), Number(item.latitude)]))
-    .map(item => {
-      const point = map.project([Number(item.longitude), Number(item.latitude)])
-      return { item, distance: (point.x - center.x) ** 2 + (point.y - center.y) ** 2 }
-    })
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, MAX_PHOTO_MARKERS)
-
-  for (const { item } of photoRecords) {
-    const element = document.createElement('button')
-    element.type = 'button'
-    element.className = 'footprint-photo-marker is-travel'
-    element.title = item.placeName || '足迹地点'
-    const mediaId = item.mediaIds?.[0]
-    const image = document.createElement('img')
-    image.alt = ''
-    image.decoding = 'async'
-    element.appendChild(image)
-    const fallback = document.createElement('span')
-    fallback.textContent = (item.placeName || '地').trim().slice(0, 1)
-    element.appendChild(fallback)
-    element.addEventListener('click', event => {
-      event.stopPropagation()
-      emit('select-place', item)
-    })
-    const marker = new maplibregl.Marker({ element, anchor: 'center' })
-      .setLngLat([Number(item.longitude), Number(item.latitude)])
-      .addTo(map)
-    footprintMarkers.push(marker)
-    mapImageQueue.push({ element, image, url: mediaUrl(mediaId) })
-  }
-  loadNextMapImages()
-  updateFootprintMarkerVisibility()
-}
-
-function loadNextMapImages() {
-  while (activeMapImageRequests < MAX_MAP_IMAGE_REQUESTS && mapImageQueue.length) {
-    const request = mapImageQueue.shift()
-    if (!request.element.isConnected) continue
-    activeMapImageRequests += 1
-    const finish = () => {
-      request.image.onload = null
-      request.image.onerror = null
-      activeMapImageRequests -= 1
-      loadNextMapImages()
-    }
-    request.image.onload = finish
-    request.image.onerror = () => {
-      request.image.remove()
-      finish()
-    }
-    request.image.src = request.url
-  }
-}
-
-function updateFootprintMarkerVisibility() {
-  const visible = visibleLayers.value.includes('foot') && map?.getZoom() >= FOOTPRINT_DETAIL_ZOOM
-  footprintMarkers.forEach(marker => {
-    marker.getElement().style.display = visible ? '' : 'none'
-  })
 }
 
 function updateMode() {
@@ -414,7 +382,7 @@ function updateMode() {
   map.setLayoutProperty('footprint-clusters', 'visibility', footMode ? 'visible' : 'none')
   map.setLayoutProperty('footprint-cluster-count', 'visibility', footMode ? 'visible' : 'none')
   map.setLayoutProperty('footprint-single-points', 'visibility', footMode ? 'visible' : 'none')
-  updateFootprintMarkerVisibility()
+  map.setLayoutProperty('footprint-category-icons', 'visibility', footMode ? 'visible' : 'none')
   const routeFeatures = [
     ...(layers.has('flight') ? flightFeatures.features : []),
     ...(layers.has('train') ? trainFeatures.features : [])
@@ -640,11 +608,12 @@ async function updateTravelDataByYear() {
   if (updateId !== footprintUpdateId) return
 
   exploredRegions = nextRegions
+  if (map?.isStyleLoaded()) await ensureFootprintIcons(visibleFootprintRecords)
   footprintFeatures = {
     type: 'FeatureCollection',
     features: visibleFootprintRecords.filter(item => item.visitType !== 'transit' && validCoordinates(item)).map(item => ({
       type: 'Feature',
-      properties: { footprintId: item.footprintId, visitType: 'travel' },
+      properties: { footprintId: item.footprintId, visitType: 'travel', iconKey: getFootprintCategoryIcon(item.locationType).icon },
       geometry: { type: 'Point', coordinates: [Number(item.longitude), Number(item.latitude)] }
     }))
   }
@@ -653,7 +622,6 @@ async function updateTravelDataByYear() {
     transitCities: [...transitCityIds].filter(id => !travelCityIds.has(id)).length,
     places: new Set(visibleFootprintRecords.filter(item => item.visitType !== 'transit').map(getPlaceKey)).size
   })
-  renderFootprintMarkers()
   map?.getSource('footprint-points')?.setData(footprintFeatures)
   map?.getSource('explored-cities')?.setData(exploredRegions)
   updateMode()
@@ -683,7 +651,7 @@ onMounted(async () => {
       map.easeTo({ center: cluster.geometry.coordinates, zoom: Math.min(zoom, FOOTPRINT_DETAIL_ZOOM) })
       return
     }
-    const footprint = map.queryRenderedFeatures(event.point, { layers: ['footprint-single-points'] })[0]
+    const footprint = map.queryRenderedFeatures(event.point, { layers: ['footprint-single-points', 'footprint-category-icons'] })[0]
     if (footprint) {
       const place = visibleFootprintRecords.find(item => String(item.footprintId) === String(footprint.properties.footprintId))
       if (place) emit('select-place', place)
@@ -713,11 +681,9 @@ onMounted(async () => {
     popup.setLngLat(event.lngLat).setHTML(`<strong>${title}</strong>${detail}`).addTo(map)
   })
   map.on('mousemove', event => {
-    const features = map.queryRenderedFeatures(event.point, { layers: ['travel-routes', 'flight-planes', 'train-moving-dots', 'footprint-clusters', 'footprint-single-points'] })
+    const features = map.queryRenderedFeatures(event.point, { layers: ['travel-routes', 'flight-planes', 'train-moving-dots', 'footprint-clusters', 'footprint-single-points', 'footprint-category-icons'] })
     map.getCanvas().style.cursor = features.length ? 'pointer' : ''
   })
-  map.on('zoom', updateFootprintMarkerVisibility)
-  map.on('moveend', renderFootprintMarkers)
 })
 
 watch(visibleLayers, () => {
@@ -729,7 +695,6 @@ watch(() => props.selectedYear, loadTravelData)
 onBeforeUnmount(() => {
   stopPlaneAnimation()
   stopTrainAnimation()
-  clearFootprintMarkers()
   popup?.remove()
   map?.remove()
 })
@@ -791,27 +756,6 @@ onBeforeUnmount(() => {
 .legend-swatch.transit-region { height: 9px; background: #79c8ff; }
 .legend-swatch.travel-place { width: 9px; height: 9px; border: 2px solid #53e2b4; border-radius: 50%; background: #12372f; }
 .legend-swatch.explored { height: 9px; }
-
-:global(.footprint-photo-marker) {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  overflow: hidden;
-  border: 2px solid #53e2b4;
-  border-radius: 50%;
-  background: #12372f;
-  box-shadow: 0 5px 16px rgba(0, 0, 0, .46);
-  color: #dffcf3;
-  cursor: pointer;
-  transition: border-color .18s, box-shadow .18s;
-}
-
-:global(.footprint-photo-marker:hover) { z-index: 2; box-shadow: 0 7px 22px rgba(48, 226, 180, .42); }
-:global(.footprint-photo-marker img) { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-:global(.footprint-photo-marker span) { display: grid; width: 100%; height: 100%; place-items: center; font-size: 15px; font-weight: 700; }
 
 :deep(.maplibregl-ctrl-group) {
   border-radius: 4px;

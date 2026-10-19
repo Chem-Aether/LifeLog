@@ -19,9 +19,9 @@ def stations(
         raise HTTPException(503, str(exc)) from exc
 
 
-@router.post("/routes/sample", summary="按有序途经站采样铁路轨迹")
-def route_sample(body: RailwayRouteRequest = Body(description="提供车次编号和按行车顺序排列的车站列表")):
+@router.post("/routes/sample", summary="优先读取列车实际线路，失败时按铁路网寻路")
+def route_sample(body: RailwayRouteRequest = Body(description="提供有序途经站；可选提供车次号以优先读取 12306 地图线路")):
     try:
-        return payload(sample_route(body.trainCode.strip().upper(), body.stations))
+        return payload(sample_route(body.stations, body.train_code))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

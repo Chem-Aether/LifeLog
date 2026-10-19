@@ -9,6 +9,7 @@ import java.util.List;
  * @param content 正文
  * @param entryDate 日记日期
  * @param mood 心情
+ * @param weatherCode 天气现象代码
  * @param location 地点
  * @param tags 标签列表
  * @param mediaIds 媒体 ID 列表
@@ -18,6 +19,7 @@ public record DiaryEntryRequest(
         String content,
         LocalDate entryDate,
         String mood,
+        Integer weatherCode,
         String location,
         List<String> tags,
         List<String> mediaIds

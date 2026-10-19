@@ -33,7 +33,7 @@
 
     <section v-loading="loading" class="entry-list" aria-label="日记列表">
       <el-table v-if="isManage && entries.length" :data="entries" class="diary-table" row-key="id">
-        <el-table-column prop="entryDate" label="日期" width="132">
+        <el-table-column prop="entryDate" label="日期" width="170">
           <template #default="{ row }">{{ formatDate(row.entryDate) }}</template>
         </el-table-column>
         <el-table-column label="日记内容" min-width="250">
@@ -48,14 +48,19 @@
         <el-table-column label="心情" width="108">
           <template #default="{ row }">{{ row.mood || '—' }}</template>
         </el-table-column>
+        <el-table-column label="天气" width="112" align="center">
+          <template #default="{ row }"><span v-if="weatherOption(row.weatherCode)" class="weather-cell"><img :src="weatherIconUrl(row.weatherCode)" alt="" />{{ weatherOption(row.weatherCode).name }}</span><span v-else>—</span></template>
+        </el-table-column>
         <el-table-column prop="location" label="地点" min-width="130" show-overflow-tooltip />
-        <el-table-column label="标签" min-width="150">
+        <el-table-column label="标签" width="120">
           <template #default="{ row }"><span class="table-tags">{{ row.tags?.join('、') || '—' }}</span></template>
         </el-table-column>
         <el-table-column label="操作" width="112" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button text :icon="Edit" title="编辑" aria-label="编辑日记" @click="goToEditor(row)" />
-            <el-button text class="delete-action" :icon="Delete" title="删除" aria-label="删除日记" @click="removeEntry(row)" />
+            <div class="table-actions">
+              <el-button text :icon="Edit" title="编辑" aria-label="编辑日记" @click="goToEditor(row)" />
+              <el-button text class="delete-action" :icon="Delete" title="删除" aria-label="删除日记" @click="removeEntry(row)" />
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -64,7 +69,7 @@
         <article v-for="entry in entries" :key="entry.id" class="feed-card">
           <header class="feed-card-head">
             <span class="author-avatar"><el-icon><Notebook /></el-icon></span>
-            <div class="author-copy"><strong>我的日记</strong><div class="entry-meta"><span>{{ formatDate(entry.entryDate) }}</span><span v-if="entry.mood" class="mood-label">{{ entry.mood }}</span><span v-if="entry.location"><el-icon><LocationInformation /></el-icon>{{ entry.location }}</span></div></div>
+            <div class="author-copy"><strong>我的日记</strong><div class="entry-meta"><span>{{ formatDate(entry.entryDate) }}</span><span v-if="entry.mood" class="mood-label">{{ entry.mood }}</span><span v-if="weatherOption(entry.weatherCode)" class="weather-meta"><img :src="weatherIconUrl(entry.weatherCode)" alt="" />{{ weatherOption(entry.weatherCode).name }}</span><span v-if="entry.location"><el-icon><LocationInformation /></el-icon>{{ entry.location }}</span></div></div>
             <el-dropdown trigger="click" @command="command => command === 'edit' ? goToEditor(entry) : removeEntry(entry)">
               <el-button text circle :icon="MoreFilled" aria-label="日记操作" />
               <template #dropdown><el-dropdown-menu><el-dropdown-item command="edit">编辑</el-dropdown-item><el-dropdown-item command="delete" class="delete-item">删除</el-dropdown-item></el-dropdown-menu></template>
@@ -97,9 +102,8 @@
       </el-empty>
     </section>
 
-    <footer v-if="isManage && total > pageSize" class="pagination-row">
-      <span>第 {{ page }} / {{ pageCount }} 页</span>
-      <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" @current-change="loadEntries" />
+    <footer v-if="isManage && total" class="pagination-row">
+      <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]" :total="total" layout="total, sizes, prev, pager, next, jumper" @current-change="changePage" @size-change="changePageSize" />
     </footer>
 
     <el-dialog v-model="detailVisible" width="min(760px, calc(100vw - 28px))" class="diary-dialog detail-dialog">
@@ -110,6 +114,7 @@
         </div>
       </template>
       <template v-if="detailEntry">
+        <div v-if="weatherOption(detailEntry.weatherCode)" class="detail-weather"><img :src="weatherIconUrl(detailEntry.weatherCode)" alt="" />{{ weatherOption(detailEntry.weatherCode).name }}</div>
         <div v-if="detailEntry.location" class="detail-location"><el-icon><LocationInformation /></el-icon>{{ detailEntry.location }}</div>
         <div class="detail-content">{{ detailEntry.content || '这篇日记没有正文。' }}</div>
         <div v-if="detailEntry.mediaIds?.length" class="detail-gallery">
@@ -131,6 +136,7 @@ import {
   deleteDiaryEntry, diaryMediaUrl, getDiaryEntries, getDiarySummary, getDiaryYears,
 } from '../apis/diary.js'
 import { diaryFeedState } from '../utils/feedState.js'
+import { weatherIconUrl, weatherOption } from '../utils/weather.js'
 
 const currentYear = new Date().getFullYear()
 const route = useRoute()
@@ -139,8 +145,8 @@ const isManage = computed(() => route.path.endsWith('/manage'))
 const selectedYear = ref(route.query.year ? Number(route.query.year) : null)
 const years = ref([currentYear])
 const keyword = ref(String(route.query.keyword || ''))
-const page = ref(1)
-const pageSize = 10
+const page = ref(readPositiveInt(route.query.page, 1))
+const pageSize = ref(isManage.value ? readPositiveInt(route.query.size, 10) : 10)
 const total = ref(0)
 const entries = ref([])
 const summary = ref({ entries: 0, daysWritten: 0, thisMonth: 0 })
@@ -154,13 +160,25 @@ const detailVisible = ref(false)
 const detailEntry = ref(null)
 const expandedEntries = ref(new Set())
 const expandedMediaEntries = ref(new Set())
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
-
-watch(() => [route.query.keyword, route.query.year], ([nextKeyword, nextYear]) => {
-  keyword.value = String(nextKeyword || '')
-  selectedYear.value = nextYear ? Number(nextYear) : null
-  applyFilters()
+watch(() => [route.query.keyword, route.query.year, route.query.page, route.query.size], ([nextKeyword, nextYear, nextPage, nextSize]) => {
+  const nextKeywordValue = String(nextKeyword || '')
+  const nextYearValue = nextYear ? Number(nextYear) : null
+  const nextPageValue = readPositiveInt(nextPage, 1)
+  const nextSizeValue = isManage.value ? readPositiveInt(nextSize, 10) : 10
+  const filtersChanged = keyword.value !== nextKeywordValue || selectedYear.value !== nextYearValue
+  const paginationChanged = page.value !== nextPageValue || pageSize.value !== nextSizeValue
+  keyword.value = nextKeywordValue
+  selectedYear.value = nextYearValue
+  page.value = nextPageValue
+  pageSize.value = nextSizeValue
+  if (filtersChanged) applyFilters()
+  else if (paginationChanged) loadEntries()
 })
+
+function readPositiveInt(value, fallback) {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
 
 function dateText(value) {
   if (!value) return null
@@ -219,7 +237,7 @@ async function loadEntries({ append = false } = {}) {
   if (append) { loadingMore.value = true; loadMoreFailed.value = false }
   else loading.value = true
   try {
-    const result = await getDiaryEntries({ keyword: keyword.value || undefined, year: selectedYear.value || undefined, page: requestedPage, size: pageSize })
+    const result = await getDiaryEntries({ keyword: keyword.value || undefined, year: selectedYear.value || undefined, page: requestedPage, size: pageSize.value })
     const items = result.items || []
     entries.value = append ? [...entries.value, ...items] : items
     total.value = result.total || 0
@@ -250,7 +268,34 @@ async function applyFilters() {
   page.value = 1
   entries.value = []
   loadMoreFailed.value = false
+  syncManageQuery()
   await Promise.all([loadEntries(), loadSummary()])
+}
+
+function manageQuery() {
+  const query = {}
+  if (keyword.value) query.keyword = keyword.value
+  if (selectedYear.value) query.year = selectedYear.value
+  if (page.value > 1) query.page = page.value
+  if (pageSize.value !== 10) query.size = pageSize.value
+  return query
+}
+
+function syncManageQuery() {
+  if (isManage.value) router.replace({ path: '/diary/manage', query: manageQuery() })
+}
+
+function changePage(nextPage) {
+  page.value = nextPage
+  syncManageQuery()
+  loadEntries()
+}
+
+function changePageSize(nextSize) {
+  pageSize.value = nextSize
+  page.value = 1
+  syncManageQuery()
+  loadEntries()
 }
 
 function retryLoadMore() {
@@ -269,11 +314,11 @@ async function reloadLoadedFeed(deletedId) {
       keyword: keyword.value || undefined,
       year: selectedYear.value || undefined,
       page: index + 1,
-      size: pageSize,
+      size: pageSize.value,
     })))
     entries.value = results.flatMap(result => result.items || [])
     total.value = results[0]?.total || 0
-    page.value = Math.min(loadedPageCount, Math.max(1, Math.ceil(total.value / pageSize)))
+    page.value = Math.min(loadedPageCount, Math.max(1, Math.ceil(total.value / pageSize.value)))
   } catch {
     const hadEntry = entries.value.some(item => item.id === deletedId)
     entries.value = entries.value.filter(item => item.id !== deletedId)
@@ -324,7 +369,9 @@ function openDetail(entry) { detailEntry.value = entry; detailVisible.value = tr
 function goToEditor(entry = null) {
   detailVisible.value = false
   const query = { from: isManage.value ? 'manage' : 'feed' }
-  if (!isManage.value) {
+  if (isManage.value) {
+    Object.assign(query, manageQuery())
+  } else {
     if (selectedYear.value) query.year = selectedYear.value
     if (keyword.value) query.keyword = keyword.value
   }
@@ -384,6 +431,10 @@ onMounted(async () => {
 .diary-table :deep(th.el-table__cell) { height:44px; color:#63757d; font-size:11px; font-weight:650; }
 .diary-table :deep(td.el-table__cell) { height:66px; color:#495d64; font-size:12px; }
 .diary-table :deep(.el-table__inner-wrapper::before) { display:none; }
+.weather-cell,.weather-meta { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }.weather-cell img,.weather-meta img { width:24px; height:24px; object-fit:contain; }.weather-meta img { width:18px; height:18px; }.detail-weather { display:flex; align-items:center; gap:7px; margin-bottom:12px; color:#71827e; font-size:12px; }.detail-weather img { width:30px; height:30px; object-fit:contain; }
+.diary-table :deep(td:first-child .cell) { white-space:nowrap; }
+.table-actions { display:flex; width:100%; align-items:center; justify-content:center; gap:6px; }
+.table-actions :deep(.el-button) { width:30px; height:30px; margin:0; }
 .table-title { display:block; max-width:100%; overflow:hidden; padding:0; border:0; background:none; color:#30474e; font:inherit; font-size:13px; font-weight:650; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
 .table-title:hover { color:#258b88; }.table-excerpt { display:-webkit-box; overflow:hidden; max-width:560px; margin:5px 0 0; color:#87959a; font-size:11px; line-height:1.5; -webkit-box-orient:vertical; -webkit-line-clamp:1; }
 .table-tags { display:block; overflow:hidden; color:#64847f; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }

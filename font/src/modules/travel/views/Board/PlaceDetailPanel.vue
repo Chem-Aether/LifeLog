@@ -30,7 +30,7 @@
         </el-tag>
       </div>
       <el-descriptions :column="1" border class="place-fields">
-        <el-descriptions-item label="地点类型">{{ place.locationType || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="地点类型"><span class="category-detail"><img :src="categoryIcon.iconUrl" alt="">{{ categoryLabel }}</span></el-descriptions-item>
         <el-descriptions-item label="到访日期">{{ place.visitDate || '未记录' }}</el-descriptions-item>
         <el-descriptions-item label="地图坐标">{{ coordinateText }}</el-descriptions-item>
       </el-descriptions>
@@ -47,12 +47,15 @@ import { computed, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { mediaUrl } from '@/modules/travel/apis/media.js'
 import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
+import { getFootprintCategoryIcon, getFootprintCategoryLabel } from '@/modules/travel/stores/footprintCategories.js'
 
 const props = defineProps({ place: { type: Object, default: null } })
 defineEmits(['close'])
 const activeIndex = ref(0)
 const imageFailed = ref(false)
 const regionName = computed(() => getFootprintRegion(props.place).regionName || '地区未知')
+const categoryLabel = computed(() => getFootprintCategoryLabel(props.place?.locationType))
+const categoryIcon = computed(() => getFootprintCategoryIcon(props.place?.locationType))
 const imageUrls = computed(() => (Array.isArray(props.place?.mediaIds) ? props.place.mediaIds : [])
   .slice(0, 9).map(mediaUrl).filter(Boolean))
 const coverUrl = computed(() => imageUrls.value[activeIndex.value] || '')
@@ -98,6 +101,8 @@ header :deep(.el-button) { color: #aac4ca; font-size: 24px; }
 .place-fields :deep(.el-descriptions__label.el-descriptions__cell.is-bordered-label) { width: 90px; background: rgba(17, 45, 59, .64); color: #7f9ea6; }
 .place-fields :deep(.el-descriptions__content.el-descriptions__cell.is-bordered-content) { background: rgba(8, 26, 38, .48); color: #d9e8eb; overflow-wrap: anywhere; }
 .place-fields :deep(.el-descriptions__cell) { border-color: rgba(113, 184, 195, .16) !important; }
+.category-detail { display: inline-flex; align-items: center; gap: 7px; }
+.category-detail img { width: 22px; height: 22px; object-fit: contain; }
 .travel-note { margin-top: 14px; padding: 15px 16px; border: 1px solid rgba(113, 184, 195, .16); border-radius: 5px; background: rgba(8, 26, 38, .48); }
 .travel-note h4 { margin: 0 0 9px; color: #7f9ea6; font-size: 12px; font-weight: 500; }
 .travel-note p { margin: 0; color: #d9e8eb; font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; white-space: pre-wrap; }

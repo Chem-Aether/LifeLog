@@ -1,7 +1,7 @@
 from contextlib import closing
 import sqlite3
 
-from ..settings import RAILWAY_NETWORK_PATH
+from ..settings import RAILWAY_NETWORK_PATH, RAILWAY_ROUTING_PATH
 from ..utils.geopackage import decode_geometry
 
 
@@ -9,6 +9,13 @@ def connect_network():
     if not RAILWAY_NETWORK_PATH.is_file():
         raise FileNotFoundError(f"Railway network not found: {RAILWAY_NETWORK_PATH}")
     uri = f"file:{RAILWAY_NETWORK_PATH.as_posix()}?mode=ro"
+    return sqlite3.connect(uri, uri=True)
+
+
+def connect_routing_network():
+    if not RAILWAY_ROUTING_PATH.is_file():
+        raise FileNotFoundError(f"OSM railway routing GeoPackage not found: {RAILWAY_ROUTING_PATH}")
+    uri = f"file:{RAILWAY_ROUTING_PATH.as_posix()}?mode=ro"
     return sqlite3.connect(uri, uri=True)
 
 

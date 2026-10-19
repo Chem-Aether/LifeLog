@@ -1,7 +1,7 @@
 <template>
   <div v-if="isEditing" v-loading="saving || uploadingCover" class="travel-edit-page">
     <header class="edit-header"><div><el-button text @click="requestClose">返回足迹管理</el-button><h1>{{ form.footprintId ? '编辑足迹' : '新增足迹' }}</h1></div><div class="edit-actions"><el-button :disabled="saving || uploadingCover" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" :disabled="uploadingCover" @click="save">保存并点亮</el-button></div></header>
-    <section class="edit-panel"><el-form label-width="90px"><el-form-item label="地图选点"><FootprintMapPicker :longitude="form.longitude" :latitude="form.latitude" @pick="handleMapPick" @clear="clearMapPoint" /></el-form-item><el-form-item label="当前地区"><div class="region-result"><span>{{ selectedRegionName || '选点后自动识别' }}</span></div></el-form-item><div class="field-grid"><el-form-item label="记录性质" required><el-radio-group v-model="form.visitType"><el-radio-button value="travel">旅行地点</el-radio-button><el-radio-button value="transit">途经城市</el-radio-button></el-radio-group></el-form-item><el-form-item label="地点名称" required><el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" /></el-form-item><el-form-item label="地点类型"><el-input v-model="form.locationType" placeholder="例如：景点、餐厅、车站" maxlength="100" /></el-form-item><el-form-item label="到访日期"><el-date-picker v-model="form.visitDate" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable placeholder="选择日期" style="width:100%" /></el-form-item></div><el-form-item label="旅行心得"><el-input v-model="form.note" type="textarea" :rows="4" placeholder="记录这次旅行的见闻、感受或特别回忆" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="旅行图片"><MediaUploadEditor v-model="coverItems" :upload="uploadTravelMedia" :before-remove="beforeRemoveCover" :url-for="mediaUrl" :multiple="true" :max-count="9" :disabled="saving" @busy-change="uploadingCover = $event" /></el-form-item></el-form></section>
+    <section class="edit-panel"><el-form label-width="90px"><el-form-item label="地图选点"><FootprintMapPicker :longitude="form.longitude" :latitude="form.latitude" @pick="handleMapPick" @clear="clearMapPoint" /></el-form-item><el-form-item label="当前地区"><div class="region-result"><span>{{ selectedRegionName || '选点后自动识别' }}</span></div></el-form-item><div class="field-grid"><el-form-item label="记录性质" required><el-radio-group v-model="form.visitType"><el-radio-button value="travel">旅行地点</el-radio-button><el-radio-button value="transit">途经城市</el-radio-button></el-radio-group></el-form-item><el-form-item label="地点名称" required><el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" /></el-form-item><el-form-item label="地点类型"><el-select v-model="form.locationType" clearable filterable placeholder="选择地点分类" style="width:100%"><el-option-group v-for="group in footprintCategoryGroups" :key="group.label" :label="group.label"><el-option v-for="category in group.options" :key="category.value" :label="category.label" :value="category.value"><span class="category-option"><img :src="category.iconUrl" alt=""><span>{{ category.label }}</span></span></el-option></el-option-group></el-select></el-form-item><el-form-item label="到访日期"><el-date-picker v-model="form.visitDate" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable placeholder="选择日期" style="width:100%" /></el-form-item></div><el-form-item label="旅行心得"><el-input v-model="form.note" type="textarea" :rows="4" placeholder="记录这次旅行的见闻、感受或特别回忆" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="旅行图片"><MediaUploadEditor v-model="coverItems" :upload="uploadTravelMedia" :before-remove="beforeRemoveCover" :url-for="mediaUrl" :multiple="true" :max-count="9" :disabled="saving" @busy-change="uploadingCover = $event" /></el-form-item></el-form></section>
   </div>
   <div v-else v-loading="loading || saving || deleting" class="footprint-page">
     <div class="page-header">
@@ -19,6 +19,13 @@
           <el-option label="全部类型" value="all" />
           <el-option label="旅行地点" value="travel" />
           <el-option label="途经城市" value="transit" />
+        </el-select>
+        <el-select v-model="locationTypeFilter" aria-label="地点分类筛选" clearable filterable placeholder="全部地点分类" style="width: 190px">
+          <el-option-group v-for="group in footprintCategoryGroups" :key="group.label" :label="group.label">
+            <el-option v-for="category in group.options" :key="category.value" :label="category.label" :value="category.value">
+              <span class="category-option"><img :src="category.iconUrl" alt=""><span>{{ category.label }}</span></span>
+            </el-option>
+          </el-option-group>
         </el-select>
         <el-button :disabled="loading || saving || deleting" @click="loadRows">刷新</el-button>
         <span class="count">共 {{ total }} 条</span>
@@ -50,7 +57,11 @@
         <template #default="scope">{{ getFootprintRegion(scope.row).regionName }}</template>
       </el-table-column>
       <el-table-column prop="placeName" label="地点名称" min-width="180" sortable="custom" />
-      <el-table-column prop="locationType" label="地点类型" min-width="120" />
+      <el-table-column prop="locationType" label="地点类型" min-width="170" sortable="custom">
+        <template #default="scope">
+          <span class="category-cell"><img :src="getFootprintCategoryIcon(scope.row.locationType).iconUrl" alt="">{{ getFootprintCategoryLabel(scope.row.locationType) }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="visitType" label="记录性质" width="110" sortable="custom">
         <template #default="scope">
           <el-tag :type="scope.row.visitType === 'transit' ? 'info' : 'success'">
@@ -98,6 +109,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { addFootprint, deleteFootprint, deleteFootprints, getFootprintById, getFootprints, updateFootprint } from '@/modules/travel/apis/travel.js'
 import { deleteTravelMedia, mediaUrl, uploadTravelMedia } from '@/modules/travel/apis/media.js'
 import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
+import { footprintCategoryGroups, getFootprintCategoryIcon, getFootprintCategoryLabel, normalizeFootprintCategory } from '@/modules/travel/stores/footprintCategories.js'
 import MediaUploadEditor from '@/components/MediaUploadEditor.vue'
 import FootprintMapPicker from '@/modules/travel/components/FootprintMapPicker.vue'
 import TravelDataTools from '@/modules/travel/components/TravelDataTools.vue'
@@ -120,6 +132,7 @@ const tableRef = ref(null)
 const regionFilter = ref('')
 const placeFilter = ref('')
 const visitTypeFilter = ref('all')
+const locationTypeFilter = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const sortState = reactive({ prop: 'visitDate', order: 'descending' })
@@ -143,7 +156,7 @@ const coverItems = computed({
 })
 
 let filterTimer
-watch([regionFilter, placeFilter, visitTypeFilter], () => {
+watch([regionFilter, placeFilter, visitTypeFilter, locationTypeFilter], () => {
   currentPage.value = 1
   clearSelection()
   clearTimeout(filterTimer)
@@ -180,6 +193,7 @@ async function loadRows() {
       region: regionFilter.value.trim() || undefined,
       keyword: placeFilter.value.trim() || undefined,
       visitType: visitTypeFilter.value === 'all' ? undefined : visitTypeFilter.value,
+      locationType: locationTypeFilter.value || undefined,
       page: currentPage.value,
       pageSize: pageSize.value,
       sortBy: sortState.prop || 'visitDate',
@@ -251,7 +265,7 @@ function openEditData(row) {
   Object.assign(form, {
     footprintId: row.footprintId,
     placeName: row.placeName,
-    locationType: row.locationType || '',
+    locationType: row.locationType ? normalizeFootprintCategory(row.locationType) : '',
     visitType: row.visitType || 'travel',
     visitDate: row.visitDate || null,
     longitude: row.longitude == null ? null : Number(row.longitude),
@@ -430,6 +444,8 @@ p { margin: 0; color: #65777c; font-size: 13px; }
 .more-fields :deep(.el-collapse-item__wrap) { border-bottom: 0; }
 .more-fields :deep(.el-form-item) { margin-bottom: 8px; }
 .region-option { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.category-option, .category-cell { display: inline-flex; align-items: center; gap: 8px; }
+.category-option img, .category-cell img { width: 22px; height: 24px; object-fit: contain; }
 .pagination-bar { display: flex; justify-content: center; margin-top: 20px; padding-bottom: 12px; }
 @media (max-width: 700px) {
   .page-header { align-items: stretch; flex-direction: column; }

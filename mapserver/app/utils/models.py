@@ -27,10 +27,10 @@ class PointsRequest(BaseModel):
 
 
 class RailwayRouteRequest(BaseModel):
-    trainCode: str = Field(default="", max_length=30, description="车次编号，用于辅助匹配线路，例如 G1")
     stations: list[str] = Field(
         min_length=2,
         max_length=200,
         description="按行车顺序排列的途经车站名称，至少 2 站、最多 200 站",
         examples=[["北京南", "南京南", "上海虹桥"]],
     )
+    train_code: str | None = Field(default=None, min_length=1, max_length=20, description="可选车次号，用于优先查询 12306 实际地图线路")

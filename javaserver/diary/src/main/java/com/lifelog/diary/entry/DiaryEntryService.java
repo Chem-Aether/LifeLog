@@ -7,12 +7,22 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** 实现日记条目的查询、校验、持久化和关联数据管理。 */
 @Service
 public class DiaryEntryService {
     private static final Pattern MEDIA_ID = Pattern.compile("[0-9a-f]{32}");
+    private static final Set<Integer> WEATHER_CODES = Set.of(
+            1000, 1001, 1002, 1003, 1004, 1005,
+            2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011,
+            2020, 2021, 2022, 2023, 2024, 2025, 2026,
+            3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3020, 3021, 3022, 3023,
+            4000, 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009, 4010, 4011, 4012, 4013, 4020, 4021,
+            5000, 5001, 5002, 5003, 5004, 5005, 5020, 5021, 5022, 5023, 5024,
+            6000, 6001, 6002, 6003, 6004, 9000, 9001, 9010, 9011, 9020, 9021, 9022, 9999
+    );
     private final DiaryEntryMapper mapper;
 
     /**
@@ -134,6 +144,7 @@ public class DiaryEntryService {
         if (request.content() != null && request.content().length() > 20000) throw badRequest("正文最多20000个字符");
         if (request.entryDate() == null) throw badRequest("日记日期不能为空");
         if (request.mood() != null && request.mood().length() > 32) throw badRequest("心情字段过长");
+        if (request.weatherCode() != null && !WEATHER_CODES.contains(request.weatherCode())) throw badRequest("天气代码无效");
         if (request.location() != null && request.location().trim().length() > 160) throw badRequest("地点最多160个字符");
         normalizeTags(request.tags());
         normalizeMediaIds(request.mediaIds());

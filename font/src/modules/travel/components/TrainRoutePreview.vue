@@ -41,9 +41,11 @@
               :aria-pressed="selectedCandidateIndices[segmentIndex] === index"
               @click.stop="selectCandidate(index, segmentIndex)"
             >
-              <span class="choice-label">{{ candidate.label }}</span>
+              <span class="choice-label">线路{{ chineseNumber(index + 1) }}</span>
               <span class="choice-distance">{{ candidate.distanceKm }} km</span>
-              <span v-if="selectedCandidateIndices[segmentIndex] === index" class="choice-check" aria-hidden="true">✓</span>
+              <span class="choice-lines" :title="candidateName(candidate)">
+                {{ candidateName(candidate) }}
+              </span>
             </button>
           </div>
           <div v-else class="no-candidate">未匹配到可用铁路路径</div>
@@ -89,6 +91,13 @@ const parseRouteLines = value => {
   } catch { return [] }
 }
 const routeSegments = computed(() => props.routeSegments || [])
+const chineseNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+const chineseNumber = value => chineseNumbers[value - 1] || String(value)
+const candidateName = candidate => {
+  const names = [...new Set((candidate.railwayLines || [])
+    .filter(name => name && !/^OSM way \d+$/i.test(name)))]
+  return names.slice(0, 2).join(' / ') || '未命名铁路'
+}
 const activeSegment = computed(() => routeSegments.value[activeSegmentIndex.value])
 const selectedCandidateIndex = computed(() => selectedCandidateIndices.value[activeSegmentIndex.value] ?? 0)
 const routeCoordinates = computed(() => {
@@ -128,6 +137,17 @@ const croppedCoordinates = computed(() => {
   const start = selectedStations.value[0].projection
   const end = selectedStations.value.at(-1).projection
   return [start.coordinate, ...routeCoordinates.value.slice(start.segment + 1, end.segment + 1), end.coordinate]
+})
+const croppedDistanceKm = computed(() => {
+  const radians = degree => degree * Math.PI / 180
+  return croppedCoordinates.value.slice(1).reduce((distance, point, index) => {
+    const previous = croppedCoordinates.value[index]
+    const latitudeDelta = radians(point[1] - previous[1])
+    const longitudeDelta = radians(point[0] - previous[0])
+    const haversine = Math.sin(latitudeDelta / 2) ** 2
+      + Math.cos(radians(previous[1])) * Math.cos(radians(point[1])) * Math.sin(longitudeDelta / 2) ** 2
+    return distance + 6371.0088 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  }, 0)
 })
 const selectedRouteCoordinates = computed(() => props.modelValue ? croppedCoordinates.value : routeCoordinates.value)
 const lineCollection = coordinates => ({
@@ -255,6 +275,7 @@ function selectCandidate(index, segmentIndex = activeSegmentIndex.value) {
 function confirm() {
   emit('confirm', {
     routeGeoJson: JSON.stringify({ type: 'LineString', coordinates: croppedCoordinates.value }),
+    mileageKm: Math.round(croppedDistanceKm.value * 100) / 100,
     waypoints: selectedStations.value.map((station, index) => ({ stationName: station.stationName, longitude: station.longitude, latitude: station.latitude, arrivalTime: station.arrivalTime || null, departureTime: station.departureTime || null, sequence: index + 1 })),
     routeOrigin: orderedStations.value[0],
     routeTerminal: orderedStations.value.at(-1)
@@ -272,10 +293,14 @@ watch(() => props.routeSegments, segments => {
   selectedCandidateIndices.value = (segments || []).map(segment => segment.selectedCandidate ?? 0)
   activeSegmentIndex.value = Math.max(0, (segments || []).findIndex(segment => segment.candidates?.length > 1))
 }, { deep: true, immediate: true })
-watch([() => props.routeGeoJson, () => props.routeSegments, () => props.stations, activeSegmentIndex, selectedCandidateIndices], async () => {
+watch([() => props.routeGeoJson, () => props.routeSegments], async () => {
   await nextTick()
   renderSelection()
   fitRoute()
+})
+watch(() => props.stations, async () => {
+  await nextTick()
+  renderSelection()
 }, { deep: true })
 watch([startIndex, endIndex], renderSelection)
 onMounted(initialize)
@@ -306,13 +331,13 @@ onBeforeUnmount(() => map?.remove())
 .segment-stations small, .active-segment-label { color:#7c8c91; font-size:11px; white-space:nowrap; }
 .active-segment-label { margin-left:auto; color:#147d79; }
 .candidate-options { display:flex; align-items:stretch; flex-wrap:wrap; gap:7px; min-width:0; padding-left:36px; }
-.candidate-choice { position:relative; display:flex; align-items:center; gap:9px; min-height:34px; max-width:100%; padding:6px 10px; border:1px solid #dbe4e6; border-radius:4px; background:#fff; color:#40565c; cursor:pointer; transition:border-color .16s ease, background-color .16s ease, color .16s ease; }
+.candidate-choice { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:9px; row-gap:3px; min-height:38px; max-width:100%; min-width:180px; padding:6px 10px; border:1px solid #dbe4e6; border-radius:4px; background:#fff; color:#40565c; cursor:pointer; transition:border-color .16s ease, background-color .16s ease, color .16s ease; }
 .candidate-choice:hover { border-color:#80b8b5; background:#f6fbfa; }
 .candidate-choice.selected { border-color:#218d88; background:#eaf6f4; color:#126e6b; box-shadow:inset 0 0 0 1px #218d88; }
 .choice-label { overflow:hidden; font-size:12px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
 .choice-distance { color:#718187; font-size:11px; white-space:nowrap; }
+.choice-lines { grid-column:1 / -1; overflow:hidden; color:#718187; font-size:10px; text-align:left; text-overflow:ellipsis; white-space:nowrap; }
 .candidate-choice.selected .choice-distance { color:#397c79; }
-.choice-check { color:#147d79; font-size:12px; font-weight:700; }
 .no-candidate { padding:7px 10px 7px 36px; border-radius:4px; background:#f5f7f7; color:#718187; font-size:12px; }
 .candidate-hint { padding:0 2px; }
 .route-preview { width: 100%; height: 520px; border: 1px solid #d6e0e2; border-radius: 4px; background:#e8edf0; }
