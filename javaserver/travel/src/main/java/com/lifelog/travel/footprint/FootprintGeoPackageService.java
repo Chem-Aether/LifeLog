@@ -32,24 +32,12 @@ public class FootprintGeoPackageService {
 
     /** 导出全部足迹记录。 */
     public byte[] exportAll() throws IOException {
-        return export(null);
-    }
-
-    /** 导出单条足迹记录。 */
-    public byte[] exportOne(Long id) throws IOException {
-        return export(id);
-    }
-
-    /** 创建临时 GeoPackage、写入筛选后的足迹并读取文件字节。 */
-    private byte[] export(Long id) throws IOException {
         Path temp = Files.createTempFile("lifelog-footprints-", ".gpkg");
         try {
             try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + temp)) {
                 connection.setAutoCommit(false);
                 createSchema(connection);
-                List<FootSpot> rows = footprints.selectRecords(null).stream()
-                        .filter(row -> id == null || id.equals(row.getFootprintId())).toList();
-                insertRows(connection, rows);
+                insertRows(connection, footprints.selectRecords(null));
                 connection.commit();
             } catch (SQLException exception) {
                 throw new IOException("创建足迹 GeoPackage 失败", exception);
@@ -68,7 +56,7 @@ public class FootprintGeoPackageService {
             statement.execute("CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT NOT NULL, srs_id INTEGER NOT NULL PRIMARY KEY, organization TEXT NOT NULL, organization_coordsys_id INTEGER NOT NULL, definition TEXT NOT NULL, description TEXT)");
             statement.execute("CREATE TABLE gpkg_contents (table_name TEXT NOT NULL PRIMARY KEY, data_type TEXT NOT NULL, identifier TEXT UNIQUE, description TEXT DEFAULT '', last_change DATETIME NOT NULL, min_x DOUBLE, min_y DOUBLE, max_x DOUBLE, max_y DOUBLE, srs_id INTEGER, FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id))");
             statement.execute("CREATE TABLE gpkg_geometry_columns (table_name TEXT NOT NULL, column_name TEXT NOT NULL, geometry_type_name TEXT NOT NULL, srs_id INTEGER NOT NULL, z TINYINT NOT NULL, m TINYINT NOT NULL, PRIMARY KEY (table_name, column_name), FOREIGN KEY (table_name) REFERENCES gpkg_contents(table_name), FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id))");
-            statement.execute("CREATE TABLE footprints (fid INTEGER PRIMARY KEY AUTOINCREMENT, footprint_id INTEGER NOT NULL UNIQUE, place_name TEXT NOT NULL, visit_type TEXT NOT NULL, visit_date TEXT, location_type TEXT, note TEXT, media_ids TEXT NOT NULL, longitude DOUBLE, latitude DOUBLE, geom POINT)");
+            statement.execute("CREATE TABLE footprints (fid INTEGER PRIMARY KEY AUTOINCREMENT, footprint_id INTEGER NOT NULL UNIQUE, place_name TEXT NOT NULL, visit_type TEXT NOT NULL, visit_date TEXT, region_id TEXT, location_type TEXT, note TEXT, media_ids TEXT NOT NULL, longitude DOUBLE, latitude DOUBLE, geom POINT)");
             statement.execute("INSERT INTO gpkg_spatial_ref_sys VALUES ('Undefined Cartesian', -1, 'NONE', -1, 'undefined', 'undefined Cartesian coordinate reference system')");
             statement.execute("INSERT INTO gpkg_spatial_ref_sys VALUES ('Undefined Geographic', 0, 'NONE', 0, 'undefined', 'undefined geographic coordinate reference system')");
             statement.execute("INSERT INTO gpkg_spatial_ref_sys VALUES ('WGS 84 geodetic', 4326, 'EPSG', 4326, '" + WGS84_WKT.replace("'", "''") + "', 'longitude/latitude coordinates on the WGS 84 spheroid')");
@@ -83,7 +71,7 @@ public class FootprintGeoPackageService {
 
     /** 批量写入足迹及点几何，并更新图层边界范围。 */
     private void insertRows(Connection connection, List<FootSpot> rows) throws SQLException {
-        String sql = "INSERT INTO footprints (footprint_id,place_name,visit_type,visit_date,location_type,note,media_ids,longitude,latitude,geom) VALUES (?,?,?,?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO footprints (footprint_id,place_name,visit_type,visit_date,region_id,location_type,note,media_ids,longitude,latitude,geom) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
         double minX = Double.POSITIVE_INFINITY;
         double minY = Double.POSITIVE_INFINITY;
         double maxX = Double.NEGATIVE_INFINITY;
@@ -94,13 +82,14 @@ public class FootprintGeoPackageService {
                 statement.setString(2, row.getPlaceName());
                 statement.setString(3, row.getVisitType());
                 statement.setString(4, row.getVisitDate() == null ? null : row.getVisitDate().toString());
-                statement.setString(5, row.getLocationType());
-                statement.setString(6, row.getNote());
-                statement.setString(7, row.getMediaIdsJson());
+                statement.setString(5, row.getRegionId());
+                statement.setString(6, row.getLocationType());
+                statement.setString(7, row.getNote());
+                statement.setString(8, row.getMediaIdsJson());
                 if (row.getLongitude() == null || row.getLatitude() == null) {
-                    statement.setNull(8, Types.DOUBLE);
                     statement.setNull(9, Types.DOUBLE);
-                    statement.setNull(10, Types.BLOB);
+                    statement.setNull(10, Types.DOUBLE);
+                    statement.setNull(11, Types.BLOB);
                 } else {
                     double longitude = row.getLongitude().doubleValue();
                     double latitude = row.getLatitude().doubleValue();
@@ -108,9 +97,9 @@ public class FootprintGeoPackageService {
                             || longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
                         throw new SQLException("足迹坐标超出经纬度有效范围，记录 ID: " + row.getFootprintId());
                     }
-                    statement.setDouble(8, longitude);
-                    statement.setDouble(9, latitude);
-                    statement.setBytes(10, pointBlob(longitude, latitude));
+                    statement.setDouble(9, longitude);
+                    statement.setDouble(10, latitude);
+                    statement.setBytes(11, pointBlob(longitude, latitude));
                     minX = Math.min(minX, longitude); minY = Math.min(minY, latitude);
                     maxX = Math.max(maxX, longitude); maxY = Math.max(maxY, latitude);
                 }

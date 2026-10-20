@@ -133,6 +133,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { getFootprints } from '@/modules/travel/apis/travel.js'
+import { enrichFootprintRegions } from '@/modules/travel/apis/sysResource.js'
 import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
 import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
@@ -604,7 +605,7 @@ async function loadData() {
   tickets.value = [...flights.map(toFlightTrip), ...trains.map(toTrainTrip)]
   if (flightResult.status === 'rejected' || trainResult.status === 'rejected') ElMessage.error('旅行记录加载失败')
   if (footprintResult.status === 'fulfilled') {
-    footprints.value = footprintResult.value.data || []
+    footprints.value = await enrichFootprintRegions(footprintResult.value.data || [])
   }
   else ElMessage.error('足迹统计加载失败')
   await nextTick()

@@ -2,6 +2,8 @@ package com.lifelog.travel.footprint;
 
 import lombok.Data;
 
+import java.util.List;
+
 /** 足迹查询的筛选、分页和排序参数。 */
 @Data
 public class FootSpotQueryDTO {
@@ -13,8 +15,8 @@ public class FootSpotQueryDTO {
     private String keyword;
     /** 地点分类编码。 */
     private String locationType;
-    /** 行政区名称关键字。 */
-    private String region;
+    /** 限定为指定行政区节点 ID；null 表示不筛选，空列表表示无匹配项。 */
+    private List<String> regionIds;
     /** 页码。 */
     private Integer page;
     /** 每页记录数。 */

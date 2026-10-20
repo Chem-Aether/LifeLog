@@ -2,6 +2,8 @@ import { travelRequest as request } from '@/utils/request.js'
 
 
 export const getFootprints = (params = {}) => request({ url: '/travel/footprints', method: 'get', params })
+export const searchFootprints = data => request({ url: '/travel/footprints/search', method: 'post', data })
+export const getFootprintRegionIds = params => request({ url: '/travel/footprints/region-ids', method: 'get', params })
 export const getFootprintById = id => request({ url: `/travel/footprints/${id}`, method: 'get' })
 
 export const getTrajectories = params => request({ url: '/travel/trajectories', method: 'get', params })
@@ -14,7 +16,7 @@ export const deleteTrajectories = ids => request({ url: '/travel/trajectories/ba
 export const exportTravelData = (type, format) => request({
   url: '/travel/export',
   method: 'get',
-  params: type ? { type, ...(format ? { format } : {}) } : undefined,
+  params: { type, ...(format ? { format } : {}) },
   responseType: 'blob',
   timeout: 0,
   fullResponse: true

@@ -29,7 +29,7 @@ import { storeToRefs } from 'pinia'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { getFootprints, getTrajectories } from '@/modules/travel/apis/travel.js'
-import { getAirportsByIcao, getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
+import { enrichFootprintRegions, getAirportsByIcao, getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
 import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
 import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
@@ -581,7 +581,8 @@ function loadLayerData(layer, year) {
     if (layer === 'foot') {
       const response = await getFootprints(year === 'all' ? {} : { year })
       if (String(props.selectedYear) !== year) return
-      footprintRecords = response?.data || []
+      footprintRecords = await enrichFootprintRegions(response?.data || [])
+      if (String(props.selectedYear) !== year) return
     } else if (layer === 'flight') {
       const flights = await getAllFlights(year)
       const airportCodes = [...new Set(flights.flatMap(item => [item.departureIcao, item.arrivalIcao])

@@ -106,7 +106,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addFootprint, deleteFootprint, deleteFootprints, getFootprintById, getFootprints, updateFootprint } from '@/modules/travel/apis/travel.js'
+import { addFootprint, deleteFootprint, deleteFootprints, getFootprintById, getFootprintRegionIds, searchFootprints, updateFootprint } from '@/modules/travel/apis/travel.js'
+import { getRegionPaths } from '@/modules/travel/apis/sysResource.js'
 import { deleteTravelMedia, mediaUrl, uploadTravelMedia } from '@/modules/travel/apis/media.js'
 import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
 import { footprintCategoryGroups, getFootprintCategoryIcon, getFootprintCategoryLabel, normalizeFootprintCategory } from '@/modules/travel/stores/footprintCategories.js'
@@ -147,6 +148,7 @@ const form = reactive({
   visitDate: null,
   longitude: null,
   latitude: null,
+  regionId: null,
   note: '',
   mediaIds: []
 })
@@ -169,7 +171,7 @@ onMounted(async () => {
   if (!isEditing.value) return
   const row = route.params.id ? await getEditRecord(route.params.id) : null
   if (route.params.id && !row) { ElMessage.error('足迹记录不存在'); router.replace('/travel/admin/footprint'); return }
-  if (row) openEditData(row)
+  if (row) await openEditData(row)
   else { resetForm(); editSnapshot.value = snapshotForm() }
 })
 
@@ -181,7 +183,7 @@ watch(() => route.fullPath, async () => {
   await loadRows()
   const row = route.params.id ? await getEditRecord(route.params.id) : null
   if (route.params.id && !row) { ElMessage.error('足迹记录不存在'); router.replace('/travel/admin/footprint'); return }
-  if (row) openEditData(row)
+  if (row) await openEditData(row)
   else { resetForm(); editSnapshot.value = snapshotForm() }
 })
 
@@ -189,11 +191,32 @@ async function loadRows() {
   const sequence = ++loadSequence
   loading.value = true
   try {
-    const res = await getFootprints({
-      region: regionFilter.value.trim() || undefined,
+    const filters = {
       keyword: placeFilter.value.trim() || undefined,
       visitType: visitTypeFilter.value === 'all' ? undefined : visitTypeFilter.value,
       locationType: locationTypeFilter.value || undefined,
+    }
+    let regionIds
+    let pathsById = {}
+    const regionKeyword = regionFilter.value.trim().toLocaleLowerCase()
+    if (regionKeyword) {
+      const idResponse = await getFootprintRegionIds(filters)
+      if (sequence !== loadSequence) return
+      const candidateIds = idResponse.data || []
+      pathsById = await getRegionPaths(candidateIds)
+      if (sequence !== loadSequence) return
+      regionIds = candidateIds.filter(id => (pathsById[String(id)]?.path || [])
+        .some(node => String(node.name || '').toLocaleLowerCase().includes(regionKeyword)))
+      if (!regionIds.length) {
+        rows.value = []
+        total.value = 0
+        clearSelection()
+        return
+      }
+    }
+    const res = await searchFootprints({
+      ...filters,
+      regionIds,
       page: currentPage.value,
       pageSize: pageSize.value,
       sortBy: sortState.prop || 'visitDate',
@@ -201,7 +224,12 @@ async function loadRows() {
     })
     if (sequence !== loadSequence) return
     const result = res.data || {}
-    rows.value = result.records || []
+    const records = result.records || []
+    if (!Object.keys(pathsById).length) {
+      pathsById = await getRegionPaths(records.map(item => item.regionId))
+      if (sequence !== loadSequence) return
+    }
+    rows.value = records.map(item => ({ ...item, regionPaths: pathsById[String(item.regionId)]?.path || [] }))
     total.value = Number(result.total || 0)
     clearSelection()
   } catch (error) {
@@ -244,6 +272,7 @@ function resetForm() {
     visitDate: null,
     longitude: null,
     latitude: null,
+    regionId: null,
     note: '',
     mediaIds: []
   })
@@ -261,7 +290,8 @@ function openEdit(row) {
   router.push({ name: 'TravelFootprintEdit', params: { id: row.footprintId } })
 }
 
-function openEditData(row) {
+async function openEditData(row) {
+  const pathsById = await getRegionPaths(row.regionId ? [row.regionId] : [])
   Object.assign(form, {
     footprintId: row.footprintId,
     placeName: row.placeName,
@@ -270,6 +300,7 @@ function openEditData(row) {
     visitDate: row.visitDate || null,
     longitude: row.longitude == null ? null : Number(row.longitude),
     latitude: row.latitude == null ? null : Number(row.latitude),
+    regionId: row.regionId || null,
     note: row.note || '',
     mediaIds: Array.isArray(row.mediaIds) ? [...row.mediaIds] : []
   })
@@ -282,10 +313,11 @@ function openEditData(row) {
     visitDate: form.visitDate,
     longitude: form.longitude,
     latitude: form.latitude,
+    regionId: form.regionId,
     note: form.note.trim() || null,
     mediaIds: form.mediaIds
   })
-    selectedRegionName.value = getFootprintRegion(row).regionName
+    selectedRegionName.value = getFootprintRegion({ ...row, regionPaths: pathsById[String(row.regionId)]?.path || [] }).regionName
 }
 
 async function beforeRemoveCover(mediaId) {
@@ -300,7 +332,7 @@ async function beforeRemoveCover(mediaId) {
 function hasUnsavedChanges() {
   return isEditing.value && editSnapshot.value !== snapshotForm()
 }
-function snapshotForm() { return JSON.stringify({ placeName: form.placeName.trim(), locationType: form.locationType.trim() || null, visitType: form.visitType, visitDate: form.visitDate || null, longitude: form.longitude, latitude: form.latitude, note: form.note.trim() || null, mediaIds: form.mediaIds }) }
+function snapshotForm() { return JSON.stringify({ placeName: form.placeName.trim(), locationType: form.locationType.trim() || null, visitType: form.visitType, visitDate: form.visitDate || null, longitude: form.longitude, latitude: form.latitude, regionId: form.regionId, note: form.note.trim() || null, mediaIds: form.mediaIds }) }
 async function requestClose() {
   if (saving.value || uploadingCover.value) return
   if (hasUnsavedChanges()) { try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) } catch { return } }
@@ -316,6 +348,7 @@ onBeforeRouteLeave(async () => {
 async function handleMapPick(point) {
   form.longitude = point.longitude
   form.latitude = point.latitude
+  form.regionId = point.regionId || null
   if (point.suggestedName && !form.placeName.trim()) {
     form.placeName = point.suggestedName
   }
@@ -325,6 +358,7 @@ async function handleMapPick(point) {
 function clearMapPoint() {
   form.longitude = null
   form.latitude = null
+  form.regionId = null
   selectedRegionName.value = ''
 }
 
@@ -339,6 +373,7 @@ async function save() {
     visitDate: form.visitDate || null,
     longitude: form.longitude,
     latitude: form.latitude,
+    regionId: form.regionId,
     note: form.note.trim() || null,
     mediaIds: form.mediaIds
   }

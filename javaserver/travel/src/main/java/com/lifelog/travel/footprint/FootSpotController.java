@@ -5,9 +5,7 @@ import com.lifelog.common.api.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
 /** 提供旅行足迹的筛选、维护和批量删除接口。 */
@@ -18,17 +16,25 @@ public class FootSpotController {
     @Autowired
     private FootSpotService footSpotService;
 
-    /** 查询足迹；不传分页参数时返回全部记录，传入完整分页参数时返回分页结果。 */
+    /** 不分页查询足迹记录。 */
     @GetMapping("/footprints")
-    @Operation(summary = "查询足迹", description = "page 与 pageSize 均不传时返回全部记录；同时传入时分页")
+    @Operation(summary = "查询全部足迹记录")
     public Result footprints(@ModelAttribute FootSpotQueryDTO query) {
-        if (query.getPage() == null && query.getPageSize() == null) {
-            return Result.success(footSpotService.findAll(query));
-        }
-        if (query.getPage() == null || query.getPageSize() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page 和 pageSize 必须同时提供");
-        }
+        return Result.success(footSpotService.findAll(query));
+    }
+
+    /** 分页查询足迹；regionIds 由前端地图服务解析后提交。 */
+    @PostMapping("/footprints/search")
+    @Operation(summary = "分页查询足迹")
+    public Result search(@RequestBody FootSpotQueryDTO query) {
         return Result.success(footSpotService.findPage(query));
+    }
+
+    /** 获取筛选条件下出现过的行政区编码。 */
+    @GetMapping("/footprints/region-ids")
+    @Operation(summary = "查询足迹涉及的行政区编码")
+    public Result regionIds(@ModelAttribute FootSpotQueryDTO query) {
+        return Result.success(footSpotService.findRegionIds(query));
     }
 
     /** 查询单条足迹详情。 */
@@ -40,7 +46,7 @@ public class FootSpotController {
 
     /** 新增足迹记录。 */
     @PostMapping("/footprints")
-    @Operation(summary = "新增足迹并点亮所属地区")
+    @Operation(summary = "新增足迹")
     public Result add(@RequestBody FootSpot spot) {
         return Result.success(footSpotService.add(spot));
     }

@@ -42,7 +42,4 @@ public class FootSpot {
     @JsonIgnore
     @TableField(value = "media_ids", typeHandler = JsonbStringTypeHandler.class, jdbcType = JdbcType.OTHER)
     private String mediaIdsJson;
-    /** 从根节点到最细匹配行政区的结构化路径。 */
-    @TableField(exist = false)
-    private List<RegionPathNodeDTO> regionPaths;
 }

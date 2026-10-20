@@ -1,0 +1,4 @@
+Goserver.exe
+data/*-shm
+data/*-wal
+*.log

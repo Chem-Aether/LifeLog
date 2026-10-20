@@ -137,7 +137,7 @@ async function handleMapClick(event) {
   try {
     emit('pick', { longitude, latitude, ...await locationAt(longitude, latitude) })
   } catch {
-    emit('pick', { longitude, latitude, adcode: '', districtName: '', fullName: '' })
+    emit('pick', { longitude, latitude, regionId: null, adcode: '', districtName: '', fullName: '' })
   }
 }
 
@@ -157,7 +157,7 @@ async function locateCoordinates() {
   try {
     emit('pick', { ...point, ...await locationAt(point.longitude, point.latitude) })
   } catch {
-    emit('pick', { ...point, adcode: '', districtName: '', fullName: '' })
+    emit('pick', { ...point, regionId: null, adcode: '', districtName: '', fullName: '' })
   }
 }
 

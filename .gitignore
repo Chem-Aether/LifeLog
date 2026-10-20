@@ -29,3 +29,5 @@ desktop/release/
 **/.pytest_cache/
 
 /outputs/
+data/
+test/

@@ -37,21 +37,18 @@ public class TrainGeoPackageService {
     }
 
     /** 导出全部铁路行程及线路数据。 */
-    public byte[] exportAll() throws IOException { return export(null, false); }
-    /** 导出指定铁路行程及线路数据。 */
-    public byte[] exportOne(Long id) throws IOException { return export(id, false); }
+    public byte[] exportAll() throws IOException { return export(false); }
     /** 创建铁路行程导入模板。 */
-    public byte[] exportTemplate() throws IOException { return export(null, true); }
+    public byte[] exportTemplate() throws IOException { return export(true); }
 
     /** 生成临时 GeoPackage，并写入行程、线路和途经站。 */
-    private byte[] export(Long id, boolean template) throws IOException {
+    private byte[] export(boolean template) throws IOException {
         Path temp = Files.createTempFile("lifelog-trains-", ".gpkg");
         try {
             try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + temp)) {
                 connection.setAutoCommit(false);
                 createSchema(connection);
-                List<TrainRecord> records = template ? List.of() : trains.selectRecords(null).stream()
-                        .filter(row -> id == null || id.equals(row.getTrainId())).toList();
+                List<TrainRecord> records = template ? List.of() : trains.selectRecords(null);
                 insertRecords(connection, records);
                 Set<Long> ids = new HashSet<>();
                 records.forEach(row -> ids.add(row.getTrainId()));

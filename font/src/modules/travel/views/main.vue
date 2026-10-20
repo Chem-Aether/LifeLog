@@ -24,7 +24,6 @@
         <router-link to="/travel/admin/trajectory"><el-icon><MapLocation /></el-icon><span>GPS轨迹<small>轨迹记录与采样点</small></span></router-link>
       </nav>
       <div class="nav-footer">
-        <button class="export-button" :disabled="exporting" @click="exportAll"><el-icon><Download /></el-icon><span>{{ exporting ? '正在生成...' : '导出全部数据' }}</span></button>
         <div class="nav-links"><router-link to="/home"><el-icon><HomeFilled /></el-icon><span>返回系统主页</span></router-link></div>
       </div>
     </aside>
@@ -35,35 +34,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Close, DataAnalysis, Download, HomeFilled, LocationInformation, MapLocation, Menu, Picture, Position, Tickets } from '@element-plus/icons-vue'
-import { exportTravelData } from '@/modules/travel/apis/travel.js'
+import { Close, DataAnalysis, HomeFilled, LocationInformation, MapLocation, Menu, Picture, Position, Tickets } from '@element-plus/icons-vue'
 import '../config/theme.css'
 
 const route = useRoute()
 const navOpen = ref(false)
-const exporting = ref(false)
 const currentSection = computed(() => route.path.includes('trainTicket') ? '铁路行程' : route.path.includes('flightTicket') ? '航空行程' : route.path.includes('/trajectory') ? 'GPS轨迹' : route.path.includes('/album') ? '城市图册' : route.path.includes('/statistics') ? '旅行统计' : '旅行足迹')
 watch(() => route.path, () => { navOpen.value = false })
-
-async function exportAll() {
-  exporting.value = true
-  try {
-    const response = await exportTravelData()
-    const blob = response.data
-    if (!(blob instanceof Blob) || blob.size === 0) throw new Error('导出文件为空')
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `travel-data-${new Date().toISOString().slice(0, 10)}.zip`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-    ElMessage.success('旅行数据已导出')
-  } catch { ElMessage.error('导出失败') }
-  finally { exporting.value = false }
-}
 </script>
 
 <style scoped>
@@ -74,7 +51,7 @@ async function exportAll() {
 nav p { margin:0 10px 8px; color:#9aa6aa; font-size:10px; font-weight:650; } nav a { display:flex; align-items:center; gap:10px; min-height:43px; margin:3px 0; padding:0 11px; border-radius:6px; color:#667780; font-size:13px; text-decoration:none; transition:background-color .16s,color .16s; }
 nav a:hover { background:#f3f7f7; color:#287d7a; } nav a.router-link-active { background:#e9f4f2; color:#197d79; font-weight:620; } nav a>.el-icon { flex:0 0 auto; font-size:16px; }
 nav a span,nav a small { display:block; } nav a span { font-size:13px; font-weight:inherit; } nav a small { margin-top:3px; color:#98a4a9; font-size:10px; font-weight:400; }
-.nav-footer { margin-top:auto; }.export-button { display:flex; width:100%; height:40px; align-items:center; justify-content:center; gap:8px; padding:0 12px; border:1px solid #d7e4e5; border-radius:6px; background:#fff; color:#53676f; font-size:13px; cursor:pointer; }.export-button:hover { border-color:#a9cecc; background:#f2f8f7; color:#258b88; }.export-button:disabled { opacity:.55; }
+.nav-footer { margin-top:auto; }
 .nav-links { display:flex; padding:14px 10px 0; }.nav-links a { display:flex; align-items:center; gap:8px; color:#71818b; font-size:12px; text-decoration:none; }.nav-links a:hover { color:#258b88; }
 .admin-content { min-height:100vh; margin-left:220px; box-sizing:border-box; padding:26px clamp(20px,3vw,44px); }.content-frame { width:min(1400px,100%); margin:0 auto; }.mobile-header,.nav-backdrop { display:none; }
 .content-frame :deep(.page-title),.content-frame :deep(h1) { position:relative; margin:0 0 20px; padding:0 0 14px 15px; border-bottom:1px solid var(--line); color:var(--ink); font-size:24px; font-weight:720; line-height:1.25; }
