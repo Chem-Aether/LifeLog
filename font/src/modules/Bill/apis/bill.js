@@ -22,4 +22,6 @@ export const deleteBillRecord = id => request({ url: `/bill/records/${id}`, meth
 export const getBillSummary = params => request({ url: '/bill/statistics/summary', method: 'get', params })
 export const getAccountStatistics = params => request({ url: '/bill/statistics/accounts', method: 'get', params })
 export const getCategoryStatistics = params => request({ url: '/bill/statistics/categories', method: 'get', params })
+export const getMerchantPreferences = params => request({ url: '/bill/statistics/merchants', method: 'get', params })
+export const getProductPreferences = params => request({ url: '/bill/statistics/products', method: 'get', params })
 export const getBillTimeline = year => request({ url: '/bill/statistics/timeline', method: 'get', params: { year } })

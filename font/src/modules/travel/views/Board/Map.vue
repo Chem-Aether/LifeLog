@@ -9,6 +9,16 @@
       </template>
       <span v-if="visibleLayers.includes('flight')"><i class="legend-swatch flight"></i>航线记录</span>
       <span v-if="visibleLayers.includes('train')"><i class="legend-swatch train"></i>铁路记录</span>
+      <template v-if="visibleLayers.includes('trajectory')">
+        <span><i class="legend-swatch trajectory-walk"></i>步行</span>
+        <span><i class="legend-swatch trajectory-bike"></i>骑行</span>
+        <span><i class="legend-swatch trajectory-drive"></i>驾车</span>
+        <span><i class="legend-swatch trajectory-transit"></i>公共交通</span>
+        <span><i class="legend-swatch trajectory-train"></i>火车</span>
+        <span><i class="legend-swatch trajectory-plane"></i>飞机</span>
+        <span><i class="legend-swatch trajectory-ship"></i>船舶</span>
+        <span><i class="legend-swatch trajectory-other"></i>其他轨迹</span>
+      </template>
     </div>
   </div>
 </template>
@@ -18,7 +28,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { getFootprints } from '@/modules/travel/apis/travel.js'
+import { getFootprints, getTrajectories } from '@/modules/travel/apis/travel.js'
 import { getAirportsByIcao, getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
 import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
@@ -31,6 +41,7 @@ import { MAP_BASE_URL } from '@/utils/request.js'
 const EMPTY_COLLECTION = { type: 'FeatureCollection', features: [] }
 const FOOTPRINT_MIN_ZOOM = 5.5
 const FOOTPRINT_DETAIL_ZOOM = 9
+const TRAJECTORY_MIN_ZOOM = 8.5
 const props = defineProps({
   selectedYear: {
     type: [String, Number],
@@ -54,6 +65,9 @@ const loadedDataYears = { foot: null, flight: null, train: null }
 const pendingDataRequests = new Map()
 const knownTimelineYears = new Set()
 let footprintFeatures = EMPTY_COLLECTION
+let trajectoryFeatures = EMPTY_COLLECTION
+let trajectoryRequestId = 0
+let trajectoryRequestTimer
 const footprintIconLoads = new Map()
 let footprintUpdateId = 0
 let travelLayersPromise
@@ -68,12 +82,12 @@ function baseLayers(source, prefix) {
     { id: `${prefix}-earth`, type: 'fill', source, 'source-layer': 'earth', paint: { 'fill-color': '#081522' } },
     { id: `${prefix}-landuse`, type: 'fill', source, 'source-layer': 'landuse', minzoom: 2, paint: { 'fill-color': ['match', ['get', 'kind'], ['park', 'forest', 'nature_reserve'], '#123a35', '#101f2b'], 'fill-opacity': 0.8 } },
     { id: `${prefix}-water`, type: 'fill', source, 'source-layer': 'water', paint: { 'fill-color': '#07101d' } },
-    { id: `${prefix}-boundaries`, type: 'line', source, 'source-layer': 'boundaries', paint: { 'line-color': '#39708a', 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0.35, 10, 1.1], 'line-opacity': 0.7 } },
-    { id: `${prefix}-roads-casing`, type: 'line', source, 'source-layer': 'roads', minzoom: 4, filter: ['!=', ['get', 'kind'], 'rail'], paint: { 'line-color': '#050c13', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.1, 14, 7] } },
-    { id: `${prefix}-roads`, type: 'line', source, 'source-layer': 'roads', minzoom: 4, filter: ['!=', ['get', 'kind'], 'rail'], paint: { 'line-color': ['match', ['get', 'kind'], ['highway', 'major_road'], '#75633f', '#3f5662'], 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.45, 14, 4.2], 'line-opacity': 0.3 } },
+    { id: `${prefix}-boundaries`, type: 'line', source, 'source-layer': 'boundaries', paint: { 'line-color': '#39708a', 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0.35, 10, 0.8], 'line-opacity': 0.62 } },
+    { id: `${prefix}-roads`, type: 'line', source, 'source-layer': 'roads', minzoom: 9, filter: ['!=', ['get', 'kind'], 'rail'], paint: { 'line-color': ['match', ['get', 'kind'], ['highway', 'major_road'], '#b0a184', '#7b9098'], 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 0.28, 14, 2.5], 'line-opacity': 0.34 } },
     { id: `${prefix}-buildings`, type: 'fill', source, 'source-layer': 'buildings', minzoom: 12, paint: { 'fill-color': '#263c49', 'fill-outline-color': '#3f5965' } },
     { id: `${prefix}-road-labels`, type: 'symbol', source, 'source-layer': 'roads', minzoom: 11, layout: { 'symbol-placement': 'line', 'text-field': textName, 'text-size': 11 }, paint: { 'text-color': '#c6d3d7', 'text-halo-color': '#071019', 'text-halo-width': 1.4 } },
-    { id: `${prefix}-place-labels`, type: 'symbol', source, 'source-layer': 'places', minzoom: 2, layout: { 'text-field': textName, 'text-size': ['interpolate', ['linear'], ['zoom'], 2, 10, 9, 15] }, paint: { 'text-color': '#dce9ec', 'text-halo-color': '#071019', 'text-halo-width': 1.6 } },
+    { id: `${prefix}-place-labels-overview`, type: 'symbol', source, 'source-layer': 'places', minzoom: 2, maxzoom: 8, filter: ['<', ['get', 'min_zoom'], 8], layout: { 'text-field': textName, 'text-size': ['interpolate', ['linear'], ['zoom'], 2, 10, 8, 14] }, paint: { 'text-color': '#dce9ec', 'text-halo-color': '#071019', 'text-halo-width': 1.6 } },
+    { id: `${prefix}-place-labels-city`, type: 'symbol', source, 'source-layer': 'places', minzoom: 8, filter: ['>=', ['get', 'min_zoom'], 8], layout: { 'text-field': textName, 'text-size': ['interpolate', ['linear'], ['zoom'], 8, 11, 13, 14], 'text-optional': true }, paint: { 'text-color': '#dce9ec', 'text-halo-color': '#071019', 'text-halo-width': 1.5 } },
   ]
 }
 
@@ -277,6 +291,7 @@ async function buildTravelLayers() {
   addPlaneIcon()
   map.addSource('explored-cities', { type: 'geojson', data: exploredRegions })
   map.addSource('travel-lines', { type: 'geojson', data: EMPTY_COLLECTION })
+  map.addSource('trajectory-lines', { type: 'geojson', data: trajectoryFeatures })
   map.addSource('animated-planes', { type: 'geojson', data: EMPTY_COLLECTION })
   map.addSource('animated-train-dots', { type: 'geojson', data: EMPTY_COLLECTION })
   map.addSource('footprint-points', {
@@ -290,6 +305,7 @@ async function buildTravelLayers() {
   map.addLayer({ id: 'explored-outline', type: 'line', source: 'explored-cities', paint: { 'line-color': ['match', ['get', 'visitType'], 'transit', '#a7dcff', '#7effcf'], 'line-width': 1.5, 'line-opacity': 0.9 } })
   map.addLayer({ id: 'flight-route-glow', type: 'line', source: 'travel-lines', filter: ['==', ['get', 'kind'], 'flight'], paint: { 'line-color': '#ffbd59', 'line-width': 7, 'line-opacity': 0.18, 'line-blur': 4 } })
   map.addLayer({ id: 'travel-routes', type: 'line', source: 'travel-lines', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': ['match', ['get', 'kind'], 'flight', '#ffbd59', '#59d8ff'], 'line-width': 2.4, 'line-opacity': 0.92, 'line-dasharray': [2, 1.2] } })
+  map.addLayer({ id: 'trajectory-routes', type: 'line', source: 'trajectory-lines', minzoom: TRAJECTORY_MIN_ZOOM, paint: { 'line-color': ['match', ['get', 'activityType'], 'walk', '#48d6a3', 'bike', '#f4c95d', 'drive', '#61a7ff', 'transit', '#b58cff', 'train', '#ff8f5a', 'plane', '#8aa5ff', 'ship', '#57c7c2', '#a7b0c0'], 'line-width': ['interpolate', ['linear'], ['zoom'], 8.5, 1.8, 12, 2.3, 15, 3.2], 'line-opacity': 0.96 } })
   map.addLayer({ id: 'travel-points', type: 'circle', source: 'travel-lines', filter: ['in', ['get', 'kind'], ['literal', ['flight-point', 'train-point', 'train-waypoint']]], paint: { 'circle-radius': ['match', ['get', 'kind'], 'train-waypoint', 4, 6], 'circle-color': ['match', ['get', 'kind'], 'flight-point', '#ffbd59', 'train-waypoint', '#b7f4ff', '#59d8ff'], 'circle-stroke-color': '#06101a', 'circle-stroke-width': ['match', ['get', 'kind'], 'train-waypoint', 1.4, 2] } })
   map.addLayer({ id: 'train-station-labels', type: 'symbol', source: 'travel-lines', minzoom: 5.5, filter: ['in', ['get', 'kind'], ['literal', ['train-point', 'train-waypoint']]], layout: { 'text-field': ['get', 'title'], 'text-size': ['match', ['get', 'kind'], 'train-waypoint', 10, 11], 'text-offset': [0, 1.15], 'text-anchor': 'top', 'text-optional': true }, paint: { 'text-color': '#d8f7ff', 'text-halo-color': '#07101d', 'text-halo-width': 1.5 } })
   map.addLayer({ id: 'flight-plane-glow', type: 'circle', source: 'animated-planes', paint: { 'circle-radius': 11, 'circle-color': '#ffbd59', 'circle-opacity': 0.22, 'circle-blur': 0.75 } })
@@ -388,10 +404,52 @@ function updateMode() {
     ...(layers.has('train') ? trainFeatures.features : [])
   ]
   map.getSource('travel-lines').setData({ type: 'FeatureCollection', features: routeFeatures })
+  map.setLayoutProperty('trajectory-routes', 'visibility', layers.has('trajectory') ? 'visible' : 'none')
+  map.getSource('trajectory-lines')?.setData(trajectoryFeatures)
   if (layers.has('flight')) startPlaneAnimation()
   else stopPlaneAnimation()
   if (layers.has('train')) startTrainAnimation()
   else stopTrainAnimation()
+}
+
+async function refreshTrajectoryRoutes() {
+  if (!map) return
+  clearTimeout(trajectoryRequestTimer)
+  const requestId = ++trajectoryRequestId
+  if (!visibleLayers.value.includes('trajectory') || map.getZoom() < TRAJECTORY_MIN_ZOOM) {
+    trajectoryFeatures = EMPTY_COLLECTION
+    map.getSource('trajectory-lines')?.setData(trajectoryFeatures)
+    return
+  }
+  const bounds = map.getBounds()
+  const query = {
+    west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth(),
+    zoom: map.getZoom(), ...(String(props.selectedYear) === 'all' ? {} : { year: props.selectedYear })
+  }
+  trajectoryRequestTimer = setTimeout(async () => {
+    try {
+      const response = await getTrajectories(query)
+      if (requestId !== trajectoryRequestId || !visibleLayers.value.includes('trajectory')) return
+      const features = (response?.data || []).flatMap(record => {
+        try {
+          const geometry = typeof record.routeGeoJson === 'string' ? JSON.parse(record.routeGeoJson) : record.routeGeoJson
+          if (!['LineString', 'MultiLineString'].includes(geometry?.type)) return []
+          return [{
+            type: 'Feature',
+            properties: { trajectoryId: record.trajectoryId, name: record.name, activityType: record.activityType },
+            geometry
+          }]
+        } catch { return [] }
+      })
+      trajectoryFeatures = { type: 'FeatureCollection', features }
+      map.getSource('trajectory-lines')?.setData(trajectoryFeatures)
+    } catch {
+      if (requestId === trajectoryRequestId) {
+        trajectoryFeatures = EMPTY_COLLECTION
+        map.getSource('trajectory-lines')?.setData(trajectoryFeatures)
+      }
+    }
+  }, 180)
 }
 
 function planeCollection(timestamp) {
@@ -640,6 +698,7 @@ onMounted(async () => {
   })
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
   map.on('load', addTravelLayers)
+  map.on('moveend', refreshTrajectoryRoutes)
   await loadTravelData()
   if (map.loaded()) addTravelLayers()
   popup = new maplibregl.Popup({ closeButton: false, closeOnClick: true })
@@ -657,7 +716,7 @@ onMounted(async () => {
       if (place) emit('select-place', place)
       return
     }
-    const feature = map.queryRenderedFeatures(event.point, { layers: ['travel-routes', 'travel-points', 'flight-planes', 'train-moving-dots', 'explored-fill'] })[0]
+    const feature = map.queryRenderedFeatures(event.point, { layers: ['travel-routes', 'travel-points', 'flight-planes', 'train-moving-dots', 'explored-fill', 'trajectory-routes'] })[0]
     if (!feature) {
       emit('blank-click')
       return
@@ -671,6 +730,11 @@ onMounted(async () => {
       })
       return
     }
+    if (feature.layer.id === 'trajectory-routes') {
+      const distance = feature.properties.name ? `<br>${feature.properties.name}` : ''
+      popup.setLngLat(event.lngLat).setHTML(`<strong>GPS轨迹</strong>${distance}`).addTo(map)
+      return
+    }
     const title = feature.properties.title || feature.properties.name || '已探索地区'
     const detailText = feature.properties.visitType === 'transit'
       ? '途经城市'
@@ -681,7 +745,7 @@ onMounted(async () => {
     popup.setLngLat(event.lngLat).setHTML(`<strong>${title}</strong>${detail}`).addTo(map)
   })
   map.on('mousemove', event => {
-    const features = map.queryRenderedFeatures(event.point, { layers: ['travel-routes', 'flight-planes', 'train-moving-dots', 'footprint-clusters', 'footprint-single-points', 'footprint-category-icons'] })
+    const features = map.queryRenderedFeatures(event.point, { layers: ['travel-routes', 'flight-planes', 'train-moving-dots', 'trajectory-routes', 'footprint-clusters', 'footprint-single-points', 'footprint-category-icons'] })
     map.getCanvas().style.cursor = features.length ? 'pointer' : ''
   })
 })
@@ -689,12 +753,15 @@ onMounted(async () => {
 watch(visibleLayers, () => {
   updateMode()
   loadTravelData()
+  refreshTrajectoryRoutes()
 })
-watch(() => props.selectedYear, loadTravelData)
+watch(() => props.selectedYear, () => { loadTravelData(); refreshTrajectoryRoutes() })
 
 onBeforeUnmount(() => {
   stopPlaneAnimation()
   stopTrainAnimation()
+  clearTimeout(trajectoryRequestTimer)
+  trajectoryRequestId++
   popup?.remove()
   map?.remove()
 })
@@ -728,6 +795,12 @@ onBeforeUnmount(() => {
   right: 18px;
   bottom: 18px;
   display: flex;
+  flex-wrap: wrap;
+  width: min(320px, calc(100vw - 40px));
+  box-sizing: border-box;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  align-content: flex-start;
   gap: 14px;
   padding: 8px 10px
 }
@@ -752,10 +825,22 @@ onBeforeUnmount(() => {
 .legend-swatch.train {
   background: #59d8ff
 }
+.legend-swatch.trajectory-walk { background: #48d6a3; }
+.legend-swatch.trajectory-bike { background: #f4c95d; }
+.legend-swatch.trajectory-drive { background: #61a7ff; }
+.legend-swatch.trajectory-transit { background: #b58cff; }
+.legend-swatch.trajectory-train { background: #ff8f5a; }
+.legend-swatch.trajectory-plane { background: #8aa5ff; }
+.legend-swatch.trajectory-ship { background: #57c7c2; }
+.legend-swatch.trajectory-other { background: #a7b0c0; }
 
 .legend-swatch.transit-region { height: 9px; background: #79c8ff; }
 .legend-swatch.travel-place { width: 9px; height: 9px; border: 2px solid #53e2b4; border-radius: 50%; background: #12372f; }
 .legend-swatch.explored { height: 9px; }
+
+@media (max-width: 900px) {
+  .map-legend { right: 10px; bottom: 132px; width: min(320px, calc(100vw - 20px)); max-height: calc(100vh - 260px); }
+}
 
 :deep(.maplibregl-ctrl-group) {
   border-radius: 4px;

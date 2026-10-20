@@ -65,6 +65,25 @@
       </article>
     </section>
 
+    <section v-show="viewLevel !== 'day'" class="detail-chart-grid preference-chart-grid">
+      <article class="panel preference-panel">
+        <div class="panel-heading">
+          <div><h2>商户偏好</h2><p>{{ periodHeading }} · 支出金额排行，悬浮查看消费笔数</p></div>
+        </div>
+        <div ref="merchantEl" class="preference-chart" :style="{ height: `${merchantChartHeight}px` }" />
+      </article>
+      <article class="panel preference-panel">
+        <div class="panel-heading">
+          <div><h2>商品偏好</h2><p>{{ periodHeading }} · 字号综合购买次数与消费金额，多商品账单金额均摊</p></div>
+        </div>
+        <div v-if="productPreferences.length" class="product-cloud" :style="{ height: `${merchantChartHeight}px` }">
+          <span v-for="(item, index) in productCloud" :key="item.product" class="product-cloud-word"
+            :style="{ fontSize: `${item.fontSize}px`, color: palette[index % palette.length] }">{{ item.product }}</span>
+        </div>
+        <el-empty v-else description="暂无商品摘要" :image-size="68" />
+      </article>
+    </section>
+
     <section v-if="viewLevel === 'day'" class="panel detail-panel">
       <div class="panel-heading">
         <div><h2>{{ dayLabel }}流水</h2><p>共 {{ detailTotal }} 条收支记录</p></div>
@@ -90,7 +109,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import { getAccountStatistics, getBillCategories, getBillRecordPage, getBillSummary, getBillTimeline, getCategoryStatistics } from '@/modules/Bill/apis/bill.js'
+import { getAccountStatistics, getBillCategories, getBillRecordPage, getBillSummary, getBillTimeline, getCategoryStatistics, getMerchantPreferences, getProductPreferences } from '@/modules/Bill/apis/bill.js'
 import { getCssThemeColor, getCssThemePalette } from '@/utils/cssTheme.js'
 
 const router = useRouter()
@@ -108,6 +127,8 @@ const periodSummary = ref({ income: 0, expense: 0, transfer: 0 })
 const categoryStats = ref([])
 const categories = ref([])
 const accountStats = ref([])
+const merchantStats = ref([])
+const productPreferences = ref([])
 const selectedExpenseParent = ref(null)
 const detailRecords = ref([])
 const detailTotal = ref(0)
@@ -119,10 +140,12 @@ const calendarEl = ref(null)
 const trendEl = ref(null)
 const categoryEl = ref(null)
 const accountEl = ref(null)
+const merchantEl = ref(null)
 let calendarChart
 let trendChart
 let categoryChart
 let accountChart
+let merchantChart
 
 const palette = getCssThemePalette('bill', 9)
 const dailyMap = computed(() => new Map(daily.value.map(item => [item.period, item])))
@@ -139,6 +162,17 @@ const activeAccountStats = computed(() => accountStats.value
   .filter(item => Number(item.income || 0) > 0 || Number(item.expense || 0) > 0)
   .sort((left, right) => Number(right.income || 0) + Number(right.expense || 0) - Number(left.income || 0) - Number(left.expense || 0)))
 const accountChartHeight = computed(() => Math.max(310, activeAccountStats.value.length * 44 + 76))
+const merchantChartHeight = computed(() => Math.max(280, merchantStats.value.length * 38 + 70))
+const productCloud = computed(() => {
+  const maxCount = Math.max(...productPreferences.value.map(item => Number(item.purchase_count || 0)), 1)
+  const maxAmount = Math.max(...productPreferences.value.map(item => Number(item.total_amount || 0)), 1)
+  return productPreferences.value.map(item => {
+    const countWeight = Math.log1p(Number(item.purchase_count || 0)) / Math.log1p(maxCount)
+    const amountWeight = Math.log1p(Number(item.total_amount || 0)) / Math.log1p(maxAmount)
+    const weight = (countWeight + amountWeight) / 2
+    return { ...item, fontSize: Math.round(12 + weight * 14) }
+  })
+})
 
 function money(value) { return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function directionName(value) { return ({ income: '收入', expense: '支出', transfer: '转账' })[value] || '未知' }
@@ -297,11 +331,30 @@ function compactMoney(value) {
   if (abs >= 10000) return `${(value / 10000).toFixed(1)}万`
   return Number(value).toLocaleString('zh-CN')
 }
+function renderMerchantStats() {
+  if (!merchantChart) return
+  const rows = merchantStats.value
+  const labels = rows.map(item => item.merchant)
+  merchantChart.setOption({
+    ...chartTheme(),
+    color: palette,
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => {
+      const row = rows[params[0]?.dataIndex]
+      return row ? `<strong>${row.merchant}</strong><br/>支出：¥ ${money(row.total_amount)}<br/>消费：${Number(row.transaction_count || 0)} 笔` : ''
+    } },
+    grid: { top: 12, left: 8, right: 42, bottom: 8, containLabel: true },
+    xAxis: { type: 'value', min: 0, axisLabel: { color: '#87959c', fontSize: 10, formatter: compactMoney }, splitLine: { lineStyle: { color: '#edf1f2', type: 'dashed' } } },
+    yAxis: { type: 'category', data: labels, inverse: true, axisTick: { show: false }, axisLine: { show: false }, axisLabel: { color: '#617581', fontSize: 11, width: 150, overflow: 'truncate' } },
+    series: [{ type: 'bar', data: rows.map((item, index) => ({ value: Number(item.total_amount || 0), itemStyle: { color: palette[index % palette.length] } })), barMaxWidth: 16, showBackground: true, backgroundStyle: { color: '#f1f5f4', borderRadius: [0, 4, 4, 0] }, itemStyle: { borderRadius: [0, 4, 4, 0] }, label: { show: true, position: 'right', color: '#617581', fontSize: 10, formatter: params => `¥${compactMoney(params.value)}` } }],
+    graphic: rows.length ? [] : [{ type: 'text', left: 'center', top: 'middle', style: { text: '该时段暂无商户支出', fill: '#a4afb4', fontSize: 13, textAlign: 'center' } }],
+  }, true)
+}
 function initCharts() {
   calendarChart = echarts.init(calendarEl.value)
   trendChart = echarts.init(trendEl.value)
   categoryChart = echarts.init(categoryEl.value)
   accountChart = echarts.init(accountEl.value)
+  merchantChart = echarts.init(merchantEl.value)
   calendarChart.on('click', params => {
     const date = Array.isArray(params.data?.value) ? params.data.value[0] : null
     if (date) selectMonth(date.slice(0, 7))
@@ -320,7 +373,7 @@ function initCharts() {
     selectedExpenseParent.value = parent
     loadCategoryStats(parent.id)
   })
-  renderCalendar(); renderTrend(); renderCategories(); renderAccountStats()
+  renderCalendar(); renderTrend(); renderCategories(); renderAccountStats(); renderMerchantStats()
 }
 function getPeriodRange() {
   if (viewLevel.value === 'day') return { startTime: `${selectedDay.value}T00:00:00`, endTime: `${selectedDay.value}T23:59:59` }
@@ -335,22 +388,26 @@ async function loadStatistics() {
   loading.value = true
   try {
     const range = getPeriodRange()
-    const [timeline, stats, categoryList, accountRows, summary] = await Promise.all([
+    const [timeline, stats, categoryList, accountRows, summary, merchants, products] = await Promise.all([
       getBillTimeline(year.value),
       getCategoryStatistics({ ...range, direction: categoryDirection.value, detailed: categoryDirection.value === 'income' }),
       categories.value.length ? Promise.resolve(categories.value) : getBillCategories(),
       getAccountStatistics(range),
       getBillSummary(range),
+      getMerchantPreferences(range),
+      getProductPreferences(range),
     ])
     daily.value = timeline.daily || []
     monthly.value = timeline.monthly || []
     categoryStats.value = stats || []
     categories.value = categoryList || []
     accountStats.value = accountRows || []
+    merchantStats.value = merchants || []
+    productPreferences.value = products || []
     periodSummary.value = summary || { income: 0, expense: 0, transfer: 0 }
     selectedRange.value = viewLevel.value === 'day' ? { day: selectedDay.value } : null
     await nextTick()
-    renderCalendar(); renderTrend(); renderCategories(); renderAccountStats(); resizeCharts()
+    renderCalendar(); renderTrend(); renderCategories(); renderAccountStats(); renderMerchantStats(); resizeCharts()
     if (viewLevel.value === 'day') await loadDetails(range.startTime, range.endTime)
     else { detailRecords.value = []; detailTotal.value = 0 }
   } catch (error) { ElMessage.error(error?.response?.data?.msg || '统计数据加载失败') }
@@ -459,7 +516,7 @@ function openFilteredBills() {
   }
   router.push({ path: '/bill/query', query: { startTime: start, endTime: end } })
 }
-function resizeCharts() { calendarChart?.resize(); trendChart?.resize(); categoryChart?.resize(); accountChart?.resize() }
+function resizeCharts() { calendarChart?.resize(); trendChart?.resize(); categoryChart?.resize(); accountChart?.resize(); merchantChart?.resize() }
 watch(categoryDirection, () => {
   selectedExpenseParent.value = null
   loadCategoryStats()
@@ -472,7 +529,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts)
-  calendarChart?.dispose(); trendChart?.dispose(); categoryChart?.dispose(); accountChart?.dispose()
+  calendarChart?.dispose(); trendChart?.dispose(); categoryChart?.dispose(); accountChart?.dispose(); merchantChart?.dispose()
 })
 </script>
 
@@ -490,6 +547,7 @@ onBeforeUnmount(() => {
 .panel { padding:16px 18px; min-width:0; }.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }.panel-heading h2 { margin:0; font-size:16px; }.panel-heading p { margin:5px 0 0; color:#8a979d; font-size:11px; }
 .heatmap-legend { display:flex; align-items:center; gap:5px; color:#87959c; font-size:10px; }.heatmap-legend i { width:12px; height:12px; border-radius:3px; }.heatmap-legend .loss { background:#d96870; }.heatmap-legend .neutral { background:#f2f4f6; border:1px solid #e4e9ee; }.heatmap-legend .profit { background:#54a58d; }.detail-pagination { display:flex; justify-content:flex-end; margin-top:14px; overflow-x:auto; }
 .calendar-chart { height:190px; margin-top:8px; }.trend-chart,.category-chart { width:100%; height:310px; margin-top:8px; }.account-chart { width:100%; min-height:310px; margin-top:8px; }.detail-chart-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:stretch; }.category-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }.detail-panel { min-height:190px; }.detail-table { margin-top:12px; }.tag-income { color:#288d76; border-color:#b9ded2; background:#eff8f4; }.tag-expense { color:#c95e66; border-color:#efc6c8; background:#fff4f4; }.tag-transfer { color:#537fbd; border-color:#c5d5eb; background:#f2f6fc; }
+.preference-chart { width:100%; min-height:280px; margin-top:8px; }.product-cloud { box-sizing:border-box; display:flex; min-height:280px; flex-wrap:wrap; align-content:center; align-items:center; justify-content:center; gap:10px 16px; margin-top:8px; padding:16px 8px; overflow:hidden; }.product-cloud-word { max-width:100%; font-weight:600; line-height:1.35; overflow-wrap:anywhere; cursor:default; transition:opacity .15s ease; }.product-cloud-word:hover { opacity:.68; }
 .statistics-page :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { background:#258b88; border-color:#258b88; box-shadow:-1px 0 0 0 #258b88; }
 @media(max-width:1000px) { .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.detail-chart-grid { grid-template-columns:1fr; } }
 @media(max-width:620px) { .page-header { align-items:flex-start; flex-direction:column; }.heading-copy { align-items:flex-start; flex-direction:column; gap:6px; }.period-control { align-self:flex-end; }.summary-grid { gap:8px; }.summary-tile { padding:13px; }.summary-tile strong { font-size:18px; }.panel { padding:14px 12px; }.calendar-chart { height:165px; }.trend-chart,.category-chart { height:280px; }.panel-heading { align-items:flex-start; }.category-actions { gap:4px; }.category-actions :deep(.el-button) { padding:6px; }.heatmap-legend { align-self:flex-end; }.panel-heading :deep(.el-radio-group) { flex-shrink:0; } }

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 
 export const useTravleStore = defineStore('map', {
     state: () => ({
-        // 控制显示模式：足迹 / 航线 / 铁路
+        // 控制显示模式：足迹 / 航线 / 铁路 / GPS 轨迹
         mapType: 'foot',
         visibleLayers: ['foot'],
         mapName: '足迹',

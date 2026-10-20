@@ -40,6 +40,16 @@ public interface BillStatisticsMapper {
                                                  @Param("detailed") boolean detailed,
                                                  @Param("parentCategoryId") Long parentCategoryId);
 
+    /** 按支出金额统计商户偏好。 */
+    @SelectProvider(type = Sql.class, method = "merchantPreferences")
+    List<Map<String, Object>> merchantPreferences(@Param("startTime") Timestamp startTime,
+                                                  @Param("endTime") Timestamp endTime);
+
+    /** 查询支出商品描述，用于轻量拆分商品偏好。 */
+    @SelectProvider(type = Sql.class, method = "expenseDescriptions")
+    List<Map<String, Object>> expenseDescriptions(@Param("startTime") Timestamp startTime,
+                                                  @Param("endTime") Timestamp endTime);
+
     final class Sql {
         /** 创建统计查询 SQL 提供器。 */
         public Sql() {}
@@ -120,6 +130,25 @@ public interface BillStatisticsMapper {
             sql.append(dateFilter(params));
             if (params.get("parentCategoryId") != null) sql.append(" AND (c.id=#{parentCategoryId} OR c.parent_id=#{parentCategoryId})");
             return sql.append(detailed ? " GROUP BY c.id, c.name ORDER BY total_amount DESC" : " GROUP BY 1 ORDER BY total_amount DESC").toString();
+        }
+
+        /** 生成仅包含支出的商户统计 SQL。 */
+        public static String merchantPreferences(Map<String, Object> params) {
+            return """
+                    SELECT BTRIM(counterparty) AS merchant, COUNT(*) AS transaction_count,
+                           SUM(amount) AS total_amount
+                    FROM bill_transaction
+                    WHERE to_account_id IS NULL AND NULLIF(BTRIM(counterparty), '') IS NOT NULL
+                    """ + dateFilter(params)
+                    + " GROUP BY BTRIM(counterparty) ORDER BY total_amount DESC LIMIT 12";
+        }
+
+        /** 生成仅包含支出的商品描述查询 SQL。 */
+        public static String expenseDescriptions(Map<String, Object> params) {
+            return """
+                    SELECT description, amount FROM bill_transaction
+                    WHERE to_account_id IS NULL AND NULLIF(BTRIM(description), '') IS NOT NULL
+                    """ + dateFilter(params);
         }
 
         /**

@@ -15,6 +15,7 @@
         <el-checkbox-button value="foot">足迹</el-checkbox-button>
         <el-checkbox-button value="flight">航线</el-checkbox-button>
         <el-checkbox-button value="train">铁路</el-checkbox-button>
+        <el-checkbox-button value="trajectory">GPS轨迹</el-checkbox-button>
       </el-checkbox-group>
     </header>
     <button
@@ -188,6 +189,7 @@ function goToAdmin() {
 .layer-switch :deep(.el-checkbox-button:nth-child(1).is-checked .el-checkbox-button__inner) { border-color: #43d6a0; background: #167c67; color: #fff; box-shadow: none; }
 .layer-switch :deep(.el-checkbox-button:nth-child(2).is-checked .el-checkbox-button__inner) { border-color: #f4bd62; background: #95641b; color: #fff; box-shadow: none; }
 .layer-switch :deep(.el-checkbox-button:nth-child(3).is-checked .el-checkbox-button__inner) { border-color: #43c9de; background: #176d86; color: #fff; box-shadow: none; }
+.layer-switch :deep(.el-checkbox-button:nth-child(4).is-checked .el-checkbox-button__inner) { border-color: #ed7184; background: #9f4054; color: #fff; box-shadow: none; }
 .drawer-handle { position: absolute; z-index: 5; top: 50%; left: 0; display: grid; width: 30px; height: 62px; padding: 0; transform: translateY(-50%); place-items: center; border-radius: 0 7px 7px 0; color: #d8edf1; cursor: pointer; }
 .drawer-handle span { font-size: 27px; line-height: 1; }
 .drawer-handle:hover { width: 36px; border-color: rgba(67, 201, 222, .55); color: #fff; }
@@ -198,7 +200,7 @@ function goToAdmin() {
 .foot-summary strong, .foot-summary span { display: block; }
 .foot-summary strong { color: #eefafb; font-size: 18px; }
 .foot-summary span { margin-top: 2px; color: #819da5; font-size: 11px; }
-.timeline { position: absolute; z-index: 5; bottom: 18px; left: 50%; display: grid; grid-template-columns: 62px minmax(0, 580px); align-items: center; width: min(680px, calc(100vw - 420px)); min-height: 52px; padding: 0 12px; transform: translateX(-50%); border-radius: 6px; }
+.timeline { position: absolute; z-index: 5; bottom: 18px; left: 50%; display: grid; grid-template-columns: 62px minmax(0, 580px); align-items: center; width: min(680px, calc(100vw - 700px)); min-height: 52px; padding: 0 12px; transform: translateX(-50%); border-radius: 6px; }
 .timeline button { height: 32px; border: 0; border-radius: 4px; background: transparent; color: #8eabb2; font: inherit; cursor: pointer; transition: background-color .18s, color .18s; }
 .timeline button:hover { background: rgba(53, 176, 181, .12); color: #d7eff1; }
 .timeline button.active { background: #168ba0; color: #fff; box-shadow: inset 0 0 0 1px rgba(111, 224, 229, .4); }

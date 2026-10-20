@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /** 旅行服务的 Spring Boot 启动入口。 */
 @SpringBootApplication(scanBasePackages = "com.lifelog")
-@MapperScan({"com.lifelog.travel.flight", "com.lifelog.travel.footprint", "com.lifelog.travel.train"})
+@MapperScan({"com.lifelog.travel.flight", "com.lifelog.travel.footprint", "com.lifelog.travel.train", "com.lifelog.travel.trajectory"})
 public class TravelServiceApplication {
     /**
      * 启动旅行服务。

@@ -22,6 +22,8 @@ export default [
             { path: 'flightTicket/edit/:id?', name: 'TravelFlightTicketEdit', component: () => import('../views/admin/flightTicket.vue'), },
             { path: 'footprint', component: () => import('../views/admin/footprint.vue'), },
             { path: 'footprint/edit/:id?', name: 'TravelFootprintEdit', component: () => import('../views/admin/footprint.vue'), },
+            { path: 'trajectory', name: 'TravelTrajectoryAdmin', component: () => import('../views/admin/trajectory.vue'), },
+            { path: 'trajectory/edit/:id?', name: 'TravelTrajectoryEdit', component: () => import('../views/admin/trajectory.vue'), },
             { path: 'album', name: 'TravelCityAlbum', component: () => import('../views/admin/cityAlbum.vue'), },
             { path: 'statistics', name: 'TravelStatistics', component: () => import('../views/admin/statistics.vue'), },
         ]

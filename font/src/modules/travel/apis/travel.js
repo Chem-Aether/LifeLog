@@ -4,6 +4,13 @@ import { travelRequest as request } from '@/utils/request.js'
 export const getFootprints = (params = {}) => request({ url: '/travel/footprints', method: 'get', params })
 export const getFootprintById = id => request({ url: `/travel/footprints/${id}`, method: 'get' })
 
+export const getTrajectories = params => request({ url: '/travel/trajectories', method: 'get', params })
+export const getTrajectoryById = id => request({ url: `/travel/trajectories/${id}`, method: 'get' })
+export const addTrajectory = data => request({ url: '/travel/trajectories', method: 'post', data, timeout: 0 })
+export const updateTrajectory = (id, data) => request({ url: `/travel/trajectories/${id}`, method: 'put', data, timeout: 0 })
+export const deleteTrajectory = id => request({ url: `/travel/trajectories/${id}`, method: 'delete' })
+export const deleteTrajectories = ids => request({ url: '/travel/trajectories/batch', method: 'delete', data: ids })
+
 export const exportTravelData = (type, format) => request({
   url: '/travel/export',
   method: 'get',

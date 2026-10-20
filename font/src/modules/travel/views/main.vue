@@ -21,6 +21,7 @@
         <router-link to="/travel/admin/trainTicket"><el-icon><Tickets /></el-icon><span>铁路行程<small>车票与途经站</small></span></router-link>
         <router-link to="/travel/admin/flightTicket"><el-icon><Position /></el-icon><span>航空行程<small>航班与里程记录</small></span></router-link>
         <router-link to="/travel/admin/footprint"><el-icon><LocationInformation /></el-icon><span>旅行足迹<small>地点与探索记录</small></span></router-link>
+        <router-link to="/travel/admin/trajectory"><el-icon><MapLocation /></el-icon><span>GPS轨迹<small>轨迹记录与采样点</small></span></router-link>
       </nav>
       <div class="nav-footer">
         <button class="export-button" :disabled="exporting" @click="exportAll"><el-icon><Download /></el-icon><span>{{ exporting ? '正在生成...' : '导出全部数据' }}</span></button>
@@ -42,7 +43,7 @@ import '../config/theme.css'
 const route = useRoute()
 const navOpen = ref(false)
 const exporting = ref(false)
-const currentSection = computed(() => route.path.includes('trainTicket') ? '铁路行程' : route.path.includes('flightTicket') ? '航空行程' : route.path.includes('/album') ? '城市图册' : route.path.includes('/statistics') ? '旅行统计' : '旅行足迹')
+const currentSection = computed(() => route.path.includes('trainTicket') ? '铁路行程' : route.path.includes('flightTicket') ? '航空行程' : route.path.includes('/trajectory') ? 'GPS轨迹' : route.path.includes('/album') ? '城市图册' : route.path.includes('/statistics') ? '旅行统计' : '旅行足迹')
 watch(() => route.path, () => { navOpen.value = false })
 
 async function exportAll() {

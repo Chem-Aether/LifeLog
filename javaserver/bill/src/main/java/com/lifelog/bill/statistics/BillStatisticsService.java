@@ -6,14 +6,18 @@ import org.springframework.web.server.ResponseStatusException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 /** 处理账单统计参数校验、时间范围转换和统计查询。 */
 @Service
 public class BillStatisticsService {
+    private static final Pattern PRODUCT_SEPARATOR = Pattern.compile("[;；]");
     private final BillStatisticsMapper statisticsMapper;
 
     /**
@@ -75,6 +79,47 @@ public class BillStatisticsService {
             throw new ResponseStatusException(BAD_REQUEST, "账单方向无效");
         return statisticsMapper.categoryStatistics(blankToNull(direction), timestamp(start), timestamp(end),
                 detailed, parentCategoryId);
+    }
+
+    /** 查询指定时间范围内的支出商户偏好。 */
+    public List<Map<String, Object>> merchantPreferences(String start, String end) {
+        return statisticsMapper.merchantPreferences(timestamp(start), timestamp(end));
+    }
+
+    /** 从支出摘要中拆分并汇总常见商品描述。 */
+    public List<Map<String, Object>> productPreferences(String start, String end) {
+        Map<String, ProductPreference> preferences = new HashMap<>();
+        for (Map<String, Object> row : statisticsMapper.expenseDescriptions(timestamp(start), timestamp(end))) {
+            Object description = row.get("description");
+            if (description == null) continue;
+            List<String> products = PRODUCT_SEPARATOR.splitAsStream(description.toString())
+                    .map(item -> item.trim().replaceAll("\\s+", " "))
+                    .filter(item -> !item.isEmpty())
+                    .toList();
+            if (products.isEmpty()) continue;
+            double amountPerProduct = ((Number) row.get("amount")).doubleValue() / products.size();
+            for (String product : products) {
+                preferences.computeIfAbsent(product, ignored -> new ProductPreference()).add(amountPerProduct);
+            }
+        }
+        return preferences.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<String, ProductPreference>>comparingLong(entry -> entry.getValue().count).reversed()
+                        .thenComparing(Map.Entry::getKey))
+                .limit(60)
+                .map(entry -> Map.<String, Object>of("product", entry.getKey(),
+                        "purchase_count", entry.getValue().count,
+                        "total_amount", entry.getValue().amount))
+                .toList();
+    }
+
+    private static final class ProductPreference {
+        private long count;
+        private double amount;
+
+        private void add(double value) {
+            count++;
+            amount += value;
+        }
     }
 
     /**

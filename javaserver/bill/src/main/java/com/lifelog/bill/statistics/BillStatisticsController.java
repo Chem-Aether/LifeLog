@@ -69,4 +69,18 @@ public class BillStatisticsController {
         return Result.success(statisticsService.categoryStatistics(
                 direction, startTime, endTime, detailed, parentCategoryId));
     }
+
+    /** 查询支出商户偏好排行。 */
+    @GetMapping("/merchants")
+    public Result merchants(@RequestParam(required = false) String startTime,
+                            @RequestParam(required = false) String endTime) {
+        return Result.success(statisticsService.merchantPreferences(startTime, endTime));
+    }
+
+    /** 查询支出商品描述词频。 */
+    @GetMapping("/products")
+    public Result products(@RequestParam(required = false) String startTime,
+                           @RequestParam(required = false) String endTime) {
+        return Result.success(statisticsService.productPreferences(startTime, endTime));
+    }
 }

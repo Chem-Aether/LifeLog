@@ -55,6 +55,53 @@ CREATE TABLE IF NOT EXISTS footprint (
 CREATE INDEX IF NOT EXISTS idx_footprint_location ON footprint USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_footprint_region_id ON footprint (region_id) WHERE region_id IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS trajectory (
+    trajectory_id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    activity_type VARCHAR(24) NOT NULL DEFAULT 'walk',
+    started_at TIMESTAMPTZ NOT NULL,
+    ended_at TIMESTAMPTZ,
+    distance_m DOUBLE PRECISION,
+    duration_s INTEGER,
+    elevation_gain_m DOUBLE PRECISION,
+    elevation_loss_m DOUBLE PRECISION,
+    route_geometry geometry(MultiLineStringZ,4326),
+    point_count INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_trajectory_time CHECK (ended_at IS NULL OR ended_at >= started_at),
+    CONSTRAINT chk_trajectory_distance CHECK (distance_m IS NULL OR distance_m >= 0),
+    CONSTRAINT chk_trajectory_duration CHECK (duration_s IS NULL OR duration_s >= 0),
+    CONSTRAINT chk_trajectory_point_count CHECK (point_count >= 0)
+);
+ALTER TABLE trajectory ALTER COLUMN route_geometry DROP NOT NULL;
+ALTER TABLE trajectory ALTER COLUMN route_geometry TYPE geometry(MultiLineStringZ,4326)
+    USING CASE WHEN route_geometry IS NULL THEN NULL ELSE ST_Multi(route_geometry) END;
+ALTER TABLE trajectory DROP CONSTRAINT IF EXISTS chk_trajectory_point_count;
+ALTER TABLE trajectory ADD CONSTRAINT chk_trajectory_point_count CHECK (point_count >= 0);
+CREATE INDEX IF NOT EXISTS idx_trajectory_started_at ON trajectory (started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trajectory_route_geometry ON trajectory USING GIST (route_geometry);
+
+CREATE TABLE IF NOT EXISTS trajectory_point (
+    trajectory_id BIGINT NOT NULL REFERENCES trajectory(trajectory_id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL,
+    segment_no INTEGER NOT NULL DEFAULT 1,
+    recorded_at TIMESTAMPTZ NOT NULL,
+    location geometry(PointZ,4326) NOT NULL,
+    accuracy_m REAL,
+    speed_mps REAL,
+    PRIMARY KEY (trajectory_id, sequence),
+    CONSTRAINT chk_trajectory_point_sequence CHECK (sequence > 0),
+    CONSTRAINT chk_trajectory_point_segment CHECK (segment_no > 0),
+    CONSTRAINT chk_trajectory_point_accuracy CHECK (accuracy_m IS NULL OR accuracy_m >= 0),
+    CONSTRAINT chk_trajectory_point_speed CHECK (speed_mps IS NULL OR speed_mps >= 0)
+);
+ALTER TABLE trajectory_point ADD COLUMN IF NOT EXISTS segment_no INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE trajectory_point DROP CONSTRAINT IF EXISTS chk_trajectory_point_segment;
+ALTER TABLE trajectory_point ADD CONSTRAINT chk_trajectory_point_segment CHECK (segment_no > 0);
+CREATE INDEX IF NOT EXISTS idx_trajectory_point_recorded_at ON trajectory_point (trajectory_id, recorded_at);
+
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger
 LANGUAGE plpgsql AS 'BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END';
 
@@ -64,3 +111,5 @@ DROP TRIGGER IF EXISTS trg_train_updated_at ON train_record;
 CREATE TRIGGER trg_train_updated_at BEFORE UPDATE ON train_record FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS trg_footprint_updated_at ON footprint;
 CREATE TRIGGER trg_footprint_updated_at BEFORE UPDATE ON footprint FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS trg_trajectory_updated_at ON trajectory;
+CREATE TRIGGER trg_trajectory_updated_at BEFORE UPDATE ON trajectory FOR EACH ROW EXECUTE FUNCTION set_updated_at();
