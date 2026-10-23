@@ -8,12 +8,10 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /** 实现日记条目的查询、校验、持久化和关联数据管理。 */
 @Service
 public class DiaryEntryService {
-    private static final Pattern MEDIA_ID = Pattern.compile("[0-9a-f]{32}");
     private static final Set<Integer> WEATHER_CODES = Set.of(
             1000, 1001, 1002, 1003, 1004, 1005,
             2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011,
@@ -89,7 +87,7 @@ public class DiaryEntryService {
     public Map<String, Object> create(DiaryEntryRequest request) {
         validate(request);
         long id = mapper.insert(request);
-        mapper.replaceRelations(id, normalizeTags(request.tags()), normalizeMediaIds(request.mediaIds()));
+        mapper.replaceRelations(id, normalizeTags(request.tags()), normalizeMediaUrls(request.mediaUrls()));
         return get(id);
     }
 
@@ -104,7 +102,7 @@ public class DiaryEntryService {
     public Map<String, Object> update(long id, DiaryEntryRequest request) {
         validate(request);
         if (mapper.update(id, request) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "日记不存在");
-        mapper.replaceRelations(id, normalizeTags(request.tags()), normalizeMediaIds(request.mediaIds()));
+        mapper.replaceRelations(id, normalizeTags(request.tags()), normalizeMediaUrls(request.mediaUrls()));
         return get(id);
     }
 
@@ -129,7 +127,7 @@ public class DiaryEntryService {
         for (Map<String, Object> entry : entries) {
             long id = ((Number) entry.get("id")).longValue();
             entry.put("tags", tags.getOrDefault(id, List.of()));
-            entry.put("mediaIds", media.getOrDefault(id, List.of()));
+            entry.put("mediaUrls", media.getOrDefault(id, List.of()));
         }
     }
 
@@ -147,7 +145,7 @@ public class DiaryEntryService {
         if (request.weatherCode() != null && !WEATHER_CODES.contains(request.weatherCode())) throw badRequest("天气代码无效");
         if (request.location() != null && request.location().trim().length() > 160) throw badRequest("地点最多160个字符");
         normalizeTags(request.tags());
-        normalizeMediaIds(request.mediaIds());
+        normalizeMediaUrls(request.mediaUrls());
     }
 
     /**
@@ -165,15 +163,15 @@ public class DiaryEntryService {
     }
 
     /**
-     * 清理媒体 ID 并校验其格式。
-     * @param mediaIds 原始媒体 ID 列表
-     * @return 规范化后的媒体 ID 列表
-     * @throws ResponseStatusException 媒体 ID 格式无效时抛出
+     * 清理媒体 URL 并校验其格式。
+     * @param mediaUrls 原始媒体 URL 列表
+     * @return 规范化后的媒体 URL 列表
      */
-    private static List<String> normalizeMediaIds(List<String> mediaIds) {
-        if (mediaIds == null) return List.of();
-        return mediaIds.stream().filter(id -> id != null && !id.isBlank()).distinct().peek(id -> {
-            if (!MEDIA_ID.matcher(id).matches()) throw badRequest("图片标识无效");
+    private static List<String> normalizeMediaUrls(List<String> mediaUrls) {
+        if (mediaUrls == null) return List.of();
+        if (mediaUrls.size() > 100) throw badRequest("媒体数量过多");
+        return mediaUrls.stream().filter(url -> url != null && !url.isBlank()).map(String::trim).distinct().peek(url -> {
+            if (url.length() > 2048 || !(url.startsWith("http://") || url.startsWith("https://"))) throw badRequest("媒体 URL 无效");
         }).toList();
     }
 

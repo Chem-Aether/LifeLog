@@ -56,7 +56,7 @@ const imageFailed = ref(false)
 const regionName = computed(() => getFootprintRegion(props.place).regionName || '地区未知')
 const categoryLabel = computed(() => getFootprintCategoryLabel(props.place?.locationType))
 const categoryIcon = computed(() => getFootprintCategoryIcon(props.place?.locationType))
-const imageUrls = computed(() => (Array.isArray(props.place?.mediaIds) ? props.place.mediaIds : [])
+const imageUrls = computed(() => (Array.isArray(props.place?.mediaUrls) ? props.place.mediaUrls : [])
   .slice(0, 9).map(mediaUrl).filter(Boolean))
 const coverUrl = computed(() => imageUrls.value[activeIndex.value] || '')
 function changeImage(direction) {

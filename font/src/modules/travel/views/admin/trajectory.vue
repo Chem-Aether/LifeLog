@@ -1,32 +1,113 @@
 <template>
-  <div v-if="editing" v-loading="loading || saving" class="trajectory-editor">
-    <header class="editor-header"><div><el-button text @click="requestClose">返回轨迹管理</el-button><h1>{{ form.trajectoryId ? '编辑轨迹' : '新增轨迹' }}</h1></div><div class="header-actions"><el-button :disabled="form.points.length < 2" @click="exportGpxRecords([form], `${safeFileName(form.name || 'GPS轨迹')}.gpx`)">导出 GPX</el-button><el-button @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存轨迹</el-button></div></header>
+  <TrajectoryBatchImportDialog v-model="batchImportVisible" @imported="loadRows" />
+  <div v-if="editing" v-loading="loading || saving || importing" class="trajectory-editor">
+    <header class="editor-header">
+      <div><el-button text @click="requestClose">返回轨迹管理</el-button>
+        <h1>{{ form.trajectoryId ? '编辑轨迹' : '新增轨迹' }}</h1>
+      </div>
+      <div class="header-actions"><el-button :disabled="form.points.length < 2"
+          @click="exportGpxRecords([form], `${safeFileName(form.name || 'GPS轨迹')}.gpx`)">导出 GPX</el-button><el-button
+          @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存轨迹</el-button>
+      </div>
+    </header>
     <section class="editor-fields">
-      <el-form label-position="top"><div class="metadata-grid">
-        <el-form-item label="轨迹名称" required><el-input v-model="form.name" maxlength="200" placeholder="例如：周末骑行" /></el-form-item>
-        <el-form-item label="活动类型"><el-select v-model="form.activityType" style="width:100%"><el-option v-for="item in activityOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
-        <el-form-item label="开始时间" required><el-date-picker v-model="form.startedAt" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" editable :clearable="false" style="width:100%" @change="shiftTrajectoryTimes" /><small class="time-adjust-hint">修改开始时间会同步平移结束时间和全部采样点，点间隔保持不变</small></el-form-item>
-        <el-form-item label="结束时间"><el-date-picker v-model="form.endedAt" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" editable clearable style="width:100%" /></el-form-item>
-      </div><el-form-item label="备注"><el-input v-model="form.note" type="textarea" :rows="2" maxlength="1000" show-word-limit /></el-form-item></el-form>
+      <el-form label-position="top">
+        <div class="metadata-grid">
+          <el-form-item label="轨迹名称" required><el-input v-model="form.name" maxlength="200"
+              placeholder="例如：周末骑行" /></el-form-item>
+          <el-form-item label="活动类型"><el-select v-model="form.activityType" style="width:100%"><el-option
+                v-for="item in activityOptions" :key="item.value" :label="item.label"
+                :value="item.value" /></el-select></el-form-item>
+          <el-form-item label="开始时间" required><el-date-picker v-model="form.startedAt" type="datetime"
+              format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" editable :clearable="false" style="width:100%"
+              @change="shiftTrajectoryTimes" /><small
+              class="time-adjust-hint">修改开始时间会同步平移结束时间和全部采样点，点间隔保持不变</small></el-form-item>
+          <el-form-item label="结束时间"><el-date-picker v-model="form.endedAt" type="datetime" format="YYYY/M/D HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss" editable clearable style="width:100%" /></el-form-item>
+        </div><el-form-item label="备注"><el-input v-model="form.note" type="textarea" :rows="2" maxlength="1000"
+            show-word-limit /></el-form-item>
+      </el-form>
     </section>
-    <section class="point-workspace"><div class="map-section"><div class="map-heading"><div><strong>轨迹地图</strong><span>{{ form.points.length }} 个采样点 · {{ distanceLabel }}</span></div><div class="map-actions"><input ref="gpxInput" class="gpx-input" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" @change="importGpx"><el-button type="primary" :disabled="saving" @click="gpxInput?.click()">导入 GPX</el-button></div></div><div ref="mapElement" class="editor-map"></div><p class="map-hint">地图仅用于查看轨迹；点击已有点位可编辑信息。</p></div>
-      <section class="points-section"><div class="points-heading"><div><strong>采样点信息</strong><span v-if="selectedPoint">第 {{ selectedPoint.sequence }} / {{ form.points.length }} 点 · 分段 {{ selectedPoint.segmentNo }}</span><span v-else>点击地图上的点位进行编辑</span></div><div v-if="selectedPoint" class="point-navigation"><el-button :disabled="selectedPoint.sequence <= 1" @click="selectPointOffset(-1)">上一点</el-button><el-button :disabled="selectedPoint.sequence >= form.points.length" @click="selectPointOffset(1)">下一点</el-button></div></div>
-        <el-form v-if="selectedPoint" label-position="top" class="point-fields"><el-form-item label="采集时间"><el-date-picker v-model="selectedPoint.recordedAt" type="datetime" format="YYYY/M/D HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" editable style="width:100%" /></el-form-item><el-form-item label="经度"><el-input-number v-model="selectedPoint.longitude" :precision="6" :step="0.0001" controls-position="right" /></el-form-item><el-form-item label="纬度"><el-input-number v-model="selectedPoint.latitude" :precision="6" :step="0.0001" controls-position="right" /></el-form-item><el-form-item label="海拔 (m)"><el-input-number v-model="selectedPoint.altitudeM" :precision="1" :step="1" controls-position="right" /></el-form-item><el-form-item label="精度 (m)"><el-input-number v-model="selectedPoint.accuracyM" :precision="1" :min="0" controls-position="right" /></el-form-item><el-form-item label="速度 (m/s)"><el-input-number v-model="selectedPoint.speedMps" :precision="2" :min="0" controls-position="right" /></el-form-item></el-form>
-        <el-empty v-else :description="form.points.length ? '请点击地图中的采样点' : '请先导入 GPX 轨迹'" :image-size="56" />
-      </section></section>
+    <section class="point-workspace">
+      <div class="map-section">
+        <div class="map-heading">
+          <div><strong>轨迹地图</strong><span>{{ form.points.length }} 个采样点 · {{ distanceLabel }}</span></div>
+          <div class="map-actions"><input ref="gpxInput" class="gpx-input" type="file"
+              accept=".gpx,.csv,application/gpx+xml,application/xml,text/xml,text/csv" @change="importGpx"><el-button type="primary"
+              :disabled="saving" @click="gpxInput?.click()">加载轨迹文件</el-button><el-button link type="primary" @click="downloadTrajectoryCsvTemplate">CSV 模板</el-button></div>
+        </div>
+        <div ref="mapElement" class="editor-map"></div>
+        <p class="map-hint">地图仅用于查看轨迹；点击已有点位可编辑信息。</p>
+      </div>
+      <section class="points-section">
+        <div class="points-heading">
+          <div><strong>采样点信息</strong><span v-if="selectedPoint">第 {{ selectedPoint.sequence }} / {{ form.points.length
+              }} 点 · 分段 {{ selectedPoint.segmentNo }}</span><span v-else>点击地图上的点位进行编辑</span></div>
+          <div v-if="selectedPoint" class="point-navigation"><el-button :disabled="selectedPoint.sequence <= 1"
+              @click="selectPointOffset(-1)">上一点</el-button><el-button
+              :disabled="selectedPoint.sequence >= form.points.length" @click="selectPointOffset(1)">下一点</el-button>
+          </div>
+        </div>
+        <el-form v-if="selectedPoint" label-position="top" class="point-fields"><el-form-item
+            label="采集时间"><el-date-picker v-model="selectedPoint.recordedAt" type="datetime" format="YYYY/M/D HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss" editable style="width:100%" /></el-form-item><el-form-item
+            label="经度"><el-input-number v-model="selectedPoint.longitude" :precision="6" :step="0.0001"
+              controls-position="right" /></el-form-item><el-form-item label="纬度"><el-input-number
+              v-model="selectedPoint.latitude" :precision="6" :step="0.0001"
+              controls-position="right" /></el-form-item><el-form-item label="海拔 (m)"><el-input-number
+              v-model="selectedPoint.altitudeM" :precision="1" :step="1"
+              controls-position="right" /></el-form-item><el-form-item label="精度 (m)"><el-input-number
+              v-model="selectedPoint.accuracyM" :precision="1" :min="0"
+              controls-position="right" /></el-form-item><el-form-item label="速度 (m/s)"><el-input-number
+              v-model="selectedPoint.speedMps" :precision="2" :min="0"
+              controls-position="right" /></el-form-item></el-form>
+        <el-empty v-else :description="form.points.length ? '请点击地图中的采样点' : '请先加载 GPX 或 CSV 轨迹'" :image-size="56" />
+      </section>
+    </section>
   </div>
   <div v-else v-loading="loading || deleting || importing || exporting" class="trajectory-admin">
-    <div class="page-header"><div><h1>GPS 轨迹管理</h1><p>管理运动、步行与日常出行轨迹，并在地图中查看路线。</p></div></div>
-    <el-card class="query-card" shadow="never"><div class="query-filters"><el-input v-model="keyword" clearable placeholder="搜索轨迹名称" class="keyword-filter" /><el-select v-model="activityType" clearable placeholder="全部活动" class="activity-filter"><el-option v-for="item in activityOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select><el-date-picker v-model="dateFilter" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable clearable placeholder="按开始日期筛选" class="date-filter" /><el-button class="filter-refresh" :disabled="loading" @click="loadRows">刷新</el-button><span class="count">共 {{ total }} 条</span></div></el-card>
-    <div class="action-bar"><input ref="batchGpxInput" class="gpx-input" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" multiple @change="importGpxBatch"><el-button :loading="importing" @click="batchGpxInput?.click()">导入 GPX</el-button><el-button type="primary" @click="openCreate">新增轨迹</el-button><el-button :disabled="!selected.length || exporting" :loading="exporting" @click="exportSelected">导出所选</el-button><el-button :disabled="!rows.length || exporting" @click="exportCurrentPage">导出本页</el-button></div>
-    <div class="bulk-toolbar"><span>已选择 {{ selected.length }} 条（当前页）</span><el-button type="danger" plain :disabled="!selected.length" :loading="deleting" @click="removeSelected">批量删除</el-button></div>
-    <el-table :data="rows" row-key="trajectoryId" :default-sort="{ prop: 'startedAt', order: 'descending' }" stripe empty-text="暂无轨迹记录" @sort-change="handleSortChange" @selection-change="selected = $event">
-      <el-table-column type="selection" width="48" /><el-table-column prop="name" label="轨迹名称" min-width="190" sortable="custom" /><el-table-column prop="activityType" label="活动" width="110" sortable="custom"><template #default="scope">{{ activityLabel(scope.row.activityType) }}</template></el-table-column>
-      <el-table-column prop="startedAt" label="开始时间" min-width="190" sortable="custom"><template #default="scope">{{ formatDate(scope.row.startedAt) }}</template></el-table-column><el-table-column prop="durationS" label="时长" width="110" sortable="custom"><template #default="scope">{{ formatDuration(scope.row.durationS) }}</template></el-table-column>
-      <el-table-column prop="distanceM" label="距离" width="120" sortable="custom"><template #default="scope">{{ formatDistance(scope.row.distanceM) }}</template></el-table-column><el-table-column prop="pointCount" label="采样点" width="100" sortable="custom" />
-      <el-table-column label="操作" width="150" fixed="right"><template #default="scope"><el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button><el-button link type="danger" @click="removeOne(scope.row)">删除</el-button></template></el-table-column>
+    <div class="page-header">
+      <div>
+        <h1>GPS 轨迹管理</h1>
+        <p>管理运动、步行与日常出行轨迹，并在地图中查看路线。</p>
+      </div>
+    </div>
+    <el-card class="query-card" shadow="never">
+      <div class="query-filters"><el-input v-model="keyword" clearable placeholder="搜索轨迹名称"
+          class="keyword-filter" /><el-select v-model="activityType" clearable placeholder="全部活动"
+          class="activity-filter"><el-option v-for="item in activityOptions" :key="item.value" :label="item.label"
+            :value="item.value" /></el-select><el-date-picker v-model="dateFilter" type="date" format="YYYY/M/D"
+          value-format="YYYY-MM-DD" editable clearable placeholder="按开始日期筛选" class="date-filter" /><el-button
+          class="filter-refresh" :disabled="loading" @click="loadRows">刷新</el-button><span class="count">共 {{ total }}
+          条</span></div>
+    </el-card>
+    <div class="action-bar">
+      <TravelDataTools type="trajectory" :disabled="loading || deleting" :export-loading="exporting"
+        :export-disabled="!selected.length && !rows.length" :export-selected-count="selected.length"
+        :export-page-count="rows.length" @create="openCreate" @import="startTrajectoryImport"
+        @export="exportVisible" />
+    </div>
+    <div class="bulk-toolbar"><span>已选择 {{ selected.length }} 条（当前页）</span><el-button type="danger" plain
+        :disabled="!selected.length" :loading="deleting" @click="removeSelected">批量删除</el-button></div>
+    <el-table :data="rows" row-key="trajectoryId" :default-sort="{ prop: 'startedAt', order: 'descending' }" stripe
+      empty-text="暂无轨迹记录" @sort-change="handleSortChange" @selection-change="selected = $event">
+      <el-table-column type="selection" width="48" /><el-table-column prop="name" label="轨迹名称" min-width="190"
+        sortable="custom" /><el-table-column prop="activityType" label="活动" width="110" sortable="custom"><template
+          #default="scope">{{ activityLabel(scope.row.activityType) }}</template></el-table-column>
+      <el-table-column prop="startedAt" label="开始时间" min-width="190" sortable="custom"><template #default="scope">{{
+        formatDate(scope.row.startedAt) }}</template></el-table-column><el-table-column prop="durationS" label="时长"
+        width="110" sortable="custom"><template #default="scope">{{ formatDuration(scope.row.durationS)
+          }}</template></el-table-column>
+      <el-table-column prop="distanceM" label="距离" width="120" sortable="custom"><template #default="scope">{{
+        formatDistance(scope.row.distanceM) }}</template></el-table-column><el-table-column prop="pointCount"
+        label="采样点" width="100" sortable="custom" />
+      <el-table-column label="操作" width="150" fixed="right"><template #default="scope"><el-button link type="primary"
+            @click="openEdit(scope.row)">编辑</el-button><el-button link type="danger"
+            @click="removeOne(scope.row)">删除</el-button></template></el-table-column>
     </el-table>
-    <div class="pagination-bar"><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10,20,50]" :total="total" layout="total, sizes, prev, pager, next, jumper" background @current-change="loadRows" @size-change="changePageSize" /></div>
+    <div class="pagination-bar"><el-pagination v-model:current-page="page" v-model:page-size="pageSize"
+        :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next, jumper" background
+        @current-change="loadRows" @size-change="changePageSize" /></div>
   </div>
 </template>
 
@@ -34,10 +115,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import * as maplibregl from 'maplibre-gl'
+import { maplibregl } from '@/utils/maplibre.js'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { addTrajectory, deleteTrajectories, getTrajectories, getTrajectoryById, updateTrajectory } from '@/modules/travel/apis/travel.js'
 import { MAP_BASE_URL } from '@/utils/request.js'
+import TravelDataTools from '@/modules/travel/components/TravelDataTools.vue'
+import TrajectoryBatchImportDialog from '@/modules/travel/components/TrajectoryBatchImportDialog.vue'
+import { downloadTrajectoryCsvTemplate, parseTrajectoryFile } from '@/modules/travel/utils/trajectoryImport.js'
 
 const activityOptions = [{ label: '步行', value: 'walk' }, { label: '骑行', value: 'bike' }, { label: '驾车', value: 'drive' }, { label: '公共交通', value: 'transit' }, { label: '火车', value: 'train' }, { label: '飞机', value: 'plane' }, { label: '船舶', value: 'ship' }, { label: '其他', value: 'other' }]
 const route = useRoute()
@@ -48,12 +132,12 @@ const keyword = ref(''), activityType = ref(''), dateFilter = ref(''), loading =
 const sortState = ref({ prop: 'startedAt', order: 'desc' })
 const mapElement = ref(null)
 const gpxInput = ref(null)
-const batchGpxInput = ref(null)
 const selectedPointSequence = ref(null)
 const form = reactive(emptyForm())
 let map, routeSnapshot = '', allowNavigation = false, filterTimer, lastStartTime = ''
 const importing = ref(false)
 const exporting = ref(false)
+const batchImportVisible = ref(false)
 const selectedPoint = computed(() => form.points.find(point => point.sequence === selectedPointSequence.value) || null)
 const distanceLabel = computed(() => formatDistance(calculateDistance(form.points)))
 
@@ -159,11 +243,12 @@ async function importGpx(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
+  importing.value = true
   try {
-    const parsed = await parseGpxFile(file)
+    const [parsed] = await parseTrajectoryFile(file)
     form.points = parsed.points
     selectedPointSequence.value = parsed.points[0]?.sequence ?? null
-    if (!form.name.trim()) form.name = parsed.name || file.name.replace(/\.gpx$/i, '')
+    if (!form.name.trim()) form.name = parsed.name || file.name.replace(/\.(gpx|csv)$/i, '')
     if (!form.note.trim()) form.note = parsed.note
     if (parsed.activityType) form.activityType = parsed.activityType
     form.startedAt = parsed.points[0].recordedAt
@@ -172,113 +257,13 @@ async function importGpx(event) {
     await nextTick()
     drawRoute()
     fitRoute()
-    ElMessage.success(`已导入 ${parsed.points.length.toLocaleString()} 个采样点${parsed.hasMissingValues ? '；缺失时间或海拔的点已按间隔/0 米补齐' : ''}`)
-  } catch (error) { ElMessage.error(error.message || 'GPX 导入失败') }
+    ElMessage.success(`已加载 ${parsed.points.length.toLocaleString()} 个采样点，检查后点击“保存轨迹”入库${parsed.hasMissingValues ? '；缺失时间或海拔的点已按间隔/0 米补齐' : ''}`)
+  } catch (error) { ElMessage.error(error.message || '轨迹文件加载失败') }
+  finally { importing.value = false }
 }
 
-async function importGpxBatch(event) {
-  const files = Array.from(event.target.files || [])
-  event.target.value = ''
-  if (!files.length) return
-  importing.value = true
-  let succeeded = 0
-  let totalItems = 0
-  const failures = []
-  try {
-    for (const file of files) {
-      let parsedTracks
-      try {
-        parsedTracks = await parseGpxFile(file, true)
-        totalItems += parsedTracks.length
-      } catch (error) {
-        totalItems++
-        failures.push(`${file.name}：${error.message || '导入失败'}`)
-        continue
-      }
-      for (const parsed of parsedTracks) {
-        try {
-          const payload = {
-            name: parsed.name || file.name.replace(/\.gpx$/i, ''),
-            activityType: parsed.activityType || 'other',
-            note: parsed.note.slice(0, 1000),
-            startedAt: toIso(parsed.points[0].recordedAt),
-            endedAt: toIso(parsed.points.at(-1).recordedAt),
-            points: parsed.points.map(point => ({ ...point, recordedAt: toIso(point.recordedAt) }))
-          }
-          await addTrajectory(payload)
-          succeeded++
-        } catch (error) {
-          failures.push(`${file.name} / ${parsed.name}：${error.message || '导入失败'}`)
-        }
-      }
-    }
-    await loadRows()
-    if (failures.length) ElMessage.warning(`成功导入 ${succeeded}/${totalItems} 条轨迹。失败：${failures.join('；')}`)
-    else ElMessage.success(`已分别导入 ${succeeded} 条轨迹`)
-  } finally { importing.value = false }
-}
-
-async function parseGpxFile(file, separateTracks = false) {
-  if (file.size > 50 * 1024 * 1024) throw new Error('GPX 文件不能超过 50 MB')
-  const documentXml = new DOMParser().parseFromString(await file.text(), 'application/xml')
-  if (documentXml.querySelector('parsererror') || documentXml.documentElement.localName !== 'gpx') throw new Error('GPX 文件格式无效')
-  const tracks = Array.from(documentXml.getElementsByTagNameNS('*', 'trk'))
-  if (separateTracks) return tracks.length > 1
-    ? tracks.map((track, index) => parseGpxTrack(documentXml, file, [track], index, tracks.length))
-    : [parseGpxTrack(documentXml, file, tracks, 0, tracks.length)]
-  return parseGpxTrack(documentXml, file, tracks, 0, tracks.length)
-}
-
-function parseGpxTrack(documentXml, file, tracks, trackIndex, trackCount) {
-  const segmentNodes = tracks.flatMap(track => Array.from(track.children).filter(node => node.localName === 'trkseg')
-    .map(node => Array.from(node.children).filter(child => child.localName === 'trkpt')))
-    .filter(segment => segment.length >= 2)
-  if (!segmentNodes.length && tracks.length === 0) {
-    const routePoints = Array.from(documentXml.getElementsByTagNameNS('*', 'rtept'))
-    if (routePoints.length) segmentNodes.push(routePoints)
-  }
-  const rawNodes = segmentNodes.flat()
-  if (rawNodes.length < 2 || rawNodes.length > 200000) throw new Error('GPX 轨迹点数量须为 2 到 200,000')
-  const parsedTimes = rawNodes.map(node => new Date(node.getElementsByTagNameNS('*', 'time')[0]?.textContent || ''))
-  const firstTimedIndex = parsedTimes.findIndex(date => Number.isFinite(date.getTime()))
-  const firstTimedValue = firstTimedIndex < 0 ? Date.now() : parsedTimes[firstTimedIndex].getTime()
-  let lastTime = new Date(firstTimedValue - 5000 * (firstTimedIndex + 1))
-  const points = []
-  let rawIndex = 0
-  segmentNodes.forEach((nodes, segmentIndex) => nodes.forEach(node => {
-    const longitude = Number(node.getAttribute('lon')), latitude = Number(node.getAttribute('lat'))
-    const parsedTime = parsedTimes[rawIndex++]
-    if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || Math.abs(longitude) > 180 || Math.abs(latitude) > 90) return
-    const elevation = Number(node.getElementsByTagNameNS('*', 'ele')[0]?.textContent)
-    const recorded = Number.isFinite(parsedTime.getTime()) && parsedTime >= lastTime ? parsedTime : new Date(lastTime.getTime() + 5000)
-    lastTime = recorded
-    points.push({ sequence: points.length + 1, segmentNo: segmentIndex + 1, recordedAt: localDateTime(recorded), longitude, latitude, altitudeM: Number.isFinite(elevation) ? elevation : 0, accuracyM: null, speedMps: null })
-  }))
-  if (points.length < 2) throw new Error('GPX 中没有可用的轨迹点')
-  const textOf = (parent, name) => parent?.getElementsByTagNameNS('*', name)[0]?.textContent?.trim() || ''
-  const track = tracks[0]
-  const baseName = file.name.replace(/\.gpx$/i, '')
-  const metadataName = textOf(documentXml, 'name')
-  const name = textOf(track, 'name') || (trackCount > 1 ? `${metadataName || baseName} - ${trackIndex + 1}` : metadataName || baseName)
-  const note = textOf(track, 'desc') || textOf(documentXml, 'desc')
-  const rawType = textOf(track, 'type')
-  return {
-    name,
-    note,
-    activityType: parseActivityType(rawType),
-    points,
-    hasMissingValues: parsedTimes.some(date => !Number.isFinite(date.getTime())) || rawNodes.some(node => !Number.isFinite(Number(node.getElementsByTagNameNS('*', 'ele')[0]?.textContent)))
-  }
-}
-
-function parseActivityType(value) {
-  const type = String(value || '').trim().toLowerCase()
-  if (/步行|徒步|walking|walk|hike/.test(type)) return 'walk'
-  if (/跑步|跑|running|run/.test(type)) return 'run'
-  if (/骑行|骑|自行车|cycling|cycle|bike/.test(type)) return 'bike'
-  if (/公共交通|公交|地铁|铁路|高铁|火车|transit|bus|train|subway|rail/.test(type)) return 'transit'
-  if (/驾车|打车|出租|网约车|驾驶|driving|drive|car|taxi/.test(type)) return 'drive'
-  return type ? 'other' : ''
+function startTrajectoryImport() {
+  batchImportVisible.value = true
 }
 
 async function exportSelected() {
@@ -287,6 +272,10 @@ async function exportSelected() {
 
 async function exportCurrentPage() {
   await exportRows(rows.value, '当前页轨迹')
+}
+
+function exportVisible(scope) {
+  return scope === 'selected' ? exportSelected() : exportCurrentPage()
 }
 
 async function exportRows(items, label) {
@@ -320,11 +309,11 @@ function exportGpxRecords(records, filename) {
     addText(track, 'type', activityLabel(record.activityType))
     addText(track, 'desc', record.note)
     const groups = new Map()
-    ;[...(record.points || [])].sort((a, b) => a.sequence - b.sequence).forEach(point => {
-      const key = point.segmentNo || 1
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key).push(point)
-    })
+      ;[...(record.points || [])].sort((a, b) => a.sequence - b.sequence).forEach(point => {
+        const key = point.segmentNo || 1
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(point)
+      })
     for (const segmentPoints of groups.values()) {
       const segment = xml.createElementNS(namespace, 'trkseg')
       for (const point of segmentPoints) {
@@ -424,18 +413,345 @@ function calculateDistance(points) {
 </script>
 
 <style scoped>
-.trajectory-admin { display:flex; flex-direction:column; color:#263b40; }
-.trajectory-editor { display:flex; flex-direction:column; gap:14px; color:#263b40; }
-.page-header,.editor-header,.map-heading,.points-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; }
-.page-header { margin-bottom:12px; }.page-header h1,.editor-header h1 { margin:0 0 6px; color:#1d3035; font-size:24px; font-weight:720; line-height:1.25; }.page-header p,.map-hint { margin:0; color:#65777c; font-size:13px; }
-.header-actions,.map-actions,.point-navigation { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }.gpx-input { display:none; }
-.query-filters { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:10px; min-height:38px; }.keyword-filter { width:220px; }.activity-filter { width:150px; }.date-filter { width:220px; }
-.count { color:#65777c; font-size:13px; white-space:nowrap; }.query-card { margin-bottom:0; border:1px solid #d9e3e4; border-radius:6px; }.query-card :deep(.el-card__body) { padding:10px 18px !important; }.action-bar,.bulk-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:12px; border:1px solid #d9e3e4; border-radius:7px; background:#fff; box-shadow:0 2px 8px rgba(29,48,53,.035); }.action-bar { margin:0 0 15px; }.bulk-toolbar { margin:0 0 12px; color:#65777c; font-size:13px; }.bulk-toolbar .el-button { margin-left:auto; }.pagination-bar { display:flex; justify-content:center; margin-top:20px; padding-bottom:12px; }
-.editor-header { padding-bottom:12px; border-bottom:1px solid #e2eaea; }.editor-header h1 { margin-left:12px; }.editor-header>div:first-child { display:flex; align-items:center; }.editor-fields,.map-section,.points-section { padding:16px; border:1px solid #e2eaea; border-radius:6px; background:#fff; }
-.metadata-grid { display:grid; grid-template-columns:1.4fr .8fr 1.2fr 1.2fr; gap:14px; }.metadata-grid :deep(.el-form-item) { margin-bottom:10px; }.map-heading,.points-heading { margin-bottom:10px; }.map-heading strong,.points-heading strong { display:block; font-size:14px; }.map-heading span,.points-heading span { margin-left:8px; color:#7e8e91; font-size:12px; }
-.time-adjust-hint { display:block; margin-top:5px; color:#7e8e91; font-size:12px; line-height:1.4; }
-.point-workspace { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(300px,.8fr); align-items:stretch; gap:14px; }.point-workspace>.map-section,.point-workspace>.points-section { min-width:0; }
-.editor-map { height:min(62vh,680px); min-height:420px; border:1px solid #dce6e7; border-radius:5px; background:#e8eff0; }.map-hint { margin-top:8px; }.point-fields { display:grid; grid-template-columns:1fr; gap:0; }.point-fields :deep(.el-form-item) { margin-bottom:12px; }.point-fields :deep(.el-input-number) { width:100%; }.points-section :deep(.el-empty) { padding:10px 0; }
-@media(max-width:900px) { .metadata-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.point-workspace { grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr); }.editor-map { height:55vh; min-height:360px; } }
-@media(max-width:700px) { .page-header,.editor-header,.points-heading { align-items:flex-start; flex-direction:column; }.header-actions,.map-actions,.point-navigation { width:100%; }.map-actions>* { flex:1; }.query-filters { align-items:stretch; flex-direction:column; gap:10px; }.keyword-filter,.activity-filter,.date-filter,.query-filters :deep(.el-input),.query-filters :deep(.el-select),.query-filters :deep(.el-date-editor),.query-filters :deep(.el-button) { width:100% !important; }.action-bar,.bulk-toolbar { align-items:stretch; flex-direction:column; }.action-bar :deep(.el-button),.bulk-toolbar :deep(.el-button) { width:100%; margin:0; }.pagination-bar { justify-content:flex-start; overflow-x:auto; }.pagination-bar :deep(.el-pagination) { flex-wrap:nowrap; min-width:max-content; }.metadata-grid,.point-workspace { grid-template-columns:1fr; gap:12px; }.metadata-grid { gap:0; }.editor-fields,.map-section,.points-section { padding:12px; }.editor-map { height:45vh; min-height:280px; }.point-fields { grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; } }
+.trajectory-admin {
+  display: flex;
+  flex-direction: column;
+  color: #263b40;
+}
+
+.trajectory-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: #263b40;
+}
+
+.page-header,
+.editor-header,
+.map-heading,
+.points-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.page-header {
+  margin-bottom: 12px;
+}
+
+.page-header h1,
+.editor-header h1 {
+  margin: 0 0 6px;
+  color: #1d3035;
+  font-size: 24px;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.page-header p,
+.map-hint {
+  margin: 0;
+  color: #65777c;
+  font-size: 13px;
+}
+
+.header-actions,
+.map-actions,
+.point-navigation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gpx-input {
+  display: none;
+}
+
+.query-filters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 38px;
+}
+
+.keyword-filter {
+  width: 220px;
+}
+
+.activity-filter {
+  width: 150px;
+}
+
+.date-filter {
+  width: 220px;
+}
+
+.count {
+  color: #65777c;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.query-card {
+  margin-bottom: 0;
+  border: 1px solid #d9e3e4;
+  border-radius: 6px;
+}
+
+.query-card :deep(.el-card__body) {
+  padding: 10px 18px !important;
+}
+
+.action-bar,
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d9e3e4;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(29, 48, 53, .035);
+}
+
+.action-bar {
+  margin: 0 0 15px;
+}
+
+.action-bar> :deep(.el-button),
+.action-bar> :deep(.el-dropdown) {
+  margin: 0;
+}
+
+.action-bar :deep(.el-dropdown .el-button) {
+  margin: 0;
+}
+
+.bulk-toolbar {
+  margin: 0 0 12px;
+  color: #65777c;
+  font-size: 13px;
+}
+
+.bulk-toolbar .el-button {
+  margin-left: auto;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-bottom: 12px;
+}
+
+.editor-header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2eaea;
+}
+
+.editor-header h1 {
+  margin-left: 12px;
+}
+
+.editor-header>div:first-child {
+  display: flex;
+  align-items: center;
+}
+
+.editor-fields,
+.map-section,
+.points-section {
+  padding: 16px;
+  border: 1px solid #e2eaea;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.metadata-grid {
+  display: grid;
+  grid-template-columns: 1.4fr .8fr 1.2fr 1.2fr;
+  gap: 14px;
+}
+
+.metadata-grid :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.map-heading,
+.points-heading {
+  margin-bottom: 10px;
+}
+
+.map-heading strong,
+.points-heading strong {
+  display: block;
+  font-size: 14px;
+}
+
+.map-heading span,
+.points-heading span {
+  margin-left: 8px;
+  color: #7e8e91;
+  font-size: 12px;
+}
+
+.time-adjust-hint {
+  display: block;
+  margin-top: 5px;
+  color: #7e8e91;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.point-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, .8fr);
+  align-items: stretch;
+  gap: 14px;
+}
+
+.point-workspace>.map-section,
+.point-workspace>.points-section {
+  min-width: 0;
+}
+
+.editor-map {
+  height: min(62vh, 680px);
+  min-height: 420px;
+  border: 1px solid #dce6e7;
+  border-radius: 5px;
+  background: #e8eff0;
+}
+
+.map-hint {
+  margin-top: 8px;
+}
+
+.point-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.point-fields :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.point-fields :deep(.el-input-number) {
+  width: 100%;
+}
+
+.points-section :deep(.el-empty) {
+  padding: 10px 0;
+}
+
+@media(max-width:900px) {
+  .metadata-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .point-workspace {
+    grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr);
+  }
+
+  .editor-map {
+    height: 55vh;
+    min-height: 360px;
+  }
+}
+
+@media(max-width:700px) {
+
+  .page-header,
+  .editor-header,
+  .points-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions,
+  .map-actions,
+  .point-navigation {
+    width: 100%;
+  }
+
+  .map-actions>* {
+    flex: 1;
+  }
+
+  .query-filters {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .keyword-filter,
+  .activity-filter,
+  .date-filter,
+  .query-filters :deep(.el-input),
+  .query-filters :deep(.el-select),
+  .query-filters :deep(.el-date-editor),
+  .query-filters :deep(.el-button) {
+    width: 100% !important;
+  }
+
+  .action-bar,
+  .bulk-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .action-bar :deep(.travel-data-tools) {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .action-bar :deep(.el-button),
+  .bulk-toolbar :deep(.el-button) {
+    width: 100%;
+    margin: 0;
+  }
+
+  .pagination-bar {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .pagination-bar :deep(.el-pagination) {
+    flex-wrap: nowrap;
+    min-width: max-content;
+  }
+
+  .metadata-grid,
+  .point-workspace {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .metadata-grid {
+    gap: 0;
+  }
+
+  .editor-fields,
+  .map-section,
+  .points-section {
+    padding: 12px;
+  }
+
+  .editor-map {
+    height: 45vh;
+    min-height: 280px;
+  }
+
+  .point-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 12px;
+  }
+}
 </style>

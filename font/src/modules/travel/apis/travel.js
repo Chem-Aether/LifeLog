@@ -9,6 +9,7 @@ export const getFootprintById = id => request({ url: `/travel/footprints/${id}`,
 export const getTrajectories = params => request({ url: '/travel/trajectories', method: 'get', params })
 export const getTrajectoryById = id => request({ url: `/travel/trajectories/${id}`, method: 'get' })
 export const addTrajectory = data => request({ url: '/travel/trajectories', method: 'post', data, timeout: 0 })
+export const addTrajectories = data => request({ url: '/travel/trajectories/batch', method: 'post', data, timeout: 0 })
 export const updateTrajectory = (id, data) => request({ url: `/travel/trajectories/${id}`, method: 'put', data, timeout: 0 })
 export const deleteTrajectory = id => request({ url: `/travel/trajectories/${id}`, method: 'delete' })
 export const deleteTrajectories = ids => request({ url: '/travel/trajectories/batch', method: 'delete', data: ids })

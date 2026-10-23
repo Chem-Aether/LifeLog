@@ -48,7 +48,7 @@ public class TravelExportService {
                 writeSheet(workbook, "机票", List.of("记录ID", "航班号", "航空公司", "机型", "飞机注册号", "出发机场ICAO", "出发机场", "出发航站楼", "登机方式", "起飞时间", "到达机场ICAO", "到达机场", "到达航站楼", "下机方式", "到达时间", "经停机场JSON", "座位号", "舱位类型", "里程KM", "备注"), rows, headerStyle);
             } else {
                 List<? extends List<?>> rows = template ? List.of() : footprints.selectRecords(null).stream().map(this::footprintRow).toList();
-                writeSheet(workbook, "足迹", List.of("记录ID", "地点名称", "记录性质", "到访日期", "经度", "纬度", "行政区ID", "地点类型", "旅行心得", "媒体ID列表JSON"), rows, headerStyle);
+                writeSheet(workbook, "足迹", List.of("记录ID", "地点名称", "记录性质", "到访日期", "经度", "纬度", "行政区ID", "地点类型", "旅行心得", "媒体URL列表JSON"), rows, headerStyle);
             }
             workbook.write(output);
             return output.toByteArray();
@@ -74,7 +74,7 @@ public class TravelExportService {
     /** 将足迹记录转换为 Excel 行数据。 */
     private List<?> footprintRow(FootSpot row) {
         return Arrays.asList(row.getFootprintId(), row.getPlaceName(), row.getVisitType(), row.getVisitDate(), row.getLongitude(),
-                row.getLatitude(), row.getRegionId(), row.getLocationType(), row.getNote(), row.getMediaIdsJson());
+                row.getLatitude(), row.getRegionId(), row.getLocationType(), row.getNote(), row.getMediaUrlsJson());
     }
 
     /** 写入表头和数据行，并设置列宽、筛选和冻结表头。 */

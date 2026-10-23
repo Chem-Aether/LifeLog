@@ -1,6 +1,6 @@
 # LifeLog 桌面端
 
-Electron 桌面壳直接加载现有 Vue 网页，不复制业务界面。浏览器网页和桌面端继续共用同一套前端与后端服务。
+Electron 主进程负责检查 PostgreSQL、按配置顺序启动本地服务并等待端口就绪，然后在 Electron 窗口内加载前端。开发模式使用 Vite；安装包从本地打包的 Vue 静态文件启动，不再依赖外部网页。
 
 ## 本地预览
 
@@ -11,18 +11,18 @@ npm install
 npm run dev
 ```
 
-脚本会启动 `font` 下的 Vite 开发服务并打开桌面窗口。关闭桌面窗口或终端即可退出。
+脚本会启动 `font` 下的 Vite 开发服务，随后 Electron 检查 PostgreSQL 并按 `config.json` 启动服务。关闭桌面窗口时，Electron 会结束自己启动的子进程；已预先运行的服务不会被关闭。
 
-## 指向部署站点
-
-修改 `config.json` 的 `webUrl` 为网页部署地址后，运行 `npm start`；也可以通过 `LIFELOG_WEB_URL` 环境变量覆盖该地址。
+PostgreSQL 仍需预先安装、初始化并运行，旅行库需要 PostGIS。Go、Java、Maven 和 Python 运行时也需要在开发机可用。服务日志写入 Electron 的用户数据目录 `logs`。
 
 ## Windows 安装包
 
-确认 `config.json` 指向可访问的 LifeLog 网页地址后，在 `desktop` 目录运行：
+在 `desktop` 目录运行：
 
 ```bash
 npm run dist:win
 ```
 
-安装包输出到 `desktop/release`。桌面端需要网络访问该网页及其配置的 API 服务；后端地址仍由网页部署配置管理。
+打包流程会先构建 `font` 前端，Electron 安装包将页面放入本地 `resources/web`，启动时通过本机静态服务器提供，支持 Vue history 路由。
+
+`config.json` 中定义了开发机服务命令、启动顺序和端口。生产包会从 `desktop/runtime` 收集服务运行文件；Go 地图数据约 7.6 GB，运行时和数据文件尚未自动构建/收集。缺少任一文件时，打包前检查会停止，避免生成不能启动的安装包。PostgreSQL/PostGIS 仍是外部依赖，因此当前还不是面向普通用户的完全自包含发行版。

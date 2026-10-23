@@ -66,7 +66,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as maplibregl from 'maplibre-gl'
+import { maplibregl } from '@/utils/maplibre.js'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { MAP_BASE_URL } from '@/utils/request.js'
 

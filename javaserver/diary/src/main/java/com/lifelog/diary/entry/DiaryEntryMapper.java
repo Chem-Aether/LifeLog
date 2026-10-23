@@ -143,9 +143,9 @@ public class DiaryEntryMapper {
      * 替换日记关联的标签和媒体记录。
      * @param id 日记 ID
      * @param tags 标签列表
-     * @param mediaIds 媒体 ID 列表
+     * @param mediaUrls 媒体 URL 列表
      */
-    public void replaceRelations(long id, List<String> tags, List<String> mediaIds) {
+    public void replaceRelations(long id, List<String> tags, List<String> mediaUrls) {
         jdbc.update("DELETE FROM diary_entry_tag WHERE diary_id=:id", Map.of("id", id));
         jdbc.update("DELETE FROM diary_entry_media WHERE diary_id=:id", Map.of("id", id));
         for (String tag : tags) {
@@ -156,9 +156,9 @@ public class DiaryEntryMapper {
                     ON CONFLICT DO NOTHING
                     """, Map.of("id", id, "name", tag));
         }
-        for (int i = 0; i < mediaIds.size(); i++) {
-            jdbc.update("INSERT INTO diary_entry_media(diary_id, media_id, sort_order) VALUES (:id, :mediaId, :sortOrder)",
-                    Map.of("id", id, "mediaId", mediaIds.get(i), "sortOrder", i));
+        for (int i = 0; i < mediaUrls.size(); i++) {
+            jdbc.update("INSERT INTO diary_entry_media(diary_id, media_url, sort_order) VALUES (:id, :mediaUrl, :sortOrder)",
+                    Map.of("id", id, "mediaUrl", mediaUrls.get(i), "sortOrder", i));
         }
     }
 
@@ -171,7 +171,7 @@ public class DiaryEntryMapper {
     public Map<Long, List<String>> findRelations(List<Long> ids, boolean media) {
         if (ids.isEmpty()) return Map.of();
         String sql = media
-                ? "SELECT diary_id, media_id AS value FROM diary_entry_media WHERE diary_id IN (:ids) ORDER BY diary_id, sort_order"
+                ? "SELECT diary_id, media_url AS value FROM diary_entry_media WHERE diary_id IN (:ids) ORDER BY diary_id, sort_order"
                 : "SELECT et.diary_id, t.name AS value FROM diary_entry_tag et JOIN diary_tag t USING(tag_id) WHERE et.diary_id IN (:ids) ORDER BY et.diary_id, t.name";
         Map<Long, List<String>> result = new HashMap<>();
         jdbc.query(sql, Map.of("ids", ids), (RowCallbackHandler) rs -> {

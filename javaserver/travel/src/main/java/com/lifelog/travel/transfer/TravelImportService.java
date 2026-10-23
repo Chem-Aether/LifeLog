@@ -11,6 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -83,6 +88,119 @@ public class TravelImportService {
         return report;
     }
 
+    /** 按足迹模板列名解析 CSV，并沿用逐行新增或按 ID 更新流程。 */
+    public Map<String, Object> importFootprintsCsv(MultipartFile file, boolean updateExisting) throws IOException {
+        if (file == null || file.isEmpty()) throw new IllegalArgumentException("请选择非空 CSV 文件");
+        List<List<String>> rows = parseCsv(decodeCsv(file.getBytes()));
+        if (rows.isEmpty()) throw new IllegalArgumentException("CSV 文件缺少表头");
+        Map<String, Integer> columns = new HashMap<>();
+        List<String> header = rows.get(0);
+        for (int i = 0; i < header.size(); i++) columns.put(header.get(i).trim().replaceFirst("^\\uFEFF", ""), i);
+        if (!columns.containsKey("地点名称")) throw new IllegalArgumentException("CSV 表头无效，缺少“地点名称”列");
+
+        List<String> errors = new ArrayList<>();
+        int imported = 0;
+        for (int rowIndex = 1; rowIndex < rows.size(); rowIndex++) {
+            List<String> row = rows.get(rowIndex);
+            if (row.stream().allMatch(String::isBlank)) continue;
+            try {
+                FootSpot spot = readFootprint(row, columns);
+                Long id = csvLong(row, columns, "记录ID");
+                if (updateExisting) {
+                    if (id == null) throw new IllegalArgumentException("更新模式下记录ID不能为空");
+                    footprintService.update(id, spot);
+                } else footprintService.add(spot);
+                imported++;
+            } catch (Exception exception) {
+                errors.add("足迹!" + (rowIndex + 1) + "行：" + rootMessage(exception));
+            }
+        }
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("totalImported", imported);
+        report.put("flightsImported", 0);
+        report.put("footprintsImported", imported);
+        report.put("errors", errors);
+        return report;
+    }
+
+    private FootSpot readFootprint(List<String> row, Map<String, Integer> columns) throws IOException {
+        FootSpot spot = new FootSpot();
+        spot.setPlaceName(csvText(row, columns, "地点名称"));
+        spot.setVisitType(csvText(row, columns, "记录性质"));
+        spot.setVisitDate(csvDate(row, columns, "到访日期"));
+        spot.setLongitude(csvDecimal(row, columns, "经度"));
+        spot.setLatitude(csvDecimal(row, columns, "纬度"));
+        spot.setRegionId(csvText(row, columns, "行政区ID"));
+        spot.setLocationType(csvText(row, columns, "地点类型"));
+        spot.setNote(csvText(row, columns, "旅行心得"));
+        String mediaUrls = csvText(row, columns, "媒体URL列表JSON");
+        spot.setMediaUrls(mediaUrls == null ? List.of() : objectMapper.readValue(mediaUrls, new TypeReference<>() {}));
+        return spot;
+    }
+
+    private String csvText(List<String> row, Map<String, Integer> columns, String name) {
+        Integer index = columns.get(name);
+        if (index == null || index >= row.size()) return null;
+        String value = row.get(index).trim();
+        return value.isEmpty() ? null : value;
+    }
+
+    private Long csvLong(List<String> row, Map<String, Integer> columns, String name) {
+        String value = csvText(row, columns, name);
+        return value == null ? null : new BigDecimal(value).longValueExact();
+    }
+
+    private BigDecimal csvDecimal(List<String> row, Map<String, Integer> columns, String name) {
+        String value = csvText(row, columns, name);
+        return value == null ? null : new BigDecimal(value.replace(",", ""));
+    }
+
+    private LocalDate csvDate(List<String> row, Map<String, Integer> columns, String name) {
+        String value = csvText(row, columns, name);
+        if (value == null) return null;
+        String normalized = value.replace('/', '-');
+        try { return LocalDate.parse(normalized); }
+        catch (Exception ignored) { return LocalDate.parse(normalized, DateTimeFormatter.ofPattern("yyyy-M-d")); }
+    }
+
+    private String decodeCsv(byte[] bytes) throws IOException {
+        int offset = 0;
+        Charset charset = StandardCharsets.UTF_8;
+        if (bytes.length >= 3 && (bytes[0] & 0xff) == 0xef && (bytes[1] & 0xff) == 0xbb && (bytes[2] & 0xff) == 0xbf) offset = 3;
+        else if (bytes.length >= 2 && (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0xfe) { charset = StandardCharsets.UTF_16LE; offset = 2; }
+        else if (bytes.length >= 2 && (bytes[0] & 0xff) == 0xfe && (bytes[1] & 0xff) == 0xff) { charset = StandardCharsets.UTF_16BE; offset = 2; }
+        try {
+            return charset.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes, offset, bytes.length - offset)).toString();
+        } catch (CharacterCodingException exception) {
+            if (charset != StandardCharsets.UTF_8) throw exception;
+            return Charset.forName("GB18030").decode(ByteBuffer.wrap(bytes)).toString();
+        }
+    }
+
+    private List<List<String>> parseCsv(String text) {
+        List<List<String>> rows = new ArrayList<>();
+        List<String> row = new ArrayList<>();
+        StringBuilder field = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (quoted) {
+                if (ch == '"' && i + 1 < text.length() && text.charAt(i + 1) == '"') { field.append('"'); i++; }
+                else if (ch == '"') quoted = false;
+                else field.append(ch);
+            } else if (ch == '"' && field.isEmpty()) quoted = true;
+            else if (ch == ',') { row.add(field.toString()); field.setLength(0); }
+            else if (ch == '\n' || ch == '\r') {
+                if (ch == '\r' && i + 1 < text.length() && text.charAt(i + 1) == '\n') i++;
+                row.add(field.toString()); field.setLength(0); rows.add(row); row = new ArrayList<>();
+            } else field.append(ch);
+        }
+        if (quoted) throw new IllegalArgumentException("CSV 引号未闭合");
+        if (!row.isEmpty() || !field.isEmpty()) { row.add(field.toString()); rows.add(row); }
+        return rows;
+    }
+
     /** 将 Excel 行转换为航班记录。 */
     private FlightRecord readFlight(Row row, Map<String, Integer> h, DataFormatter formatter) throws IOException {
         FlightRecord record = new FlightRecord();
@@ -138,11 +256,11 @@ public class TravelImportService {
         spot.setLatitude(decimal(row, h, "纬度", formatter)); spot.setRegionId(text(row, h, "行政区ID", formatter));
         spot.setLocationType(text(row, h, "地点类型", formatter));
         spot.setNote(text(row, h, "旅行心得", formatter));
-        String mediaIds = text(row, h, "媒体ID列表JSON", formatter);
+        String mediaUrls = text(row, h, "媒体URL列表JSON", formatter);
         try {
-            spot.setMediaIds(mediaIds == null ? List.of() : objectMapper.readValue(mediaIds, new TypeReference<>() {}));
+            spot.setMediaUrls(mediaUrls == null ? List.of() : objectMapper.readValue(mediaUrls, new TypeReference<>() {}));
         } catch (IOException e) {
-            throw new IllegalArgumentException("媒体ID列表JSON格式无效", e);
+            throw new IllegalArgumentException("媒体URL列表JSON格式无效", e);
         }
         return spot;
     }

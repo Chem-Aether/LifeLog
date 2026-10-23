@@ -9,7 +9,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /** 处理轨迹采样、展示几何和记录摘要。 */
@@ -73,6 +75,28 @@ public class TrajectoryService {
         mapper.insert(trajectory);
         persistPoints(trajectory);
         return findById(trajectory.getTrajectoryId());
+    }
+
+    @Transactional
+    public java.util.Map<String, Object> saveBatch(List<Trajectory> trajectories) {
+        if (trajectories == null || trajectories.isEmpty() || trajectories.size() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "批量轨迹数量须为 1 到 100 条");
+        }
+        long pointCount = trajectories.stream().filter(Objects::nonNull)
+                .map(Trajectory::getPoints).filter(Objects::nonNull).mapToLong(List::size).sum();
+        if (pointCount > 500_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "单次批量导入最多支持 500,000 个采样点");
+        }
+        trajectories.forEach(this::prepare);
+        List<Map<String, Object>> imported = new ArrayList<>(trajectories.size());
+        for (Trajectory trajectory : trajectories) {
+            trajectory.setTrajectoryId(null);
+            mapper.insert(trajectory);
+            persistPoints(trajectory);
+            imported.add(Map.of("trajectoryId", trajectory.getTrajectoryId(),
+                    "name", trajectory.getName(), "pointCount", trajectory.getPointCount()));
+        }
+        return Map.of("totalImported", imported.size(), "trajectories", imported);
     }
 
     @Transactional

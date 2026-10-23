@@ -209,7 +209,7 @@ const stats = computed(() => {
     days: days.size.toLocaleString('zh-CN'),
     cities: cities.size.toLocaleString('zh-CN'),
     places: activeFootprints.value.length.toLocaleString('zh-CN'),
-    photos: activeFootprints.value.reduce((sum, item) => sum + (Array.isArray(item.mediaIds) ? item.mediaIds.length : 0), 0).toLocaleString('zh-CN'),
+    photos: activeFootprints.value.reduce((sum, item) => sum + (Array.isArray(item.mediaUrls) ? item.mediaUrls.length : 0), 0).toLocaleString('zh-CN'),
     flightCount: flights.length,
     trainCount: trains.length,
     flightKm: metricNumber(flightSummary.value, '航程'),

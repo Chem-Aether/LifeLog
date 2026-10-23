@@ -23,6 +23,8 @@ IDED 配置
 node_modules/
 dist/
 desktop/release/
+desktop/runtime/*
+!desktop/runtime/README.md
 **/.venv/
 **/__pycache__/
 **/*.py[cod]

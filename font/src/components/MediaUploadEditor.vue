@@ -1,9 +1,9 @@
 <template>
   <section class="media-editor" :class="{ disabled }">
     <div class="media-grid">
-      <article v-for="(item, index) in modelValue" :key="item.mediaId" class="media-item">
-        <video v-if="item.contentType?.startsWith('video/')" :src="item.url" controls preload="metadata" />
-        <img v-else :src="item.url" :alt="item.name || '已上传图片'" />
+      <article v-for="(item, index) in modelValue" :key="item.url" class="media-item">
+        <video v-if="item.contentType?.startsWith('video/')" :src="resolveMediaUrl(item.url)" controls preload="metadata" />
+        <img v-else :src="resolveMediaUrl(item.url)" :alt="item.name || '已上传图片'" />
         <button v-if="!item.contentType?.startsWith('video/')" class="edit-item" type="button" :aria-label="`编辑${item.name || '图片'}`" :disabled="disabled || busy" title="编辑图片" @click="editItem(index)"><el-icon><Edit /></el-icon></button>
         <button class="remove-item" type="button" :aria-label="`移除${item.name || '媒体'}`" :disabled="disabled || busy" @click="removeItem(index)"><el-icon><Close /></el-icon></button>
       </article>
@@ -35,12 +35,12 @@
 import { computed, nextTick, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Close, Edit, Loading, Plus, RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
+import { resolveMediaUrl } from '@/utils/media.js'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   upload: { type: Function, required: true },
   beforeRemove: { type: Function, default: null },
-  urlFor: { type: Function, required: true },
   multiple: { type: Boolean, default: true },
   allowVideo: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
@@ -120,8 +120,7 @@ async function editItem(index) {
   if (!item) return
   setBusy(true)
   try {
-    const token = localStorage.getItem('token')
-    const response = await fetch(item.url || props.urlFor(item.mediaId), { headers: token ? { token } : {} })
+    const response = await fetch(resolveMediaUrl(item.url))
     if (!response.ok) throw new Error('图片读取失败，请稍后重试')
     const blob = await response.blob()
     const type = blob.type || item.contentType || 'image/jpeg'
@@ -324,18 +323,17 @@ function closeDialogAfter(callback) { afterDialogClose = callback; dialogVisible
 function onDialogClosed() { const callback = afterDialogClose; afterDialogClose = null; callback?.() }
 async function uploadFile(file, mediaType, originalName = file.name, replacementIndex = null) {
   const result = await props.upload(file, mediaType)
-  const mediaId = result.media_id || result.data?.media_id
-  if (!mediaId) throw new Error('媒体服务未返回媒体编号')
+  const url = result.url || result.data?.url
+  if (!url) throw new Error('对象存储未返回媒体 URL')
   const item = {
-    mediaId,
-    url: result.url || props.urlFor(mediaId),
+    url,
     contentType: result.content_type || (mediaType === 'video' ? 'video/mp4' : file.type),
     name: originalName,
   }
   const replacedItem = replacementIndex == null
     ? props.multiple ? null : props.modelValue[0]
     : props.modelValue[replacementIndex]
-  if (replacedItem && replacedItem.mediaId !== mediaId) await props.beforeRemove?.(replacedItem.mediaId)
+  if (replacedItem && replacedItem.url !== url) await props.beforeRemove?.(replacedItem.url)
   const next = replacementIndex == null
     ? props.multiple ? [...props.modelValue, item] : [item]
     : props.modelValue.map((current, index) => index === replacementIndex ? item : current)
@@ -347,7 +345,7 @@ async function removeItem(index) {
   if (!item || props.disabled || busy.value) return
   if (props.beforeRemove) {
     setBusy(true)
-    try { await props.beforeRemove(item.mediaId) }
+    try { await props.beforeRemove(item.url) }
     catch (error) { showUploadError(error); setBusy(false); return }
     setBusy(false)
   }

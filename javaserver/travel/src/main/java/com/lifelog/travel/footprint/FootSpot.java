@@ -35,11 +35,11 @@ public class FootSpot {
     private String locationType;
     /** 足迹备注。 */
     private String note;
-    /** 关联媒体 ID 列表。 */
+    /** 关联媒体 URL 列表。 */
     @TableField(exist = false)
-    private List<String> mediaIds;
-    /** 媒体 ID 列表的 JSONB 存储字段。 */
+    private List<String> mediaUrls;
+    /** 媒体 URL 列表的 JSONB 存储字段。 */
     @JsonIgnore
-    @TableField(value = "media_ids", typeHandler = JsonbStringTypeHandler.class, jdbcType = JdbcType.OTHER)
-    private String mediaIdsJson;
+    @TableField(value = "media_urls", typeHandler = JsonbStringTypeHandler.class, jdbcType = JdbcType.OTHER)
+    private String mediaUrlsJson;
 }

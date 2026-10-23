@@ -1,33 +1,19 @@
-import { diaryRequest, mediaRequest, MEDIA_BASE_URL } from '@/utils/request.js'
+import { diaryRequest } from '@/utils/request.js'
+import { resolveMediaUrl } from '@/utils/media.js'
 
 const request = config => diaryRequest(config).then(result => result.data)
 
-export const getDiaryMediaTypes = async mediaIds => {
-  const ids = [...new Set(mediaIds || [])]
-  const types = {}
-  for (let index = 0; index < ids.length; index += 200) {
-    const result = await mediaRequest({
-      url: '/api/media/types', method: 'get', params: { ids: ids.slice(index, index + 200).join(',') },
-    })
-    Object.assign(types, result.data ?? result)
-  }
-  return types
-}
-
-const attachMediaTypes = async entry => ({ ...entry, mediaTypes: await getDiaryMediaTypes(entry.mediaIds) })
+const contentType = url => ({ jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', '3gp': 'video/3gpp', avi: 'video/x-msvideo' })[url?.split('?')[0]?.split('.').pop()?.toLowerCase()] || 'application/octet-stream'
+const attachMediaTypes = entry => ({ ...entry, mediaTypes: Object.fromEntries((entry.mediaUrls || []).map(url => [url, contentType(url)])) })
 
 export const getDiaryEntries = async (params, { includeMediaTypes = true } = {}) => {
   const result = await request({ url: '/diary/entries', method: 'get', params })
   if (!includeMediaTypes) return result
-  let mediaTypes = {}
-  try { mediaTypes = await getDiaryMediaTypes((result.items || []).flatMap(entry => entry.mediaIds || [])) }
-  catch { /* Keep diary text available if the media service is offline. */ }
-  return { ...result, items: (result.items || []).map(entry => ({ ...entry, mediaTypes })) }
+  return { ...result, items: (result.items || []).map(attachMediaTypes) }
 }
 export const getDiaryEntry = async id => {
   const entry = await request({ url: `/diary/entries/${id}`, method: 'get' })
-  try { return await attachMediaTypes(entry) }
-  catch { return { ...entry, mediaTypes: {} } }
+  return attachMediaTypes(entry)
 }
 export const createDiaryEntry = data => request({ url: '/diary/entries', method: 'post', data })
 export const updateDiaryEntry = (id, data) => request({ url: `/diary/entries/${id}`, method: 'put', data })
@@ -39,7 +25,7 @@ export const uploadDiaryMedia = file => {
   const data = new FormData()
   data.append('file', file)
   data.append('category', 'diary')
-  return mediaRequest({ url: '/api/media', method: 'post', data, timeout: 0 })
+  return diaryRequest({ url: '/api/media', method: 'post', data, timeout: 0 })
 }
 
 export const uploadDiaryVideo = file => {
@@ -47,10 +33,9 @@ export const uploadDiaryVideo = file => {
   data.append('file', file)
   data.append('category', 'diary')
   data.append('media_type', 'video')
-  return mediaRequest({ url: '/api/media', method: 'post', data, timeout: 0 })
+  return diaryRequest({ url: '/api/media', method: 'post', data, timeout: 0 })
 }
 
 
-export const diaryMediaUrl = mediaId => mediaId
-  ? `${MEDIA_BASE_URL}/media/${encodeURIComponent(mediaId)}`
-  : ''
+export const deleteDiaryMedia = url => diaryRequest({ url: '/api/media', method: 'delete', params: { url } })
+export const diaryMediaUrl = resolveMediaUrl

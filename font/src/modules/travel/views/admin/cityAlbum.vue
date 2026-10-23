@@ -126,13 +126,12 @@ const cities = computed(() => {
     const city = groups.get(key)
     if (!city.places.has(item.footprintId ?? item.placeName)) city.places.set(item.footprintId ?? item.placeName, item)
     if (item.visitDate && item.visitDate > city.latestDate) city.latestDate = item.visitDate
-    for (const mediaId of (Array.isArray(item.mediaIds) ? item.mediaIds : [])) {
-      const url = mediaUrl(mediaId)
-      if (!url) continue
+    for (const url of (Array.isArray(item.mediaUrls) ? item.mediaUrls : [])) {
+      const mediaUrlValue = mediaUrl(url)
+      if (!mediaUrlValue) continue
       city.photos.push({
-        key: `${item.footprintId}-${mediaId}`,
-        mediaId,
-        url,
+        key: `${item.footprintId}-${url}`,
+        url: mediaUrlValue,
         placeName: item.placeName || '未命名地点',
         regionName: region.regionName,
         visitDate: item.visitDate || '',

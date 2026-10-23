@@ -51,7 +51,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import * as maplibregl from 'maplibre-gl'
+import { maplibregl } from '@/utils/maplibre.js'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { reverseGeocode, searchPoiCatalog } from '@/modules/travel/apis/sysResource.js'
 import { MAP_BASE_URL } from '@/utils/request.js'

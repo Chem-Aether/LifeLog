@@ -32,6 +32,9 @@ public class TrajectoryController {
     @PostMapping
     public Result add(@RequestBody Trajectory trajectory) { return Result.success(service.save(trajectory)); }
 
+    @PostMapping("/batch")
+    public Result addBatch(@RequestBody List<Trajectory> trajectories) { return Result.success(service.saveBatch(trajectories)); }
+
     @PutMapping("/{id}")
     public Result update(@PathVariable Long id, @RequestBody Trajectory trajectory) { return Result.success(service.update(id, trajectory)); }
 

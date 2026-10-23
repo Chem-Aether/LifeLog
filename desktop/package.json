@@ -9,7 +9,8 @@
     "dev:app": "wait-on http://127.0.0.1:5173 && electron .",
     "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:app\"",
     "start": "electron .",
-    "dist:win": "electron-builder --win nsis"
+    "build:web": "npm --prefix ../font run build",
+    "dist:win": "npm run build:web && node verify-runtime.cjs && electron-builder --win portable"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
@@ -23,19 +24,22 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "LifeLog-${version}-portable.${ext}",
     "files": [
       "main.cjs",
       "config.json",
       "package.json"
     ],
+    "extraResources": [
+      { "from": "../font/dist", "to": "web" },
+      {
+        "from": "../javaserver/target",
+        "to": "services/java",
+        "filter": ["auth.jar", "bill.jar", "diary.jar", "travel.jar"]
+      }
+    ],
     "win": {
-      "target": ["nsis"]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "target": ["portable"]
     }
   }
 }

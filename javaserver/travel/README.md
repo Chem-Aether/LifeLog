@@ -15,7 +15,7 @@
 - 本服务拥有航班、列车、途经站和足迹业务记录，并负责相应 CRUD、里程和导入导出。
 - mapserver 提供空间检索、地理编码、行政区及铁路空间数据；旅行记录业务归 Travel 服务，铁路网络搜索与路径计算由前端直接调用 MapServer。
 - SpiderServer 由前端直接调用，用于在线查询 12306 车次信息；Travel 后端不依赖该服务。
-- 媒体文件由 mediaserver 保存；旅行记录如需关联图片只保存稳定的 `media_id`，不保存磁盘路径。
+- 足迹关联图片保存对象 URL；Java 服务使用 SeaweedFS S3 API 上传和删除媒体，不保存本机文件路径或媒体 ID。
 
 服务启动时通过 Spring SQL 初始化执行 `src/main/resources/db/schema.sql`，创建当前版本所需的表结构。数据库已使用 `location_type` 保存足迹地点类型，不再包含旧字段迁移或兼容逻辑；后续数据库结构变更应通过明确的版本化迁移管理。
 

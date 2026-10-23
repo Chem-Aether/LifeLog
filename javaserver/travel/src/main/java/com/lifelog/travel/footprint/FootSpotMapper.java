@@ -13,7 +13,7 @@ import java.util.Map;
 @Mapper
 public interface FootSpotMapper extends BaseMapper<FootSpot> {
     /** 根据 ID 查询足迹并读取经纬度及 JSON 数据。 */
-    @Select("SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_ids::text AS \"mediaIdsJson\", " +
+    @Select("SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_urls::text AS \"mediaUrlsJson\", " +
             "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint WHERE footprint_id = #{id}")
     FootSpot selectRecordById(@Param("id") Long id);
 
@@ -24,7 +24,7 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
                        @Param("latitude") java.math.BigDecimal latitude);
 
     /** 导出场景查询足迹记录，可按到访年份筛选。 */
-    @Select({"<script>", "SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_ids::text AS \"mediaIdsJson\",",
+    @Select({"<script>", "SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_urls::text AS \"mediaUrlsJson\",",
             "ST_X(location) AS longitude, ST_Y(location) AS latitude FROM footprint",
             "<if test='year != null'>WHERE visit_date &gt;= make_date(#{year},1,1) AND visit_date &lt; make_date(#{year}+1,1,1)</if>",
             "ORDER BY visit_date DESC NULLS LAST", "</script>"})
@@ -86,7 +86,7 @@ public interface FootSpotMapper extends BaseMapper<FootSpot> {
         }
 
         private static String selectColumns() {
-            return "SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_ids::text AS \"mediaIdsJson\", ST_X(location) AS longitude, ST_Y(location) AS latitude";
+            return "SELECT footprint_id, place_name, visit_type, visit_date, region_id, location_type, note, media_urls::text AS \"mediaUrlsJson\", ST_X(location) AS longitude, ST_Y(location) AS latitude";
         }
 
         /** 生成分页足迹查询 SQL。 */

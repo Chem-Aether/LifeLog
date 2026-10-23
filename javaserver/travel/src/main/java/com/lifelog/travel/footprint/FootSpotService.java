@@ -140,16 +140,19 @@ public class FootSpotService {
         if (StringUtils.hasText(spot.getRegionId()) && spot.getRegionId().length() > 120) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "行政区 ID 长度无效");
         }
-        List<String> mediaIds = spot.getMediaIds() == null ? List.of() : spot.getMediaIds().stream()
+        List<String> mediaUrls = spot.getMediaUrls() == null ? List.of() : spot.getMediaUrls().stream()
                 .filter(Objects::nonNull).map(String::trim).filter(StringUtils::hasText).distinct().toList();
-        if (mediaIds.size() > 9) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "每条足迹最多上传 9 张图片");
-        spot.setMediaIds(mediaIds);
+        if (mediaUrls.size() > 9) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "每条足迹最多上传 9 张图片");
+        if (mediaUrls.stream().anyMatch(url -> url.length() > 2048 || !(url.startsWith("http://") || url.startsWith("https://")))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "媒体 URL 无效");
+        }
+        spot.setMediaUrls(mediaUrls);
     }
 
     private FootSpot hydrate(FootSpot spot) {
         try {
-            spot.setMediaIds(spot.getMediaIdsJson() == null ? List.of()
-                    : objectMapper.readValue(spot.getMediaIdsJson(), new TypeReference<>() {}));
+            spot.setMediaUrls(spot.getMediaUrlsJson() == null ? List.of()
+                    : objectMapper.readValue(spot.getMediaUrlsJson(), new TypeReference<>() {}));
             return spot;
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("足迹图片列表数据损坏", exception);
@@ -158,7 +161,7 @@ public class FootSpotService {
 
     private void prepare(FootSpot spot) {
         try {
-            spot.setMediaIdsJson(objectMapper.writeValueAsString(spot.getMediaIds()));
+            spot.setMediaUrlsJson(objectMapper.writeValueAsString(spot.getMediaUrls()));
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("足迹图片列表格式无效", exception);
         }

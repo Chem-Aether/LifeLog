@@ -8,21 +8,17 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/paulmach/orb"
-	"lifelog/goserver/internal/platform/geospatial"
 	"lifelog/goserver/internal/transport/response"
 )
 
-type Handler struct{ poi, airports *sql.DB }
+type Handler struct{ poi *sql.DB }
 
-func NewHandler(poi, airports *sql.DB) *Handler { return &Handler{poi: poi, airports: airports} }
+func NewHandler(poi *sql.DB) *Handler { return &Handler{poi: poi} }
 func (h *Handler) Register(r gin.IRoutes) {
 	r.GET("/api/pois/search", h.searchPOIs)
 	r.GET("/api/pois/nearby", h.nearbyPOIs)
 	r.GET("/api/pois/stats", h.poiStats)
 	r.GET("/api/pois/:identifier", h.poiByID)
-	r.GET("/api/airports/search", h.searchAirports)
-	r.POST("/api/airports/by-codes", h.airportsByCodes)
 }
 
 func limitParam(c *gin.Context, fallback int) int {
@@ -36,6 +32,16 @@ func limitParam(c *gin.Context, fallback int) int {
 	return limit
 }
 
+// searchPOIs godoc
+// @Summary Search points of interest
+// @Tags catalog
+// @Produce json
+// @Param q query string false "Search text"
+// @Param keyword query string false "Alternative search text"
+// @Param category query string false "POI category"
+// @Param limit query integer false "Maximum result count"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/pois/search [get]
 func (a *Handler) searchPOIs(c *gin.Context) {
 	keyword := strings.TrimSpace(c.DefaultQuery("q", c.Query("keyword")))
 	category := strings.TrimSpace(c.Query("category"))
@@ -77,6 +83,14 @@ func nullable(value sql.NullString) any {
 	return nil
 }
 
+// poiByID godoc
+// @Summary Get a point of interest
+// @Tags catalog
+// @Produce json
+// @Param identifier path integer true "POI identifier"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/pois/{identifier} [get]
 func (a *Handler) poiByID(c *gin.Context) {
 	id, parseErr := strconv.ParseInt(c.Param("identifier"), 10, 64)
 	if parseErr != nil {
@@ -99,6 +113,17 @@ func (a *Handler) poiByID(c *gin.Context) {
 	response.Payload(c, poiRecord(int(id), name, nameZh, aliases, category, subcategory, lon, lat, address, website, hours, wikidata, importance))
 }
 
+// nearbyPOIs godoc
+// @Summary Search points of interest near a coordinate
+// @Tags catalog
+// @Produce json
+// @Param longitude query number false "Longitude"
+// @Param latitude query number false "Latitude"
+// @Param radius query number false "Search radius in meters"
+// @Param category query string false "POI category"
+// @Param limit query integer false "Maximum result count"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/pois/nearby [get]
 func (a *Handler) nearbyPOIs(c *gin.Context) {
 	lon, e1 := strconv.ParseFloat(c.DefaultQuery("longitude", c.Query("lng")), 64)
 	lat, e2 := strconv.ParseFloat(c.DefaultQuery("latitude", c.Query("lat")), 64)
@@ -156,6 +181,12 @@ func haversine(lon1, lat1, lon2, lat2 float64) float64 {
 	return 2 * earth * math.Asin(math.Sqrt(a))
 }
 
+// poiStats godoc
+// @Summary Get POI category counts
+// @Tags catalog
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/pois/stats [get]
 func (a *Handler) poiStats(c *gin.Context) {
 	rows, err := a.poi.Query(`SELECT category,COUNT(*) FROM poi GROUP BY category ORDER BY COUNT(*) DESC`)
 	if err != nil {
@@ -185,73 +216,4 @@ func (a *Handler) poiStats(c *gin.Context) {
 		}
 	}
 	response.Payload(c, gin.H{"total": total, "categories": categories, "metadata": metadata})
-}
-
-func (a *Handler) searchAirports(c *gin.Context) {
-	keyword := strings.TrimSpace(c.Query("keyword"))
-	pattern := "%" + keyword + "%"
-	upper := strings.ToUpper(keyword)
-	rows, err := a.airports.Query(`SELECT icao,iata,name,attr,city,geom FROM airports WHERE (?='' OR name LIKE ? OR city LIKE ? OR icao LIKE ? OR iata LIKE ?) ORDER BY CASE WHEN name=? OR icao=? OR iata=? THEN 0 ELSE 1 END,name LIMIT ?`, keyword, pattern, pattern, "%"+upper+"%", "%"+upper+"%", keyword, upper, upper, limitParam(c, 20))
-	if err != nil {
-		c.JSON(500, gin.H{"detail": err.Error()})
-		return
-	}
-	defer rows.Close()
-	items := make([]gin.H, 0)
-	for rows.Next() {
-		var icao, name string
-		var iata, attr, city sql.NullString
-		var geom []byte
-		if err := rows.Scan(&icao, &iata, &name, &attr, &city, &geom); err != nil {
-			continue
-		}
-		g, e := geospatial.DecodeGeoPackage(geom)
-		point, ok := g.(orb.Point)
-		if e != nil || !ok {
-			continue
-		}
-		items = append(items, gin.H{"icao": icao, "iata": nullable(iata), "name": name, "city": nullable(city), "attr": nullable(attr), "longitude": point[0], "latitude": point[1]})
-	}
-	response.Payload(c, items)
-}
-
-func (a *Handler) airportsByCodes(c *gin.Context) {
-	var request struct {
-		Codes []string `json:"codes"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		response.BadRequest(c, "请求参数无效")
-		return
-	}
-	result := make([]gin.H, 0, len(request.Codes))
-	seen := map[string]bool{}
-	for _, code := range request.Codes {
-		code = strings.ToUpper(strings.TrimSpace(code))
-		if code == "" || seen[code] {
-			continue
-		}
-		seen[code] = true
-		if len(seen) > 1000 {
-			response.BadRequest(c, "机场代码最多1000项")
-			return
-		}
-		var icao, name string
-		var iata, attr, city sql.NullString
-		var geom []byte
-		err := a.airports.QueryRow(`SELECT icao,iata,name,city,attr,geom FROM airports WHERE iata=? OR icao=?`, code, code).Scan(&icao, &iata, &name, &city, &attr, &geom)
-		if err == sql.ErrNoRows {
-			continue
-		}
-		if err != nil {
-			c.JSON(500, gin.H{"detail": err.Error()})
-			return
-		}
-		g, err := geospatial.DecodeGeoPackage(geom)
-		point, ok := g.(orb.Point)
-		if err != nil || !ok {
-			continue
-		}
-		result = append(result, gin.H{"icao": icao, "iata": nullable(iata), "name": name, "city": nullable(city), "attr": nullable(attr), "longitude": point[0], "latitude": point[1]})
-	}
-	response.Payload(c, result)
 }

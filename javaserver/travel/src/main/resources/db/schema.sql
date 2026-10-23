@@ -47,10 +47,10 @@ CREATE TABLE IF NOT EXISTS footprint (
     place_name VARCHAR(200) NOT NULL, visit_type VARCHAR(20) NOT NULL DEFAULT 'travel', visit_date DATE,
     location geometry(Point,4326), region_id VARCHAR(120),
     location_type VARCHAR(100), note TEXT,
-    media_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    media_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_footprint_type CHECK (visit_type IN ('travel','transit')),
-    CONSTRAINT chk_footprint_media_ids CHECK (jsonb_typeof(media_ids) = 'array' AND jsonb_array_length(media_ids) <= 9)
+    CONSTRAINT chk_footprint_media_urls CHECK (jsonb_typeof(media_urls) = 'array' AND jsonb_array_length(media_urls) <= 9)
 );
 CREATE INDEX IF NOT EXISTS idx_footprint_location ON footprint USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_footprint_region_id ON footprint (region_id) WHERE region_id IS NOT NULL;

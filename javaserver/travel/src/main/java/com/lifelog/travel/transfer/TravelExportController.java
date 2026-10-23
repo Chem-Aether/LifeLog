@@ -16,6 +16,7 @@ import java.util.Map;
 public class TravelExportController {
     private static final MediaType XLSX = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     private static final MediaType GPKG = MediaType.parseMediaType("application/geopackage+sqlite3");
+    private static final MediaType CSV = MediaType.parseMediaType("text/csv;charset=UTF-8");
     private final TravelExportService exportService;
     private final TravelImportService importService;
     private final TrainGeoPackageService geoPackageService;
@@ -57,6 +58,7 @@ public class TravelExportController {
     public ResponseEntity<byte[]> template(@RequestParam String type) throws IOException {
         validateType(type);
         if ("train".equals(type)) return attachment(geoPackageService.exportTemplate(), "铁路导入模板.gpkg", GPKG);
+        if ("footprint".equals(type)) return attachment(footprintCsvTemplate(), "旅行足迹导入模板.csv", CSV);
         return attachment(exportService.exportTemplate(type), ("flight".equals(type) ? "机票" : "足迹") + "导入模板.xlsx", XLSX);
     }
 
@@ -73,8 +75,23 @@ public class TravelExportController {
             if (!filename.toLowerCase().endsWith(".gpkg")) throw new IllegalArgumentException("铁路数据仅支持 GeoPackage（.gpkg）");
             return geoPackageService.importFile(file, mode.equals("update"));
         }
-        if (!filename.toLowerCase().endsWith(".xlsx")) throw new IllegalArgumentException("机票和足迹数据仅支持 Excel（.xlsx）");
+        if ("footprint".equals(type)) {
+            if (!filename.toLowerCase().endsWith(".csv")) throw new IllegalArgumentException("足迹数据仅支持 CSV（.csv）");
+            return importService.importFootprintsCsv(file, mode.equals("update"));
+        }
+        if (!filename.toLowerCase().endsWith(".xlsx")) throw new IllegalArgumentException("机票数据仅支持 Excel（.xlsx）");
         return importService.importWorkbook(file, mode.equals("update"), type);
+    }
+
+    private byte[] footprintCsvTemplate() {
+        String header = "记录ID,地点名称,记录性质,到访日期,经度,纬度,行政区ID,地点类型,旅行心得,媒体URL列表JSON\r\n";
+        byte[] content = header.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] withBom = new byte[content.length + 3];
+        withBom[0] = (byte) 0xef;
+        withBom[1] = (byte) 0xbb;
+        withBom[2] = (byte) 0xbf;
+        System.arraycopy(content, 0, withBom, 3, content.length);
+        return withBom;
     }
 
     /** 校验导入或导出类型是否受支持。 */

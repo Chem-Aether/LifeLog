@@ -12,7 +12,7 @@ import java.util.List;
  * @param weatherCode 天气现象代码
  * @param location 地点
  * @param tags 标签列表
- * @param mediaIds 媒体 ID 列表
+ * @param mediaUrls 媒体 URL 列表
  */
 public record DiaryEntryRequest(
         String title,
@@ -22,5 +22,5 @@ public record DiaryEntryRequest(
         Integer weatherCode,
         String location,
         List<String> tags,
-        List<String> mediaIds
+        List<String> mediaUrls
 ) {}

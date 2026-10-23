@@ -1,0 +1,437 @@
+basePath: /
+info:
+  contact: {}
+  description: API documentation for the LifeLog map and geospatial service.
+  title: LifeLog Go Map Service API
+  version: "1.0"
+paths:
+  /api/admin/maps/reload:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reload local map sources
+      tags:
+      - maps
+  /api/airports/by-codes:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Airport codes
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get airports by ICAO or IATA codes
+      tags:
+      - airports
+  /api/airports/search:
+    get:
+      parameters:
+      - description: Airport, city, ICAO, or IATA
+        in: query
+        name: keyword
+        type: string
+      - description: Maximum result count
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search airports
+      tags:
+      - airports
+  /api/maps/catalog:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List available map sources
+      tags:
+      - maps
+  /api/maps/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get map source and tile cache status
+      tags:
+      - maps
+  /api/pois/{identifier}:
+    get:
+      parameters:
+      - description: POI identifier
+        in: path
+        name: identifier
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get a point of interest
+      tags:
+      - catalog
+  /api/pois/nearby:
+    get:
+      parameters:
+      - description: Longitude
+        in: query
+        name: longitude
+        type: number
+      - description: Latitude
+        in: query
+        name: latitude
+        type: number
+      - description: Search radius in meters
+        in: query
+        name: radius
+        type: number
+      - description: POI category
+        in: query
+        name: category
+        type: string
+      - description: Maximum result count
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search points of interest near a coordinate
+      tags:
+      - catalog
+  /api/pois/search:
+    get:
+      parameters:
+      - description: Search text
+        in: query
+        name: q
+        type: string
+      - description: Alternative search text
+        in: query
+        name: keyword
+        type: string
+      - description: POI category
+        in: query
+        name: category
+        type: string
+      - description: Maximum result count
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search points of interest
+      tags:
+      - catalog
+  /api/pois/stats:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get POI category counts
+      tags:
+      - catalog
+  /api/railway/routes/sample:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Ordered station names
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Generate route candidates between ordered railway stations
+      tags:
+      - railway
+  /api/railway/stations/search:
+    get:
+      parameters:
+      - description: Station name, code, city, or pinyin
+        in: query
+        name: keyword
+        required: true
+        type: string
+      - description: Maximum result count
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search railway stations
+      tags:
+      - railway
+  /api/regions/{node_id}:
+    get:
+      parameters:
+      - description: Region node ID
+        in: path
+        name: node_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get an administrative region and its ancestor path
+      tags:
+      - regions
+  /api/regions/boundaries:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Region IDs
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/geo+json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get GeoJSON boundaries for region IDs
+      tags:
+      - regions
+  /api/regions/paths:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Region IDs
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get administrative paths for region IDs
+      tags:
+      - regions
+  /api/regions/reverse:
+    get:
+      parameters:
+      - description: Longitude
+        in: query
+        name: longitude
+        required: true
+        type: number
+      - description: Latitude
+        in: query
+        name: latitude
+        required: true
+        type: number
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Find the administrative path containing a coordinate
+      tags:
+      - regions
+  /api/regions/reverse/batch:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Coordinate list
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reverse lookup administrative paths for coordinates
+      tags:
+      - regions
+  /api/regions/search:
+    get:
+      parameters:
+      - description: Search text
+        in: query
+        name: keyword
+        required: true
+        type: string
+      - description: Administrative level
+        in: query
+        name: level
+        type: integer
+      - description: Country code
+        in: query
+        name: country_code
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search administrative regions
+      tags:
+      - regions
+  /api/tiles/{z}/{x}/{y}.mvt:
+    get:
+      parameters:
+      - description: Zoom
+        in: path
+        name: z
+        required: true
+        type: integer
+      - description: Tile X
+        in: path
+        name: x
+        required: true
+        type: integer
+      - description: Tile Y
+        in: path
+        name: "y"
+        required: true
+        type: integer
+      produces:
+      - application/vnd.mapbox-vector-tile
+      responses:
+        "200":
+          description: Gzipped MVT data
+          schema:
+            type: string
+      summary: Get a vector map tile
+      tags:
+      - maps
+  /api/tiles/tilejson.json:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get the basemap TileJSON document
+      tags:
+      - maps
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check service health
+      tags:
+      - system
+swagger: "2.0"

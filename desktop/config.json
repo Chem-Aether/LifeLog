@@ -1,3 +1,56 @@
 {
-  "webUrl": "http://127.0.0.1:5173"
+  "frontend": {
+    "developmentUrl": "http://127.0.0.1:5173",
+    "port": 5173
+  },
+  "database": {
+    "host": "127.0.0.1",
+    "port": 5432
+  },
+  "services": [
+    {
+      "id": "auth",
+      "name": "认证服务",
+      "port": 8081,
+      "timeoutMs": 90000,
+      "command": "java",
+      "args": ["-jar", "auth.jar"],
+      "cwd": "../javaserver/target",
+      "packagedCwd": "services/java",
+      "packagedArgs": ["-jar", "auth.jar"]
+    },
+    {
+      "id": "bill",
+      "name": "账单服务",
+      "port": 8083,
+      "timeoutMs": 90000,
+      "command": "java",
+      "args": ["-jar", "bill.jar"],
+      "cwd": "../javaserver/target",
+      "packagedCwd": "services/java",
+      "packagedArgs": ["-jar", "bill.jar"]
+    },
+    {
+      "id": "diary",
+      "name": "日记服务",
+      "port": 8085,
+      "timeoutMs": 90000,
+      "command": "java",
+      "args": ["-jar", "diary.jar"],
+      "cwd": "../javaserver/target",
+      "packagedCwd": "services/java",
+      "packagedArgs": ["-jar", "diary.jar"]
+    },
+    {
+      "id": "travel",
+      "name": "旅行服务",
+      "port": 8084,
+      "timeoutMs": 120000,
+      "command": "java",
+      "args": ["-jar", "travel.jar"],
+      "cwd": "../javaserver/target",
+      "packagedCwd": "services/java",
+      "packagedArgs": ["-jar", "travel.jar"]
+    }
+  ]
 }

@@ -84,6 +84,15 @@ func (h *Handler) record(id string) (map[string]any, bool, error) {
 	return map[string]any{"path": path, "dataVersion": version}, true, err
 }
 
+// search godoc
+// @Summary Search administrative regions
+// @Tags regions
+// @Produce json
+// @Param keyword query string true "Search text"
+// @Param level query integer false "Administrative level"
+// @Param country_code query string false "Country code"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/regions/search [get]
 func (h *Handler) search(c *gin.Context) {
 	keyword := strings.TrimSpace(c.Query("keyword"))
 	if keyword == "" {
@@ -120,6 +129,15 @@ func (h *Handler) search(c *gin.Context) {
 	}
 	response.Payload(c, items)
 }
+
+// byID godoc
+// @Summary Get an administrative region and its ancestor path
+// @Tags regions
+// @Produce json
+// @Param node_id path string true "Region node ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/regions/{node_id} [get]
 func (h *Handler) byID(c *gin.Context) {
 	record, ok, err := h.record(c.Param("node_id"))
 	if err != nil {
@@ -132,6 +150,15 @@ func (h *Handler) byID(c *gin.Context) {
 	}
 	response.Payload(c, record)
 }
+
+// paths godoc
+// @Summary Get administrative paths for region IDs
+// @Tags regions
+// @Accept json
+// @Produce json
+// @Param request body map[string]interface{} true "Region IDs"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/regions/paths [post]
 func (h *Handler) paths(c *gin.Context) {
 	var body struct {
 		IDs []string `json:"ids"`
@@ -161,6 +188,14 @@ func (h *Handler) paths(c *gin.Context) {
 	response.Payload(c, result)
 }
 
+// boundaries godoc
+// @Summary Get GeoJSON boundaries for region IDs
+// @Tags regions
+// @Accept json
+// @Produce application/geo+json
+// @Param request body map[string]interface{} true "Region IDs"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/regions/boundaries [post]
 func (h *Handler) boundaries(c *gin.Context) {
 	var body struct {
 		IDs []string `json:"ids"`
@@ -202,6 +237,14 @@ func (h *Handler) boundaries(c *gin.Context) {
 	c.Data(http.StatusOK, "application/geo+json", bodyJSON)
 }
 
+// reverse godoc
+// @Summary Find the administrative path containing a coordinate
+// @Tags regions
+// @Produce json
+// @Param longitude query number true "Longitude"
+// @Param latitude query number true "Latitude"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/regions/reverse [get]
 func (h *Handler) reverse(c *gin.Context) {
 	lon, e1 := strconv.ParseFloat(c.Query("longitude"), 64)
 	lat, e2 := strconv.ParseFloat(c.Query("latitude"), 64)
@@ -216,6 +259,15 @@ func (h *Handler) reverse(c *gin.Context) {
 	}
 	response.Payload(c, result)
 }
+
+// reverseBatch godoc
+// @Summary Reverse lookup administrative paths for coordinates
+// @Tags regions
+// @Accept json
+// @Produce json
+// @Param request body map[string]interface{} true "Coordinate list"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/regions/reverse/batch [post]
 func (h *Handler) reverseBatch(c *gin.Context) {
 	var body struct {
 		Points []pointInput `json:"points"`

@@ -1,7 +1,7 @@
 <template>
   <div v-if="isEditing" v-loading="saving || uploadingCover" class="travel-edit-page">
     <header class="edit-header"><div><el-button text @click="requestClose">返回足迹管理</el-button><h1>{{ form.footprintId ? '编辑足迹' : '新增足迹' }}</h1></div><div class="edit-actions"><el-button :disabled="saving || uploadingCover" @click="requestClose">取消</el-button><el-button type="primary" :loading="saving" :disabled="uploadingCover" @click="save">保存并点亮</el-button></div></header>
-    <section class="edit-panel"><el-form label-width="90px"><el-form-item label="地图选点"><FootprintMapPicker :longitude="form.longitude" :latitude="form.latitude" @pick="handleMapPick" @clear="clearMapPoint" /></el-form-item><el-form-item label="当前地区"><div class="region-result"><span>{{ selectedRegionName || '选点后自动识别' }}</span></div></el-form-item><div class="field-grid"><el-form-item label="记录性质" required><el-radio-group v-model="form.visitType"><el-radio-button value="travel">旅行地点</el-radio-button><el-radio-button value="transit">途经城市</el-radio-button></el-radio-group></el-form-item><el-form-item label="地点名称" required><el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" /></el-form-item><el-form-item label="地点类型"><el-select v-model="form.locationType" clearable filterable placeholder="选择地点分类" style="width:100%"><el-option-group v-for="group in footprintCategoryGroups" :key="group.label" :label="group.label"><el-option v-for="category in group.options" :key="category.value" :label="category.label" :value="category.value"><span class="category-option"><img :src="category.iconUrl" alt=""><span>{{ category.label }}</span></span></el-option></el-option-group></el-select></el-form-item><el-form-item label="到访日期"><el-date-picker v-model="form.visitDate" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable placeholder="选择日期" style="width:100%" /></el-form-item></div><el-form-item label="旅行心得"><el-input v-model="form.note" type="textarea" :rows="4" placeholder="记录这次旅行的见闻、感受或特别回忆" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="旅行图片"><MediaUploadEditor v-model="coverItems" :upload="uploadTravelMedia" :before-remove="beforeRemoveCover" :url-for="mediaUrl" :multiple="true" :max-count="9" :disabled="saving" @busy-change="uploadingCover = $event" /></el-form-item></el-form></section>
+    <section class="edit-panel"><el-form label-width="90px"><el-form-item label="地图选点"><FootprintMapPicker :longitude="form.longitude" :latitude="form.latitude" @pick="handleMapPick" @clear="clearMapPoint" /></el-form-item><el-form-item label="当前地区"><div class="region-result"><span>{{ selectedRegionName || '选点后自动识别' }}</span></div></el-form-item><div class="field-grid"><el-form-item label="记录性质" required><el-radio-group v-model="form.visitType"><el-radio-button value="travel">旅行地点</el-radio-button><el-radio-button value="transit">途经城市</el-radio-button></el-radio-group></el-form-item><el-form-item label="地点名称" required><el-input v-model="form.placeName" placeholder="选择 POI 后自动填写，也可手动输入" maxlength="100" /></el-form-item><el-form-item label="地点类型"><el-select v-model="form.locationType" clearable filterable placeholder="选择地点分类" style="width:100%"><el-option-group v-for="group in footprintCategoryGroups" :key="group.label" :label="group.label"><el-option v-for="category in group.options" :key="category.value" :label="category.label" :value="category.value"><span class="category-option"><img :src="category.iconUrl" alt=""><span>{{ category.label }}</span></span></el-option></el-option-group></el-select></el-form-item><el-form-item label="到访日期"><el-date-picker v-model="form.visitDate" type="date" format="YYYY/M/D" value-format="YYYY-MM-DD" editable placeholder="选择日期" style="width:100%" /></el-form-item></div><el-form-item label="旅行心得"><el-input v-model="form.note" type="textarea" :rows="4" placeholder="记录这次旅行的见闻、感受或特别回忆" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="旅行图片"><MediaUploadEditor v-model="coverItems" :upload="uploadTravelMedia" :before-remove="beforeRemoveCover" :multiple="true" :max-count="9" :disabled="saving" @busy-change="uploadingCover = $event" /></el-form-item></el-form></section>
   </div>
   <div v-else v-loading="loading || saving || deleting" class="footprint-page">
     <div class="page-header">
@@ -108,7 +108,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { addFootprint, deleteFootprint, deleteFootprints, getFootprintById, getFootprintRegionIds, searchFootprints, updateFootprint } from '@/modules/travel/apis/travel.js'
 import { getRegionPaths } from '@/modules/travel/apis/sysResource.js'
-import { deleteTravelMedia, mediaUrl, uploadTravelMedia } from '@/modules/travel/apis/media.js'
+import { deleteTravelMedia, uploadTravelMedia } from '@/modules/travel/apis/media.js'
 import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
 import { footprintCategoryGroups, getFootprintCategoryIcon, getFootprintCategoryLabel, normalizeFootprintCategory } from '@/modules/travel/stores/footprintCategories.js'
 import MediaUploadEditor from '@/components/MediaUploadEditor.vue'
@@ -150,11 +150,11 @@ const form = reactive({
   latitude: null,
   regionId: null,
   note: '',
-  mediaIds: []
+  mediaUrls: []
 })
 const coverItems = computed({
-  get: () => form.mediaIds.map((mediaId, index) => ({ mediaId, url: mediaUrl(mediaId), contentType: 'image/jpeg', name: `足迹图片 ${index + 1}` })),
-  set: items => { form.mediaIds = items.map(item => item.mediaId) },
+  get: () => form.mediaUrls.map((url, index) => ({ url, contentType: 'image/jpeg', name: `足迹图片 ${index + 1}` })),
+  set: items => { form.mediaUrls = items.map(item => item.url) },
 })
 
 let filterTimer
@@ -274,7 +274,7 @@ function resetForm() {
     latitude: null,
     regionId: null,
     note: '',
-    mediaIds: []
+    mediaUrls: []
   })
   selectedRegionName.value = ''
   originalMediaIds.value = []
@@ -302,9 +302,9 @@ async function openEditData(row) {
     latitude: row.latitude == null ? null : Number(row.latitude),
     regionId: row.regionId || null,
     note: row.note || '',
-    mediaIds: Array.isArray(row.mediaIds) ? [...row.mediaIds] : []
+    mediaUrls: Array.isArray(row.mediaUrls) ? [...row.mediaUrls] : []
   })
-  originalMediaIds.value = [...form.mediaIds]
+  originalMediaIds.value = [...form.mediaUrls]
   pendingMediaDeletion.value = new Set()
   editSnapshot.value = JSON.stringify({
     placeName: form.placeName.trim(),
@@ -315,24 +315,24 @@ async function openEditData(row) {
     latitude: form.latitude,
     regionId: form.regionId,
     note: form.note.trim() || null,
-    mediaIds: form.mediaIds
+    mediaUrls: form.mediaUrls
   })
     selectedRegionName.value = getFootprintRegion({ ...row, regionPaths: pathsById[String(row.regionId)]?.path || [] }).regionName
 }
 
-async function beforeRemoveCover(mediaId) {
-  if (!mediaId) return
-  if (form.footprintId && originalMediaIds.value.includes(mediaId)) {
-    pendingMediaDeletion.value = new Set([...pendingMediaDeletion.value, mediaId])
+async function beforeRemoveCover(url) {
+  if (!url) return
+  if (form.footprintId && originalMediaIds.value.includes(url)) {
+    pendingMediaDeletion.value = new Set([...pendingMediaDeletion.value, url])
     return
   }
-  await deleteTravelMedia(mediaId)
+  await deleteTravelMedia(url)
 }
 
 function hasUnsavedChanges() {
   return isEditing.value && editSnapshot.value !== snapshotForm()
 }
-function snapshotForm() { return JSON.stringify({ placeName: form.placeName.trim(), locationType: form.locationType.trim() || null, visitType: form.visitType, visitDate: form.visitDate || null, longitude: form.longitude, latitude: form.latitude, regionId: form.regionId, note: form.note.trim() || null, mediaIds: form.mediaIds }) }
+function snapshotForm() { return JSON.stringify({ placeName: form.placeName.trim(), locationType: form.locationType.trim() || null, visitType: form.visitType, visitDate: form.visitDate || null, longitude: form.longitude, latitude: form.latitude, regionId: form.regionId, note: form.note.trim() || null, mediaUrls: form.mediaUrls }) }
 async function requestClose() {
   if (saving.value || uploadingCover.value) return
   if (hasUnsavedChanges()) { try { await ElMessageBox.confirm('当前内容尚未保存，确定放弃修改并离开吗？', '未保存的修改', { type: 'warning', confirmButtonText: '放弃修改', cancelButtonText: '继续编辑' }) } catch { return } }
@@ -375,7 +375,7 @@ async function save() {
     latitude: form.latitude,
     regionId: form.regionId,
     note: form.note.trim() || null,
-    mediaIds: form.mediaIds
+    mediaUrls: form.mediaUrls
   }
   if (form.footprintId && editSnapshot.value === JSON.stringify(payload) && pendingMediaDeletion.value.size === 0) {
     skipLeaveGuard = true
@@ -390,11 +390,11 @@ async function save() {
       await addFootprint(payload)
       currentPage.value = 1
     }
-    for (const mediaId of pendingMediaDeletion.value) {
+    for (const url of pendingMediaDeletion.value) {
       try {
-        await deleteTravelMedia(mediaId)
+        await deleteTravelMedia(url)
         const remaining = new Set(pendingMediaDeletion.value)
-        remaining.delete(mediaId)
+        remaining.delete(url)
         pendingMediaDeletion.value = remaining
       } catch {
         editSnapshot.value = snapshotForm()

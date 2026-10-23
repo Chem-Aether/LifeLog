@@ -34,7 +34,7 @@
         <article v-for="entry in recent" :key="entry.id" class="recent-entry">
           <div class="recent-date"><strong>{{ dayOf(entry.entryDate) }}</strong><span>{{ monthOf(entry.entryDate) }}</span></div>
           <div class="recent-copy"><h3>{{ entry.title }}</h3><p>{{ entry.content || '照片与心情，也是一种记录。' }}</p><div class="recent-meta"><span>{{ formatDate(entry.entryDate) }}</span><span v-if="entry.mood">{{ entry.mood }}</span><span v-if="weatherOption(entry.weatherCode)" class="weather-meta"><img :src="weatherIconUrl(entry.weatherCode)" alt="" />{{ weatherOption(entry.weatherCode).name }}</span><span v-if="entry.location">{{ entry.location }}</span></div></div>
-          <el-image v-if="entry.mediaIds?.length" class="recent-photo" :src="diaryMediaUrl(entry.mediaIds[0])" :preview-src-list="entry.mediaIds.map(diaryMediaUrl)" fit="cover" />
+          <el-image v-if="entry.mediaUrls?.length" class="recent-photo" :src="diaryMediaUrl(entry.mediaUrls[0])" :preview-src-list="entry.mediaUrls.map(diaryMediaUrl)" fit="cover" />
         </article>
       </div>
       <el-empty v-else-if="!loading" :image-size="76" description="还没有日记，写下第一篇生活记录吧"><el-button type="primary" :icon="Plus" @click="writeToday">开始记录</el-button></el-empty>

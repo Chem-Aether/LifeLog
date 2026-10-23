@@ -39,5 +39,5 @@
 
 - 业务规则、接口和数据库表归属对应业务服务；不要把业务表放入 `common`。
 - 只有确实被多个 Java 服务复用的基础能力才放入 `common`。
-- Java 服务不直接访问地图或媒体文件目录，分别通过 mapserver、mediaserver 的 HTTP 接口访问。
+- Java 服务通过 HTTP 调用 mapserver；媒体文件由公共存储组件使用 S3 API 写入 SeaweedFS，日记和旅行数据库只保存对象 URL。
 - 旅行服务可选调用 spyderserver 查询在线车次；不使用该功能时无需启动它。

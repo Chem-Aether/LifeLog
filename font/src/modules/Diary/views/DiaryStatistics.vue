@@ -69,7 +69,7 @@ const dailyCounts = computed(() => {
   return counts
 })
 const writtenDays = computed(() => dailyCounts.value.size)
-const mediaCount = computed(() => entries.value.reduce((sum, entry) => sum + (entry.mediaIds?.length || 0), 0))
+const mediaCount = computed(() => entries.value.reduce((sum, entry) => sum + (entry.mediaUrls?.length || 0), 0))
 const locationCount = computed(() => new Set(entries.value.map(entry => entry.location?.trim()).filter(Boolean)).size)
 function frequency(key) {
   const counts = new Map()

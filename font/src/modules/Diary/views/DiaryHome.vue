@@ -43,7 +43,7 @@
           </template>
         </el-table-column>
         <el-table-column label="照片" width="82" align="center">
-          <template #default="{ row }">{{ row.mediaIds?.length || 0 }} 个媒体</template>
+          <template #default="{ row }">{{ row.mediaUrls?.length || 0 }} 个媒体</template>
         </el-table-column>
         <el-table-column label="心情" width="108">
           <template #default="{ row }">{{ row.mood || '—' }}</template>
@@ -78,16 +78,16 @@
           <button class="entry-title" @click="openDetail(entry)">{{ entry.title }}</button>
           <div v-if="entry.content" class="feed-content" :class="{ expanded: expandedEntries.has(entry.id) }">{{ entry.content }}</div>
           <button v-if="entry.content?.length > 180" class="content-toggle" @click="toggleContent(entry.id)">{{ expandedEntries.has(entry.id) ? '收起' : '全文' }}</button>
-          <div v-if="entry.mediaIds?.length" class="feed-gallery" :class="galleryClass(entry)">
-            <div v-for="(mediaId, index) in visibleMedia(entry)" :key="mediaId" class="photo-cell">
-              <video v-if="entry.mediaTypes?.[mediaId]?.startsWith('video/')" :src="diaryMediaUrl(mediaId)" controls preload="metadata"></video>
-              <el-image v-else :src="diaryMediaUrl(mediaId)" :preview-src-list="imageMedia(entry).map(diaryMediaUrl)" :initial-index="imageMedia(entry).indexOf(mediaId)" hide-on-click-modal fit="cover" loading="lazy" />
-              <button v-if="index === 8 && entry.mediaIds.length > 9 && !expandedMediaEntries.has(entry.id)" class="photo-overflow" :aria-label="`展开其余 ${entry.mediaIds.length - 9} 个媒体`" @click="toggleMedia(entry)">+{{ entry.mediaIds.length - 9 }} 更多</button>
+          <div v-if="entry.mediaUrls?.length" class="feed-gallery" :class="galleryClass(entry)">
+            <div v-for="(mediaUrl, index) in visibleMedia(entry)" :key="mediaUrl" class="photo-cell">
+              <video v-if="entry.mediaTypes?.[mediaUrl]?.startsWith('video/')" :src="diaryMediaUrl(mediaUrl)" controls preload="metadata"></video>
+              <el-image v-else :src="diaryMediaUrl(mediaUrl)" :preview-src-list="imageMedia(entry).map(diaryMediaUrl)" :initial-index="imageMedia(entry).indexOf(mediaUrl)" hide-on-click-modal fit="cover" loading="lazy" />
+              <button v-if="index === 8 && entry.mediaUrls.length > 9 && !expandedMediaEntries.has(entry.id)" class="photo-overflow" :aria-label="`展开其余 ${entry.mediaUrls.length - 9} 个媒体`" @click="toggleMedia(entry)">+{{ entry.mediaUrls.length - 9 }} 更多</button>
             </div>
           </div>
-          <button v-if="expandedMediaEntries.has(entry.id) && entry.mediaIds.length > 9" class="media-collapse" @click="toggleMedia(entry)">收起照片</button>
+          <button v-if="expandedMediaEntries.has(entry.id) && entry.mediaUrls.length > 9" class="media-collapse" @click="toggleMedia(entry)">收起照片</button>
           <div v-if="entry.tags?.length" class="entry-tags"><span v-for="tag in entry.tags" :key="tag"># {{ tag }}</span></div>
-          <footer class="feed-card-footer"><span v-if="entry.mediaIds?.length" class="photo-count"><el-icon><Picture /></el-icon>{{ entry.mediaIds.length }} 个媒体</span><span v-else></span><el-button text :icon="ChatLineSquare" @click="openDetail(entry)">查看日记</el-button></footer>
+          <footer class="feed-card-footer"><span v-if="entry.mediaUrls?.length" class="photo-count"><el-icon><Picture /></el-icon>{{ entry.mediaUrls.length }} 个媒体</span><span v-else></span><el-button text :icon="ChatLineSquare" @click="openDetail(entry)">查看日记</el-button></footer>
         </article>
       </div>
 
@@ -117,9 +117,9 @@
         <div v-if="weatherOption(detailEntry.weatherCode)" class="detail-weather"><img :src="weatherIconUrl(detailEntry.weatherCode)" alt="" />{{ weatherOption(detailEntry.weatherCode).name }}</div>
         <div v-if="detailEntry.location" class="detail-location"><el-icon><LocationInformation /></el-icon>{{ detailEntry.location }}</div>
         <div class="detail-content">{{ detailEntry.content || '这篇日记没有正文。' }}</div>
-        <div v-if="detailEntry.mediaIds?.length" class="detail-gallery">
-          <video v-for="id in detailEntry.mediaIds.filter(id => detailEntry.mediaTypes?.[id]?.startsWith('video/'))" :key="id" :src="diaryMediaUrl(id)" controls preload="metadata"></video>
-          <el-image v-for="(id, index) in detailEntry.mediaIds.filter(id => !detailEntry.mediaTypes?.[id]?.startsWith('video/'))" :key="id" :src="diaryMediaUrl(id)" :preview-src-list="detailEntry.mediaIds.filter(value => !detailEntry.mediaTypes?.[value]?.startsWith('video/')).map(diaryMediaUrl)" :initial-index="index" hide-on-click-modal fit="cover" />
+        <div v-if="detailEntry.mediaUrls?.length" class="detail-gallery">
+          <video v-for="url in detailEntry.mediaUrls.filter(url => detailEntry.mediaTypes?.[url]?.startsWith('video/'))" :key="url" :src="diaryMediaUrl(url)" controls preload="metadata"></video>
+          <el-image v-for="(url, index) in detailEntry.mediaUrls.filter(url => !detailEntry.mediaTypes?.[url]?.startsWith('video/'))" :key="url" :src="diaryMediaUrl(url)" :preview-src-list="detailEntry.mediaUrls.filter(value => !detailEntry.mediaTypes?.[value]?.startsWith('video/')).map(diaryMediaUrl)" :initial-index="index" hide-on-click-modal fit="cover" />
         </div>
         <div v-if="detailEntry.tags?.length" class="entry-tags detail-tags"><span v-for="tag in detailEntry.tags" :key="tag"># {{ tag }}</span></div>
       </template>
@@ -193,10 +193,10 @@ function galleryClass(entry) {
   return [layout, expanded ? 'expanded' : ''].filter(Boolean).join(' ')
 }
 function visibleMedia(entry) {
-  return expandedMediaEntries.value.has(entry.id) ? entry.mediaIds : entry.mediaIds.slice(0, 9)
+  return expandedMediaEntries.value.has(entry.id) ? entry.mediaUrls : entry.mediaUrls.slice(0, 9)
 }
 function imageMedia(entry) {
-  return entry.mediaIds.filter(id => !entry.mediaTypes?.[id]?.startsWith('video/'))
+  return entry.mediaUrls.filter(url => !entry.mediaTypes?.[url]?.startsWith('video/'))
 }
 function toggleMedia(entry) {
   const next = new Set(expandedMediaEntries.value)

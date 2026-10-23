@@ -11,12 +11,15 @@ import (
 	httpapi "lifelog/goserver/internal/transport/http"
 )
 
-func New() (*httpapi.Server, error) {
+func New(configPath string) (*httpapi.Server, error) {
 	root, err := findRoot()
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := config.Load(filepath.Join(root, "config", "application.json"))
+	if !filepath.IsAbs(configPath) {
+		configPath = filepath.Join(root, configPath)
+	}
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, err
 	}

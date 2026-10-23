@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS diary_entry_tag (
 
 CREATE TABLE IF NOT EXISTS diary_entry_media (
     diary_id BIGINT NOT NULL REFERENCES diary_entry(diary_id) ON DELETE CASCADE,
-    media_id VARCHAR(64) NOT NULL,
+    media_url VARCHAR(2048) NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (diary_id, media_id)
+    PRIMARY KEY (diary_id, media_url)
 );
+

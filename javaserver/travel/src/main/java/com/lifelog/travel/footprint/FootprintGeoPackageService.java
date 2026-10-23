@@ -56,7 +56,7 @@ public class FootprintGeoPackageService {
             statement.execute("CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT NOT NULL, srs_id INTEGER NOT NULL PRIMARY KEY, organization TEXT NOT NULL, organization_coordsys_id INTEGER NOT NULL, definition TEXT NOT NULL, description TEXT)");
             statement.execute("CREATE TABLE gpkg_contents (table_name TEXT NOT NULL PRIMARY KEY, data_type TEXT NOT NULL, identifier TEXT UNIQUE, description TEXT DEFAULT '', last_change DATETIME NOT NULL, min_x DOUBLE, min_y DOUBLE, max_x DOUBLE, max_y DOUBLE, srs_id INTEGER, FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id))");
             statement.execute("CREATE TABLE gpkg_geometry_columns (table_name TEXT NOT NULL, column_name TEXT NOT NULL, geometry_type_name TEXT NOT NULL, srs_id INTEGER NOT NULL, z TINYINT NOT NULL, m TINYINT NOT NULL, PRIMARY KEY (table_name, column_name), FOREIGN KEY (table_name) REFERENCES gpkg_contents(table_name), FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id))");
-            statement.execute("CREATE TABLE footprints (fid INTEGER PRIMARY KEY AUTOINCREMENT, footprint_id INTEGER NOT NULL UNIQUE, place_name TEXT NOT NULL, visit_type TEXT NOT NULL, visit_date TEXT, region_id TEXT, location_type TEXT, note TEXT, media_ids TEXT NOT NULL, longitude DOUBLE, latitude DOUBLE, geom POINT)");
+            statement.execute("CREATE TABLE footprints (fid INTEGER PRIMARY KEY AUTOINCREMENT, footprint_id INTEGER NOT NULL UNIQUE, place_name TEXT NOT NULL, visit_type TEXT NOT NULL, visit_date TEXT, region_id TEXT, location_type TEXT, note TEXT, media_urls TEXT NOT NULL, longitude DOUBLE, latitude DOUBLE, geom POINT)");
             statement.execute("INSERT INTO gpkg_spatial_ref_sys VALUES ('Undefined Cartesian', -1, 'NONE', -1, 'undefined', 'undefined Cartesian coordinate reference system')");
             statement.execute("INSERT INTO gpkg_spatial_ref_sys VALUES ('Undefined Geographic', 0, 'NONE', 0, 'undefined', 'undefined geographic coordinate reference system')");
             statement.execute("INSERT INTO gpkg_spatial_ref_sys VALUES ('WGS 84 geodetic', 4326, 'EPSG', 4326, '" + WGS84_WKT.replace("'", "''") + "', 'longitude/latitude coordinates on the WGS 84 spheroid')");
@@ -71,7 +71,7 @@ public class FootprintGeoPackageService {
 
     /** 批量写入足迹及点几何，并更新图层边界范围。 */
     private void insertRows(Connection connection, List<FootSpot> rows) throws SQLException {
-        String sql = "INSERT INTO footprints (footprint_id,place_name,visit_type,visit_date,region_id,location_type,note,media_ids,longitude,latitude,geom) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO footprints (footprint_id,place_name,visit_type,visit_date,region_id,location_type,note,media_urls,longitude,latitude,geom) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
         double minX = Double.POSITIVE_INFINITY;
         double minY = Double.POSITIVE_INFINITY;
         double maxX = Double.NEGATIVE_INFINITY;
@@ -85,7 +85,7 @@ public class FootprintGeoPackageService {
                 statement.setString(5, row.getRegionId());
                 statement.setString(6, row.getLocationType());
                 statement.setString(7, row.getNote());
-                statement.setString(8, row.getMediaIdsJson());
+                statement.setString(8, row.getMediaUrlsJson());
                 if (row.getLongitude() == null || row.getLatitude() == null) {
                     statement.setNull(9, Types.DOUBLE);
                     statement.setNull(10, Types.DOUBLE);

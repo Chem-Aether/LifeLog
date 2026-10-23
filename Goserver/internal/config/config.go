@@ -7,6 +7,9 @@ import (
 )
 
 type Config struct {
+	APIDocs struct {
+		Enabled bool `json:"enabled"`
+	} `json:"api_docs"`
 	Server struct {
 		Host string `json:"host"`
 		Port int    `json:"port"`

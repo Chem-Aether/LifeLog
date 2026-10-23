@@ -1,6 +1,11 @@
+// @title LifeLog Go Map Service API
+// @version 1.0
+// @description API documentation for the LifeLog map and geospatial service.
+// @BasePath /
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 	"time"
@@ -10,8 +15,10 @@ import (
 )
 
 func main() {
+	configPath := flag.String("config", "config/application.json", "path to the application configuration file")
+	flag.Parse()
 	gin.SetMode(gin.ReleaseMode)
-	application, err := app.New()
+	application, err := app.New(*configPath)
 	if err != nil {
 		log.Fatal(err)
 	}

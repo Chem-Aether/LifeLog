@@ -26,7 +26,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import * as maplibregl from 'maplibre-gl'
+import { maplibregl } from '@/utils/maplibre.js'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { getFootprints, getTrajectories } from '@/modules/travel/apis/travel.js'
 import { enrichFootprintRegions, getAirportsByIcao, getRegionBoundaries } from '@/modules/travel/apis/sysResource.js'
@@ -691,13 +691,14 @@ onMounted(async () => {
     container: mapContainer.value,
     style: createStyle(),
     center: [104, 35],
-    zoom: 2.2,
+    zoom: 4,
     minZoom: 1,
     maxZoom: 16,
     localIdeographFontFamily: 'Microsoft YaHei, sans-serif',
     attributionControl: false,
   })
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
+  map.on('error', event => console.error('[MapLibre]', event.error))
   map.on('load', addTravelLayers)
   map.on('moveend', refreshTrajectoryRoutes)
   await loadTravelData()

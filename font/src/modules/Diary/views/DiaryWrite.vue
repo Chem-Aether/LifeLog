@@ -14,7 +14,7 @@
         <el-input v-model="form.content" class="content-input" type="textarea" :autosize="{ minRows: 16, maxRows: 36 }" maxlength="20000" show-word-limit placeholder="今天发生了什么？写下你的所见、所闻与感受……" />
         <div class="photo-section">
           <div class="section-title"><el-icon><Picture /></el-icon><span>照片和视频</span></div>
-          <MediaUploadEditor v-model="mediaItems" :upload="uploadDiaryAsset" :url-for="diaryMediaUrl" allow-video :disabled="saving" @busy-change="uploadingImages = $event" />
+          <MediaUploadEditor v-model="mediaItems" :upload="uploadDiaryAsset" allow-video :disabled="saving" @busy-change="uploadingImages = $event" />
         </div>
       </section>
 
@@ -40,7 +40,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Check, LocationInformation, Notebook, Picture, Plus } from '@element-plus/icons-vue'
-import { createDiaryEntry, diaryMediaUrl, getDiaryEntry, updateDiaryEntry, uploadDiaryMedia, uploadDiaryVideo } from '../apis/diary.js'
+import { createDiaryEntry, getDiaryEntry, updateDiaryEntry, uploadDiaryMedia, uploadDiaryVideo } from '../apis/diary.js'
 import { diaryFeedState } from '../utils/feedState.js'
 import { weatherGroups, weatherIconUrl, weatherOption } from '../utils/weather.js'
 import MediaUploadEditor from '@/components/MediaUploadEditor.vue'
@@ -53,7 +53,7 @@ const moods = [
   { value: '🥰 感恩', label: '🥰 感恩' }, { value: '🤔 思考', label: '🤔 思考' },
   { value: '😔 低落', label: '😔 低落' }, { value: '😤 忙碌', label: '😤 忙碌' },
 ]
-const form = reactive({ title: '', content: '', entryDate: today(), mood: '', weatherCode: null, location: '', tags: [], mediaIds: [], mediaTypes: {} })
+const form = reactive({ title: '', content: '', entryDate: today(), mood: '', weatherCode: null, location: '', tags: [], mediaUrls: [], mediaTypes: {} })
 const mediaItems = ref([])
 const tagDraft = ref('')
 const saving = ref(false)
@@ -61,18 +61,18 @@ const uploadingImages = ref(false)
 const ready = ref(false)
 const saved = ref(false)
 const original = ref('')
-const isDirty = computed(() => ready.value && JSON.stringify({ ...form, tags: [...form.tags], mediaIds: [...form.mediaIds] }) !== original.value)
+const isDirty = computed(() => ready.value && JSON.stringify({ ...form, tags: [...form.tags], mediaUrls: [...form.mediaUrls] }) !== original.value)
 
 watch(mediaItems, items => {
-  form.mediaIds = items.map(item => item.mediaId)
-  form.mediaTypes = Object.fromEntries(items.map(item => [item.mediaId, item.contentType]))
+  form.mediaUrls = items.map(item => item.url)
+  form.mediaTypes = Object.fromEntries(items.map(item => [item.url, item.contentType]))
 }, { deep: true })
 
 function today() {
   const date = new Date()
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
-function snapshot() { original.value = JSON.stringify({ ...form, tags: [...form.tags], mediaIds: [...form.mediaIds] }) }
+function snapshot() { original.value = JSON.stringify({ ...form, tags: [...form.tags], mediaUrls: [...form.mediaUrls] }) }
 function backPath() {
   const source = route.query.from
   if (source === 'feed') {
@@ -104,9 +104,9 @@ async function loadEntry() {
       const entry = await getDiaryEntry(entryId.value)
       Object.assign(form, {
         title: entry.title || '', content: entry.content || '', entryDate: String(entry.entryDate).slice(0, 10),
-        mood: entry.mood || '', weatherCode: entry.weatherCode ?? null, location: entry.location || '', tags: [...(entry.tags || [])], mediaIds: [...(entry.mediaIds || [])], mediaTypes: { ...(entry.mediaTypes || {}) },
+        mood: entry.mood || '', weatherCode: entry.weatherCode ?? null, location: entry.location || '', tags: [...(entry.tags || [])], mediaUrls: [...(entry.mediaUrls || [])], mediaTypes: { ...(entry.mediaTypes || {}) },
       })
-      mediaItems.value = form.mediaIds.map(id => ({ mediaId: id, url: diaryMediaUrl(id), contentType: form.mediaTypes[id] || 'image/jpeg', name: id }))
+      mediaItems.value = form.mediaUrls.map(url => ({ url, contentType: form.mediaTypes[url] || 'image/jpeg', name: url.split('/').pop() }))
     } catch { router.replace(backPath()); return }
   }
   snapshot()
@@ -119,7 +119,7 @@ async function saveEntry() {
   if (uploadingImages.value) { ElMessage.warning('照片上传完成后再保存'); return }
   saving.value = true
   try {
-    const payload = { title: form.title, content: form.content, entryDate: form.entryDate, mood: form.mood, weatherCode: form.weatherCode, location: form.location, tags: [...form.tags], mediaIds: [...new Set(form.mediaIds)] }
+    const payload = { title: form.title, content: form.content, entryDate: form.entryDate, mood: form.mood, weatherCode: form.weatherCode, location: form.location, tags: [...form.tags], mediaUrls: [...new Set(form.mediaUrls)] }
     if (entryId.value) {
       await updateDiaryEntry(entryId.value, payload)
       diaryFeedState.entries = diaryFeedState.entries.map(entry => String(entry.id) === String(entryId.value)

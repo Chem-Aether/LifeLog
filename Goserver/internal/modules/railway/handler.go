@@ -25,6 +25,15 @@ func (h *Handler) Register(r gin.IRoutes) {
 	r.GET("/api/railway/stations/search", h.searchStations)
 	r.POST("/api/railway/routes/sample", h.sampleRoute)
 }
+
+// searchStations godoc
+// @Summary Search railway stations
+// @Tags railway
+// @Produce json
+// @Param keyword query string true "Station name, code, city, or pinyin"
+// @Param limit query integer false "Maximum result count"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/railway/stations/search [get]
 func (h *Handler) searchStations(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("keyword"))
 	if q == "" {
@@ -94,6 +103,15 @@ func pointCoordinates(blob []byte) ([2]float64, error) {
 	}
 	return [2]float64{p[0], p[1]}, nil
 }
+
+// sampleRoute godoc
+// @Summary Generate route candidates between ordered railway stations
+// @Tags railway
+// @Accept json
+// @Produce json
+// @Param request body map[string]interface{} true "Ordered station names"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/railway/routes/sample [post]
 func (h *Handler) sampleRoute(c *gin.Context) {
 	var req struct {
 		Stations  []string `json:"stations"`
