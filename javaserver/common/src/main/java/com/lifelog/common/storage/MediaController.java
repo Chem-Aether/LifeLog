@@ -1,6 +1,7 @@
 package com.lifelog.common.storage;
 
 import com.lifelog.common.api.Result;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
+@ConditionalOnProperty(prefix = "media.storage", name = "endpoint")
 public class MediaController {
     private final MediaStorageService storage;
 

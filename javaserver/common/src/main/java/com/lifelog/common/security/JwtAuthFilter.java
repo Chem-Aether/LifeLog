@@ -8,6 +8,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -17,16 +18,9 @@ import java.io.IOException;
 /** 在请求到达控制器前校验 JWT；接口文档和预检请求不要求令牌。 */
 @Component
 @ConditionalOnProperty(name = "jwt.auth.enabled", havingValue = "true")
+@RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtConfig jwtConfig;
-
-    /**
-     * 使用 JWT 配置初始化认证过滤器。
-     * @param jwtConfig JWT 密钥及有效期配置
-     */
-    public JwtAuthFilter(JwtConfig jwtConfig) {
-        this.jwtConfig = jwtConfig;
-    }
 
     /**
      * 判断请求是否属于无需 JWT 校验的 API 文档路径。

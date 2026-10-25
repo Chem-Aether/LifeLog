@@ -5,21 +5,15 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
 import com.lifelog.common.config.JwtConfig;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import java.util.Date;
 
 /** 创建并校验身份认证服务使用的 JWT。 */
 @Component
+@RequiredArgsConstructor
 public class JwtUtil {
     private final JwtConfig jwtConfig;
-
-    /**
-     * 使用认证配置初始化 JWT 工具。
-     * @param jwtConfig JWT 密钥及有效期配置
-     */
-    public JwtUtil(JwtConfig jwtConfig) {
-        this.jwtConfig = jwtConfig;
-    }
 
     /**
      * 创建包含用户标识和账号声明、带有效期的签名令牌。
