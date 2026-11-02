@@ -25,7 +25,7 @@ export const uploadDiaryMedia = file => {
   const data = new FormData()
   data.append('file', file)
   data.append('category', 'diary')
-  return diaryRequest({ url: '/api/media', method: 'post', data, timeout: 0 })
+  return diaryRequest({ url: '/api/media', method: 'post', data, timeout: 75_000 })
 }
 
 export const uploadDiaryVideo = file => {
@@ -33,7 +33,7 @@ export const uploadDiaryVideo = file => {
   data.append('file', file)
   data.append('category', 'diary')
   data.append('media_type', 'video')
-  return diaryRequest({ url: '/api/media', method: 'post', data, timeout: 0 })
+  return diaryRequest({ url: '/api/media', method: 'post', data, timeout: 16 * 60_000 })
 }
 
 

@@ -1,40 +1,49 @@
 <template>
   <section class="media-editor" :class="{ disabled }">
-    <div class="media-grid">
-      <article v-for="(item, index) in modelValue" :key="item.url" class="media-item">
-        <video v-if="item.contentType?.startsWith('video/')" :src="resolveMediaUrl(item.url)" controls preload="metadata" />
-        <img v-else :src="resolveMediaUrl(item.url)" :alt="item.name || '已上传图片'" />
-        <button v-if="!item.contentType?.startsWith('video/')" class="edit-item" type="button" :aria-label="`编辑${item.name || '图片'}`" :disabled="disabled || busy" title="编辑图片" @click="editItem(index)"><el-icon><Edit /></el-icon></button>
-        <button class="remove-item" type="button" :aria-label="`移除${item.name || '媒体'}`" :disabled="disabled || busy" @click="removeItem(index)"><el-icon><Close /></el-icon></button>
-      </article>
-      <button v-if="modelValue.length < maxCount || !multiple" class="add-item" type="button" :disabled="disabled || busy" @click="fileInput?.click()">
-        <el-icon v-if="busy" class="is-loading"><Loading /></el-icon><el-icon v-else><Plus /></el-icon>
-        <span>{{ busy ? '处理中' : modelValue.length ? multiple ? '继续添加' : '更换图片' : '添加图片' }}</span>
-      </button>
-    </div>
+    <draggable v-model="sortedItems" item-key="url" class="media-grid" handle=".sort-handle" :disabled="!multiple || disabled || busy" :animation="150">
+      <template #item="{ element: item, index }">
+        <article class="media-item">
+          <video v-if="item.contentType?.startsWith('video/')" :src="resolveMediaUrl(item.url)" controls preload="metadata" />
+          <img v-else :src="resolveMediaUrl(item.url)" :alt="item.name || '已上传图片'" />
+          <button v-if="multiple && modelValue.length > 1" class="sort-handle" type="button" :aria-label="`调整${item.name || '媒体'}的顺序`" :disabled="disabled || busy" title="拖动排序，方向键调整" @keydown.left.prevent="moveItem(index, -1)" @keydown.up.prevent="moveItem(index, -1)" @keydown.right.prevent="moveItem(index, 1)" @keydown.down.prevent="moveItem(index, 1)"><el-icon><Rank /></el-icon></button>
+          <button v-if="!item.contentType?.startsWith('video/') && item.contentType !== 'image/gif'" class="edit-item" type="button" :aria-label="`编辑${item.name || '图片'}`" :disabled="disabled || busy" title="编辑图片" @click="editItem(index)"><el-icon><Edit /></el-icon></button>
+          <button class="remove-item" type="button" :aria-label="`移除${item.name || '媒体'}`" :disabled="disabled || busy" @click="removeItem(index)"><el-icon><Close /></el-icon></button>
+        </article>
+      </template>
+      <template #footer>
+        <button v-if="modelValue.length < maxCount || !multiple" class="add-item" type="button" :disabled="disabled || busy" @click="fileInput?.click()">
+          <el-icon v-if="busy" class="is-loading"><Loading /></el-icon><el-icon v-else><Plus /></el-icon>
+          <span>{{ busy ? '处理中' : modelValue.length ? multiple ? '继续添加' : '更换图片' : '添加图片' }}</span>
+        </button>
+      </template>
+    </draggable>
     <p class="editor-hint">图片默认原图上传，可手动编辑裁切、旋转和缩放<template v-if="allowVideo">；视频直接上传</template></p>
     <input ref="fileInput" class="file-input" type="file" :accept="accept" :multiple="multiple" :disabled="disabled || busy" @change="selectFiles">
 
     <el-dialog v-model="dialogVisible" title="编辑图片" width="min(760px, calc(100vw - 28px))" class="crop-dialog" :close-on-click-modal="false" @close="handleDialogClose" @closed="onDialogClosed">
-      <div class="crop-workspace" @pointerdown="startDrag" @pointermove="moveDrag" @pointerup="stopDrag" @pointercancel="stopDrag">
+      <div class="crop-workspace" @pointermove="moveDrag" @pointerup="stopDrag" @pointercancel="stopDrag">
         <canvas ref="canvasEl" class="crop-canvas" width="800" height="500" />
-        <div class="crop-frame" :style="frameStyle"><span /><span /><span /><span /></div>
+        <div class="crop-frame" :style="frameStyle" @pointerdown="startDrag">
+          <button v-for="handle in resizeHandles" :key="handle" type="button" class="crop-handle" :class="`handle-${handle}`" :aria-label="`调整裁切框${handleLabels[handle]}`" :title="`调整裁切框${handleLabels[handle]}`" @pointerdown.stop="startResize($event, handle)" />
+        </div>
       </div>
       <div class="crop-tools">
-        <label class="ratio-control"><span>裁切比例</span><el-select v-model="aspectChoice" aria-label="裁切比例" @change="changeAspect"><el-option label="原图" value="original" /><el-option label="1 : 1" value="1:1" /><el-option label="4 : 3" value="4:3" /><el-option label="3 : 2" value="3:2" /><el-option label="16 : 9" value="16:9" /></el-select></label>
-        <div class="zoom-control"><span>缩放</span><el-slider v-model="zoom" :min="1" :max="3" :step="0.01" :show-tooltip="false" @input="drawCanvas" /></div>
+        <label class="ratio-control"><span>裁切比例</span><el-select v-model="aspectChoice" aria-label="裁切比例" @change="changeAspect"><el-option label="原图" value="original" /><el-option label="自由" value="free" /><el-option label="1 : 1" value="1:1" /><el-option label="4 : 3" value="4:3" /><el-option label="3 : 2" value="3:2" /><el-option label="16 : 9" value="16:9" /></el-select></label>
+        <div class="zoom-control"><span>缩放</span><el-slider v-model="zoom" :min="1" :max="3" :step="0.01" :show-tooltip="false" @input="changeZoom" /></div>
         <el-button circle aria-label="向左旋转" title="向左旋转" @click="rotate(-1)"><el-icon><RefreshLeft /></el-icon></el-button>
         <el-button circle aria-label="向右旋转" title="向右旋转" @click="rotate(1)"><el-icon><RefreshRight /></el-icon></el-button>
+        <el-button circle aria-label="重置图片" title="重置图片" :disabled="!modified" @click="resetEditor"><el-icon><Refresh /></el-icon></el-button>
       </div>
-      <template #footer><el-button @click="cancelImage">取消</el-button><el-button type="primary" :loading="uploading" @click="confirmImage">保存并替换</el-button></template>
+      <template #footer><el-button @click="cancelImage">取消</el-button><el-button type="primary" :loading="uploading" :disabled="!modified" @click="confirmImage">保存图片</el-button></template>
     </el-dialog>
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Close, Edit, Loading, Plus, RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Close, Edit, Loading, Plus, Rank, Refresh, RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
+import draggable from 'vuedraggable'
 import { resolveMediaUrl } from '@/utils/media.js'
 
 const props = defineProps({
@@ -47,6 +56,18 @@ const props = defineProps({
   maxCount: { type: Number, default: 100 },
 })
 const emit = defineEmits(['update:modelValue', 'busy-change'])
+const sortedItems = computed({
+  get: () => props.modelValue,
+  set: items => emit('update:modelValue', items),
+})
+function moveItem(index, direction) {
+  if (!props.multiple || props.disabled || busy.value) return
+  const target = index + direction
+  if (target < 0 || target >= props.modelValue.length) return
+  const items = [...props.modelValue]
+  ;[items[index], items[target]] = [items[target], items[index]]
+  emit('update:modelValue', items)
+}
 const fileInput = ref(null)
 const canvasEl = ref(null)
 const dialogVisible = ref(false)
@@ -56,12 +77,17 @@ const queue = ref([])
 const activeFile = ref(null)
 const editingIndex = ref(null)
 const sourceCanvas = ref(null)
+const initialCanvas = ref(null)
+const modified = ref(false)
 const aspectChoice = ref('original')
 const zoom = ref(1)
 const cropRect = ref({ x: 0, y: 0, width: 0, height: 0 })
 const imageOffset = ref({ x: 0, y: 0 })
-const draggingFrame = ref(false)
-const lastPointer = ref({ x: 0, y: 0 })
+const handleLabels = { nw: '左上角', ne: '右上角', sw: '左下角', se: '右下角', n: '上边', e: '右边', s: '下边', w: '左边' }
+const resizeHandles = computed(() => aspectChoice.value === 'free'
+  ? ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+  : ['nw', 'ne', 'se', 'sw'])
+let dragState = null
 let afterDialogClose = null
 const viewport = { width: 800, height: 500 }
 const originalAspect = ref(1)
@@ -148,6 +174,8 @@ async function openImageEditor(file, index) {
     canvas.getContext('2d').drawImage(bitmap, 0, 0)
     bitmap.close()
     sourceCanvas.value = canvas
+    initialCanvas.value = canvas
+    modified.value = false
     originalAspect.value = canvas.width / canvas.height
     setCropRect('original')
     dialogVisible.value = true
@@ -157,6 +185,7 @@ async function openImageEditor(file, index) {
     activeFile.value = null
     editingIndex.value = null
     sourceCanvas.value = null
+    initialCanvas.value = null
     throw new Error('图片无法读取，请换一张图片重试', { cause: error })
   }
 }
@@ -167,15 +196,26 @@ function aspectValue(value = aspectChoice.value) {
   return width / height
 }
 function setCropRect(value) {
-  const aspect = aspectValue(value)
   const imageScale = Math.min((viewport.width - 24) / sourceCanvas.value.width, (viewport.height - 24) / sourceCanvas.value.height)
   const imageWidth = sourceCanvas.value.width * imageScale
   const imageHeight = sourceCanvas.value.height * imageScale
-  const width = Math.min(imageWidth * 0.88, imageHeight * 0.88 * aspect, viewport.width - 44, (viewport.height - 44) * aspect)
+  const aspect = value === 'free' ? imageWidth / imageHeight : aspectValue(value)
+  const width = Math.min(imageWidth, imageHeight * aspect)
   const height = width / aspect
   cropRect.value = { x: (viewport.width - width) / 2, y: (viewport.height - height) / 2, width, height }
 }
-function changeAspect(value) { setCropRect(value); clampImage(); drawCanvas() }
+function changeAspect(value) { setCropRect(value); clampImage(); modified.value = true; drawCanvas() }
+function changeZoom() { clampImage(); modified.value = true; drawCanvas() }
+function resetEditor() {
+  sourceCanvas.value = initialCanvas.value
+  originalAspect.value = sourceCanvas.value.width / sourceCanvas.value.height
+  aspectChoice.value = 'original'
+  zoom.value = 1
+  imageOffset.value = { x: 0, y: 0 }
+  setCropRect('original')
+  modified.value = false
+  drawCanvas()
+}
 function layoutImage() {
   const image = sourceCanvas.value
   if (!image) return null
@@ -187,9 +227,13 @@ function layoutImage() {
 function clampImage() {
   const image = layoutImage()
   if (!image) return
+  const centeredX = (viewport.width - image.width) / 2
+  const centeredY = (viewport.height - image.height) / 2
   imageOffset.value = {
-    x: Math.min(cropRect.value.x, Math.max(cropRect.value.x + cropRect.value.width - image.width, imageOffset.value.x)),
-    y: Math.min(cropRect.value.y, Math.max(cropRect.value.y + cropRect.value.height - image.height, imageOffset.value.y)),
+    x: Math.max(cropRect.value.x + cropRect.value.width - image.width - centeredX,
+      Math.min(cropRect.value.x - centeredX, imageOffset.value.x)),
+    y: Math.max(cropRect.value.y + cropRect.value.height - image.height - centeredY,
+      Math.min(cropRect.value.y - centeredY, imageOffset.value.y)),
   }
 }
 function drawCanvas() {
@@ -222,31 +266,68 @@ function pointerPosition(event) {
   const rect = canvasEl.value.getBoundingClientRect()
   return { x: (event.clientX - rect.left) * viewport.width / rect.width, y: (event.clientY - rect.top) * viewport.height / rect.height }
 }
+function cropBounds() {
+  const image = layoutImage()
+  return {
+    left: Math.max(0, image.x), top: Math.max(0, image.y),
+    right: Math.min(viewport.width, image.x + image.width),
+    bottom: Math.min(viewport.height, image.y + image.height),
+  }
+}
+function clamp(value, min, max) { return Math.max(min, Math.min(max, value)) }
 function startDrag(event) {
-  draggingFrame.value = true
-  lastPointer.value = pointerPosition(event)
+  if (event.button !== 0) return
+  dragState = { mode: 'move', point: pointerPosition(event), rect: { ...cropRect.value } }
   event.currentTarget.setPointerCapture(event.pointerId)
 }
-function moveDrag(event) {
-  if (!draggingFrame.value) return
-  const point = pointerPosition(event)
-  const deltaX = point.x - lastPointer.value.x
-  const deltaY = point.y - lastPointer.value.y
-  lastPointer.value = point
-  const image = layoutImage()
-  const { width, height } = cropRect.value
-  const minX = Math.max(0, image.x)
-  const minY = Math.max(0, image.y)
-  const maxX = Math.min(viewport.width - width, image.x + image.width - width)
-  const maxY = Math.min(viewport.height - height, image.y + image.height - height)
-  cropRect.value = {
-    ...cropRect.value,
-    x: Math.max(minX, Math.min(maxX, cropRect.value.x + deltaX)),
-    y: Math.max(minY, Math.min(maxY, cropRect.value.y + deltaY)),
+function startResize(event, handle) {
+  if (event.button !== 0) return
+  dragState = { mode: handle, point: pointerPosition(event), rect: { ...cropRect.value } }
+  event.currentTarget.setPointerCapture(event.pointerId)
+}
+function resizeCrop(handle, rect, dx, dy, bounds) {
+  const minSize = 40
+  const left = rect.x
+  const top = rect.y
+  const right = left + rect.width
+  const bottom = top + rect.height
+  if (aspectChoice.value !== 'free') {
+    const horizontal = handle.includes('w') ? -1 : 1
+    const vertical = handle.includes('n') ? -1 : 1
+    const anchorX = horizontal < 0 ? right : left
+    const anchorY = vertical < 0 ? bottom : top
+    const aspect = aspectValue()
+    const widthFromX = rect.width + horizontal * dx
+    const widthFromY = (rect.height + vertical * dy) * aspect
+    const maxWidth = Math.min(horizontal < 0 ? anchorX - bounds.left : bounds.right - anchorX,
+      (vertical < 0 ? anchorY - bounds.top : bounds.bottom - anchorY) * aspect)
+    const width = clamp(Math.abs(dx) >= Math.abs(dy * aspect) ? widthFromX : widthFromY,
+      Math.min(maxWidth, Math.max(minSize, minSize * aspect)), maxWidth)
+    const height = width / aspect
+    return { x: horizontal < 0 ? anchorX - width : anchorX, y: vertical < 0 ? anchorY - height : anchorY, width, height }
   }
+  const nextLeft = handle.includes('w') ? clamp(left + dx, bounds.left, right - minSize) : left
+  const nextRight = handle.includes('e') ? clamp(right + dx, left + minSize, bounds.right) : right
+  const nextTop = handle.includes('n') ? clamp(top + dy, bounds.top, bottom - minSize) : top
+  const nextBottom = handle.includes('s') ? clamp(bottom + dy, top + minSize, bounds.bottom) : bottom
+  return { x: nextLeft, y: nextTop, width: nextRight - nextLeft, height: nextBottom - nextTop }
+}
+function moveDrag(event) {
+  if (!dragState) return
+  const point = pointerPosition(event)
+  const dx = point.x - dragState.point.x
+  const dy = point.y - dragState.point.y
+  const bounds = cropBounds()
+  const rect = dragState.rect
+  const next = dragState.mode === 'move'
+    ? { ...rect, x: clamp(rect.x + dx, bounds.left, bounds.right - rect.width),
+        y: clamp(rect.y + dy, bounds.top, bounds.bottom - rect.height) }
+    : resizeCrop(dragState.mode, rect, dx, dy, bounds)
+  if (next.x !== rect.x || next.y !== rect.y || next.width !== rect.width || next.height !== rect.height) modified.value = true
+  cropRect.value = next
   drawCanvas()
 }
-function stopDrag() { draggingFrame.value = false }
+function stopDrag() { dragState = null }
 function rotate(direction) {
   const source = sourceCanvas.value
   const rotated = document.createElement('canvas')
@@ -261,11 +342,12 @@ function rotate(direction) {
   imageOffset.value = { x: 0, y: 0 }
   setCropRect(aspectChoice.value)
   clampImage()
+  modified.value = true
   drawCanvas()
 }
 
 async function confirmImage() {
-  if (!sourceCanvas.value || !activeFile.value) return
+  if (!sourceCanvas.value || !activeFile.value || !modified.value) return
   uploading.value = true
   try {
     const source = sourceCanvas.value
@@ -294,12 +376,13 @@ async function confirmImage() {
     closeDialogAfter(async () => {
       try { await uploadFile(file, 'image', originalFile.name, replacementIndex) }
       catch (error) { showUploadError(error) }
-      finally { uploading.value = false; sourceCanvas.value = null; editingIndex.value = null; await processNext() }
+      finally { uploading.value = false; sourceCanvas.value = null; initialCanvas.value = null; editingIndex.value = null; await processNext() }
     })
   } catch (error) {
     uploading.value = false
     showUploadError(error)
     sourceCanvas.value = null
+    initialCanvas.value = null
     activeFile.value = null
     editingIndex.value = null
     closeDialogAfter(processNext)
@@ -308,6 +391,7 @@ async function confirmImage() {
 function cancelImage() {
   activeFile.value = null
   sourceCanvas.value = null
+  initialCanvas.value = null
   editingIndex.value = null
   closeDialogAfter(processNext)
 }
@@ -315,6 +399,7 @@ function handleDialogClose() {
   if (activeFile.value) {
     activeFile.value = null
     sourceCanvas.value = null
+    initialCanvas.value = null
     editingIndex.value = null
     afterDialogClose = processNext
   }
@@ -333,7 +418,13 @@ async function uploadFile(file, mediaType, originalName = file.name, replacement
   const replacedItem = replacementIndex == null
     ? props.multiple ? null : props.modelValue[0]
     : props.modelValue[replacementIndex]
-  if (replacedItem && replacedItem.url !== url) await props.beforeRemove?.(replacedItem.url)
+  if (replacedItem && replacedItem.url !== url) {
+    try { await props.beforeRemove?.(replacedItem.url) }
+    catch (error) {
+      try { await props.beforeRemove?.(url) } catch { /* The original error is more useful to the caller. */ }
+      throw error
+    }
+  }
   const next = replacementIndex == null
     ? props.multiple ? [...props.modelValue, item] : [item]
     : props.modelValue.map((current, index) => index === replacementIndex ? item : current)
@@ -343,23 +434,32 @@ async function uploadFile(file, mediaType, originalName = file.name, replacement
 async function removeItem(index) {
   const item = props.modelValue[index]
   if (!item || props.disabled || busy.value) return
-  if (props.beforeRemove) {
-    setBusy(true)
-    try { await props.beforeRemove(item.url) }
-    catch (error) { showUploadError(error); setBusy(false); return }
-    setBusy(false)
-  }
+  const isVideo = item.contentType?.startsWith('video/')
+  setBusy(true)
+  try {
+    await ElMessageBox.confirm(`确定移除这${isVideo ? '段视频' : '张图片'}吗？`, '移除媒体', {
+      type: 'warning', confirmButtonText: '移除', cancelButtonText: '取消',
+    })
+  } catch { setBusy(false); return }
+  try { await props.beforeRemove?.(item.url) }
+  catch (error) { showUploadError(error); setBusy(false); return }
   emit('update:modelValue', props.modelValue.filter((_, itemIndex) => itemIndex !== index))
+  ElMessage.success('已从当前记录移除')
+  setBusy(false)
 }
 function showUploadError(error) {
-  ElMessage.error(error?.response?.data?.detail || error?.message || '媒体上传失败')
+  const message = error?.response?.data?.detail
+    || (error?.response?.status === 502 ? '媒体存储暂时无响应，请稍后重试' : null)
+    || (error?.code === 'ECONNABORTED' ? '上传超时，请稍后重试' : null)
+    || error?.message || '媒体上传失败'
+  ElMessage.error(message)
 }
 </script>
 
 <style scoped>
-.media-editor { min-width:0; }.media-grid { display:flex; flex-wrap:wrap; gap:9px; }.media-item,.add-item { position:relative; display:grid; width:88px; height:88px; flex:0 0 auto; place-items:center; overflow:hidden; border:1px solid #dfe7e5; border-radius:5px; background:#f5f8f6; }.media-item img,.media-item video { display:block; width:100%; height:100%; object-fit:cover; }.remove-item,.edit-item { position:absolute; top:4px; display:grid; width:24px; height:24px; place-items:center; border:0; border-radius:50%; background:rgba(27,42,39,.72); color:#fff; cursor:pointer; }.remove-item { right:4px; }.edit-item { right:32px; }.add-item { gap:5px; align-content:center; border-style:dashed; color:#64877a; font:inherit; font-size:10px; cursor:pointer; }.add-item .el-icon { font-size:19px; }.add-item:disabled,.remove-item:disabled,.edit-item:disabled { cursor:not-allowed; opacity:.55; }.editor-hint { margin:7px 0 0; color:#94a19b; font-size:10px; }.file-input { display:none; }
-.crop-tools { display:grid; grid-template-columns:150px minmax(140px,1fr) 36px 36px; align-items:center; gap:12px; margin-top:14px; }.ratio-control,.zoom-control { display:grid; grid-template-columns:auto minmax(80px,1fr); align-items:center; gap:8px; color:#73817b; font-size:10px; }.ratio-control :deep(.el-select) { width:94px; }.zoom-control :deep(.el-slider) { margin:0 5px; }.crop-tools :deep(.el-button) { width:34px; height:34px; margin:0; }
-.crop-workspace { position:relative; width:100%; overflow:hidden; border-radius:5px; background:#202927; touch-action:none; cursor:move; }.crop-canvas { display:block; width:100%; height:auto; aspect-ratio:8/5; pointer-events:none; }.crop-frame { position:absolute; border:1px solid transparent; pointer-events:none; }.crop-frame span { position:absolute; width:13px; height:13px; border-color:#fff; border-style:solid; }.crop-frame span:nth-child(1) { top:-1px; left:-1px; border-width:2px 0 0 2px; }.crop-frame span:nth-child(2) { top:-1px; right:-1px; border-width:2px 2px 0 0; }.crop-frame span:nth-child(3) { right:-1px; bottom:-1px; border-width:0 2px 2px 0; }.crop-frame span:nth-child(4) { bottom:-1px; left:-1px; border-width:0 0 2px 2px; }
+.media-editor { min-width:0; }.media-grid { display:flex; flex-wrap:wrap; gap:9px; }.media-item,.add-item { position:relative; display:grid; width:88px; height:88px; flex:0 0 auto; place-items:center; overflow:hidden; border:1px solid #dfe7e5; border-radius:5px; background:#f5f8f6; }.media-item img,.media-item video { display:block; width:100%; height:100%; object-fit:cover; }.remove-item,.edit-item,.sort-handle { position:absolute; top:4px; display:grid; width:24px; height:24px; place-items:center; border:0; border-radius:50%; background:rgba(27,42,39,.72); color:#fff; cursor:pointer; }.remove-item { right:4px; }.edit-item { right:32px; }.sort-handle { left:4px; cursor:grab; touch-action:none; }.sort-handle:active { cursor:grabbing; }.media-item.sortable-ghost { opacity:.35; }.add-item { gap:5px; align-content:center; border-style:dashed; color:#64877a; font:inherit; font-size:10px; cursor:pointer; }.add-item .el-icon { font-size:19px; }.add-item:disabled,.remove-item:disabled,.edit-item:disabled,.sort-handle:disabled { cursor:not-allowed; opacity:.55; }.editor-hint { margin:7px 0 0; color:#94a19b; font-size:10px; }.file-input { display:none; }
+.crop-tools { display:grid; grid-template-columns:150px minmax(140px,1fr) repeat(3,36px); align-items:center; gap:12px; margin-top:14px; }.ratio-control,.zoom-control { display:grid; grid-template-columns:auto minmax(80px,1fr); align-items:center; gap:8px; color:#73817b; font-size:10px; }.ratio-control :deep(.el-select) { width:94px; }.zoom-control :deep(.el-slider) { margin:0 5px; }.crop-tools :deep(.el-button) { width:34px; height:34px; margin:0; }
+.crop-workspace { position:relative; width:100%; overflow:hidden; border-radius:5px; background:#202927; touch-action:none; }.crop-canvas { display:block; width:100%; height:auto; aspect-ratio:8/5; pointer-events:none; }.crop-frame { position:absolute; border:1px solid rgba(255,255,255,.92); cursor:move; touch-action:none; }.crop-handle { position:absolute; z-index:1; width:17px; height:17px; padding:0; border:2px solid #fff; border-radius:3px; background:#258b88; box-shadow:0 1px 6px rgba(0,0,0,.45); touch-action:none; }.handle-nw { top:0; left:0; transform:translate(-50%,-50%); cursor:nwse-resize; }.handle-ne { top:0; right:0; transform:translate(50%,-50%); cursor:nesw-resize; }.handle-sw { bottom:0; left:0; transform:translate(-50%,50%); cursor:nesw-resize; }.handle-se { bottom:0; right:0; transform:translate(50%,50%); cursor:nwse-resize; }.handle-n { top:0; left:50%; transform:translate(-50%,-50%); cursor:ns-resize; }.handle-s { bottom:0; left:50%; transform:translate(-50%,50%); cursor:ns-resize; }.handle-e { top:50%; right:0; transform:translate(50%,-50%); cursor:ew-resize; }.handle-w { top:50%; left:0; transform:translate(-50%,-50%); cursor:ew-resize; }
 :deep(.crop-dialog .el-dialog) { overflow:hidden; border-radius:7px; }.disabled { opacity:.75; }
-@media(max-width:540px) { .crop-tools { grid-template-columns:minmax(0,1fr) 36px 36px; gap:8px; }.ratio-control { grid-column:1/-1; grid-template-columns:70px 1fr; }.zoom-control { grid-column:1; } }
+@media(max-width:540px) { .crop-tools { grid-template-columns:minmax(0,1fr) repeat(3,36px); gap:8px; }.ratio-control { grid-column:1/-1; grid-template-columns:70px 1fr; }.zoom-control { grid-column:1; } }
 </style>

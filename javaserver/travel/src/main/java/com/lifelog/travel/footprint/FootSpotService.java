@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lifelog.common.storage.MediaObjectPath;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -143,7 +144,7 @@ public class FootSpotService {
         List<String> mediaUrls = spot.getMediaUrls() == null ? List.of() : spot.getMediaUrls().stream()
                 .filter(Objects::nonNull).map(String::trim).filter(StringUtils::hasText).distinct().toList();
         if (mediaUrls.size() > 9) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "每条足迹最多上传 9 张图片");
-        if (mediaUrls.stream().anyMatch(url -> url.length() > 2048 || !(url.startsWith("http://") || url.startsWith("https://")))) {
+        if (mediaUrls.stream().anyMatch(url -> !MediaObjectPath.isValid(url))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "媒体 URL 无效");
         }
         spot.setMediaUrls(mediaUrls);

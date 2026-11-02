@@ -87,22 +87,29 @@ public class BillRecordService {
     public byte[] exportRecords(String direction, Long accountId, Long categoryId, String keyword,
                                 String startTime, String endTime) {
         List<Map<String, Object>> rows = list(direction, accountId, categoryId, keyword, startTime, endTime);
-        StringBuilder csv = new StringBuilder("\uFEFF交易时间,方向,金额,付款账户ID,付款账户,收款账户ID,收款账户,交易对象,分类ID,分类,摘要,备注\r\n");
+        StringBuilder csv = new StringBuilder("\uFEFF交易时间,金额,付款账户,收款账户,交易对象,摘要,分类\r\n");
         for (Map<String, Object> row : rows) {
             csv.append(csvValue(row.get("occurredAt"))).append(',')
-                    .append(csvValue(row.get("direction"))).append(',')
                     .append(csvValue(row.get("amount"))).append(',')
-                    .append(csvValue(row.get("fromAccountId"))).append(',')
-                    .append(csvValue(row.get("fromAccountName"))).append(',')
-                    .append(csvValue(row.get("toAccountId"))).append(',')
-                    .append(csvValue(row.get("toAccountName"))).append(',')
+                    .append(csvValue(exportAccountName(row, "fromAccountName", "fromAccountCode"))).append(',')
+                    .append(csvValue(exportAccountName(row, "toAccountName", "toAccountCode"))).append(',')
                     .append(csvValue(row.get("counterparty"))).append(',')
-                    .append(csvValue(row.get("categoryId"))).append(',')
-                    .append(csvValue(row.get("category"))).append(',')
                     .append(csvValue(row.get("description"))).append(',')
-                    .append(csvValue(row.get("remark"))).append("\r\n");
+                    .append(csvValue(row.get("category"))).append("\r\n");
         }
         return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String exportAccountName(Map<String, Object> row, String nameKey, String codeKey) {
+        Object nameValue = row.get(nameKey);
+        if (nameValue == null || nameValue.toString().isBlank()) return "";
+
+        Object codeValue = row.get(codeKey);
+        if (codeValue == null || codeValue.toString().isBlank()) return nameValue.toString();
+
+        String code = codeValue.toString().replaceAll("[\\s-]", "");
+        String suffix = code.substring(Math.max(0, code.length() - 4));
+        return nameValue + "(" + suffix + ")";
     }
 
     /** 校验并创建账单记录。 */
@@ -126,6 +133,19 @@ public class BillRecordService {
     /** 删除指定账单记录。 */
     public void delete(long id) {
         if (recordMapper.delete(id) == 0) throw new ResponseStatusException(NOT_FOUND, "账单记录不存在");
+    }
+
+    /** 删除当前页选中的账单记录。 */
+    @Transactional
+    public int deleteBatch(List<Long> ids) {
+        List<Long> validIds = ids == null ? List.of() : ids.stream()
+                .filter(id -> id != null && id > 0).distinct().toList();
+        if (validIds.isEmpty() || validIds.size() > 100) {
+            throw new ResponseStatusException(BAD_REQUEST, "请选择1到100条账单记录");
+        }
+        int deleted = 0;
+        for (Long id : validIds) deleted += recordMapper.delete(id);
+        return deleted;
     }
 
     /** 校验账单引用的付款和收款账户是否存在。 */

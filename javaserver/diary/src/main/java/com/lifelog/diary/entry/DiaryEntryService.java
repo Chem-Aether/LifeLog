@@ -1,5 +1,6 @@
 package com.lifelog.diary.entry;
 
+import com.lifelog.common.storage.MediaObjectPath;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -171,7 +172,7 @@ public class DiaryEntryService {
         if (mediaUrls == null) return List.of();
         if (mediaUrls.size() > 100) throw badRequest("媒体数量过多");
         return mediaUrls.stream().filter(url -> url != null && !url.isBlank()).map(String::trim).distinct().peek(url -> {
-            if (url.length() > 2048 || !(url.startsWith("http://") || url.startsWith("https://"))) throw badRequest("媒体 URL 无效");
+            if (!MediaObjectPath.isValid(url)) throw badRequest("媒体 URL 无效");
         }).toList();
     }
 

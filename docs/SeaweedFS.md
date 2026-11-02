@@ -2,7 +2,7 @@
 
 日记和旅行 Java 服务负责业务记录及媒体上传、删除；SeaweedFS 通过 S3 接口保存文件；数据库只存对象相对路径；前端从 `VITE_MEDIA_BASE_URL` 读取访问地址。服务之间没有互相查询业务数据，但 Java 仍依赖 S3 协议和配置，这是必要的存储依赖。SeaweedFS 内部由 Master 管卷位置，Volume 存文件内容，Filer 管路径和文件元数据，S3 网关提供兼容接口。[SeaweedFS 架构说明](https://github.com/seaweedfs/seaweedfs/blob/master/README.md?plain=1)
 
-你安装的是 `4.48 enterprise`。目前运行的是 `weed mini` 单机模式，数据持久化在 `C:\Database\SeaweedFS\data`。这个模式适合开发和家庭单机使用，不提供多节点高可用。
+你安装的是 `4.48 enterprise`。目前运行的是 `weed mini` 单机模式，数据持久化在 `D:\Database\SeaweedFS\data`。这个模式适合开发和家庭单机使用，不提供多节点高可用。
 
 **常用入口**
 
@@ -18,7 +18,7 @@
 前台启动时可以在 PowerShell 执行，窗口里按 `Ctrl+C` 停止：
 
 ```powershell
-& "C:\Database\SeaweedFS\weed.exe" mini -dir="C:\Database\SeaweedFS\data" -ip=127.0.0.1 -ip.bind=127.0.0.1 -bucket=lifelog-media -webdav=false -admin.ui=false
+& "D:\Database\SeaweedFS\weed.exe" mini -dir="D:\Database\SeaweedFS\data" -ip=127.0.0.1 -ip.bind=127.0.0.1 -bucket=lifelog-media -webdav=false -admin.ui=false
 ```
 
 目前服务是隐藏运行的。需要停止时，可以查找占用 S3 端口的进程再停止：
@@ -33,7 +33,7 @@ Stop-Process -Id $seaweedPid
 进入管理命令行：
 
 ```powershell
-& "C:\Database\SeaweedFS\weed.exe" shell -master=127.0.0.1:9333 -filer=127.0.0.1:8888
+& "D:\Database\SeaweedFS\weed.exe" shell -master=127.0.0.1:9333 -filer=127.0.0.1:8888
 ```
 
 进入后输入：
@@ -50,7 +50,7 @@ s3.bucket.list
 
 **备份要点**
 
-完整备份需要同时备份 PostgreSQL 和整个 SeaweedFS 数据目录。最简单的单机做法是先停止 SeaweedFS，再复制 `C:\Database\SeaweedFS\data` 到另一块磁盘；数据库另用 `pg_dump` 备份。恢复时两部分都要恢复，因为数据库里的媒体相对路径需要对应的对象文件仍然存在。
+完整备份需要同时备份 PostgreSQL 和整个 SeaweedFS 数据目录。最简单的单机做法是先停止 SeaweedFS，再复制 `D:\Database\SeaweedFS\data` 到另一块磁盘；数据库另用 `pg_dump` 备份。恢复时两部分都要恢复，因为数据库里的媒体相对路径需要对应的对象文件仍然存在。
 
 **手机访问提醒**
 
@@ -61,7 +61,7 @@ s3.bucket.list
 
 ## 运维命令
 
-下面这些命令按你现在的配置编写，数据目录是 `C:\Database\SeaweedFS\data`。启动前先查状态，避免重复启动。
+下面这些命令按你现在的配置编写，数据目录是 `D:\Database\SeaweedFS\data`。启动前先查状态，避免重复启动。
 
 **查看状态**
 
@@ -88,7 +88,7 @@ Start-Process http://127.0.0.1:8888
 **隐藏窗口启动**
 
 ```powershell
-Start-Process -FilePath "C:\Database\SeaweedFS\weed.exe" -ArgumentList @("mini", "-dir=C:\Database\SeaweedFS\data", "-ip=127.0.0.1", "-ip.bind=127.0.0.1", "-bucket=lifelog-media", "-webdav=false", "-admin.ui=false") -WorkingDirectory "C:\Database\SeaweedFS" -WindowStyle Hidden
+Start-Process -FilePath "D:\Database\SeaweedFS\weed.exe" -ArgumentList @("mini", "-dir=D:\Database\SeaweedFS\data", "-ip=127.0.0.1", "-ip.bind=127.0.0.1", "-bucket=lifelog-media", "-webdav=false", "-admin.ui=false") -WorkingDirectory "D:\Database\SeaweedFS" -WindowStyle Hidden
 ```
 
 **关闭隐藏进程**
@@ -98,8 +98,8 @@ Start-Process -FilePath "C:\Database\SeaweedFS\weed.exe" -ArgumentList @("mini",
 ```powershell
 $matches = @(Get-CimInstance Win32_Process -Filter "name = 'weed.exe'" |
   Where-Object {
-    $_.ExecutablePath -eq "C:\Database\SeaweedFS\weed.exe" -and
-    $_.CommandLine.Contains("-dir=C:\Database\SeaweedFS\data")
+    $_.ExecutablePath -eq "D:\Database\SeaweedFS\weed.exe" -and
+    $_.CommandLine.Contains("-dir=D:\Database\SeaweedFS\data")
   })
 
 if ($matches.Count -eq 1) {
@@ -121,7 +121,7 @@ if ($matches.Count -eq 1) {
 **查看桶和卷**
 
 ```powershell
-& "C:\Database\SeaweedFS\weed.exe" shell -master=127.0.0.1:9333 -filer=127.0.0.1:8888
+& "D:\Database\SeaweedFS\weed.exe" shell -master=127.0.0.1:9333 -filer=127.0.0.1:8888
 ```
 
 进入命令行后输入：
@@ -132,4 +132,4 @@ volume.list
 help
 ```
 
-不要删除 `C:\Database\SeaweedFS\data` 来关闭服务。该目录保存对象数据和索引，删除它会导致媒体丢失。
+不要删除 `D:\Database\SeaweedFS\data` 来关闭服务。该目录保存对象数据和索引，删除它会导致媒体丢失。

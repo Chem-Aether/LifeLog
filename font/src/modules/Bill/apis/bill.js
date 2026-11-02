@@ -19,6 +19,7 @@ export const exportBillRecords = params => billRequest({ url: '/bill/records/exp
 export const createBillRecord = data => request({ url: '/bill/records', method: 'post', data })
 export const updateBillRecord = (id, data) => request({ url: `/bill/records/${id}`, method: 'put', data })
 export const deleteBillRecord = id => request({ url: `/bill/records/${id}`, method: 'delete' })
+export const deleteBillRecords = ids => request({ url: '/bill/records/batch', method: 'delete', data: ids })
 export const getBillSummary = params => request({ url: '/bill/statistics/summary', method: 'get', params })
 export const getAccountStatistics = params => request({ url: '/bill/statistics/accounts', method: 'get', params })
 export const getCategoryStatistics = params => request({ url: '/bill/statistics/categories', method: 'get', params })

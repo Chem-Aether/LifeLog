@@ -32,4 +32,5 @@ desktop/runtime/*
 
 /outputs/
 data/
-test/
+test/*
+!test/*.test.mjs

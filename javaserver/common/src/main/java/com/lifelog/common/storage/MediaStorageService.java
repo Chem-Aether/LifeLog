@@ -8,19 +8,23 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.CORSConfiguration;
 import software.amazon.awssdk.services.s3.model.CORSRule;
 import software.amazon.awssdk.services.s3.model.PutBucketCorsRequest;
 import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -36,6 +40,8 @@ public class MediaStorageService {
             "jpg", "image/jpeg", "jpeg", "image/jpeg", "png", "image/png", "webp", "image/webp", "gif", "image/gif");
     private static final Set<String> VIDEO_EXTENSIONS = Set.of("mp4", "m4v", "mov", "webm", "3gp", "avi");
     private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("yyyy/MM");
+    private static final Duration IMAGE_UPLOAD_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration VIDEO_UPLOAD_TIMEOUT = Duration.ofMinutes(15);
     private final MediaStorageProperties properties;
     private final S3Client s3;
     private volatile boolean bucketPrepared;
@@ -48,6 +54,8 @@ public class MediaStorageService {
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(
                         properties.getAccessKey(), properties.getSecretKey())))
                 .forcePathStyle(true)
+                // SeaweedFS mini rejects the SDK's streaming SigV4 upload without S3 auth configured.
+                .serviceConfiguration(S3Configuration.builder().chunkedEncodingEnabled(false).build())
                 .build();
     }
 
@@ -69,9 +77,15 @@ public class MediaStorageService {
             s3.putObject(PutObjectRequest.builder()
                             .bucket(properties.getBucket()).key(key).contentType(contentType)
                             .cacheControl("public, max-age=31536000, immutable")
+                            .overrideConfiguration(config -> config.apiCallTimeout(
+                                    "image".equals(mediaType) ? IMAGE_UPLOAD_TIMEOUT : VIDEO_UPLOAD_TIMEOUT))
                             .build(),
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
-        } catch (IOException | S3Exception exception) {
+                    // Multipart streams may not support reset; retries need a new stream.
+                    RequestBody.fromContentProvider(() -> {
+                        try { return file.getInputStream(); }
+                        catch (IOException exception) { throw new UncheckedIOException(exception); }
+                    }, file.getSize(), contentType));
+        } catch (UncheckedIOException | SdkException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "写入 SeaweedFS 失败", exception);
         }
 

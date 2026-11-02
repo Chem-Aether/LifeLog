@@ -23,9 +23,18 @@ export function parseBillCsv(text) {
   const delimiter = detectDelimiter(source)
   const parsed = parseRows(source, delimiter).filter(row => row.some(value => value.trim()))
   if (!parsed.length) throw new Error('CSV 文件为空')
-  const headers = parsed[0].map(value => value.trim())
+  const headerIndex = findBillHeaderIndex(parsed)
+  const headers = parsed[headerIndex].map(value => value.trim())
   if (headers.every(value => !value)) throw new Error('未识别到表头，请确认文件首行为列名')
-  return { headers, rows: parsed.slice(1), delimiter }
+  return { headers, rows: parsed.slice(headerIndex + 1), headerIndex, delimiter }
+}
+
+export function findBillHeaderIndex(rows) {
+  const index = rows.slice(0, 30).findIndex(row => {
+    const mapping = suggestBillCsvMapping(row.map(value => String(value ?? '').trim()))
+    return mapping.occurredAt >= 0 && mapping.amount >= 0
+  })
+  return index < 0 ? 0 : index
 }
 
 export function suggestBillCsvMapping(headers) {
@@ -83,6 +92,13 @@ export function resolveBillAccount(value, accounts) {
   return relaxed.length === 1 ? { id: Number(relaxed[0].id), ambiguous: false } : { id: null, ambiguous: relaxed.length > 1 }
 }
 
+export function inferBillDirection(fromAccountId, toAccountId, fallback = '') {
+  if (fromAccountId && toAccountId) return 'transfer'
+  if (fromAccountId) return 'expense'
+  if (toAccountId) return 'income'
+  return fallback
+}
+
 export function resolveBillCategory(value, categories) {
   const name = normalizeHeader(value)
   if (!name) return { id: null, ambiguous: false }
@@ -94,11 +110,6 @@ export function resolveBillCategory(value, categories) {
   return matches.length === 1
     ? { id: Number(matches[0].id), ambiguous: false }
     : { id: null, ambiguous: matches.length > 1 }
-}
-
-export function createBillCsvTemplate() {
-  const headers = ['交易时间', '方向', '金额', '付款账户ID', '付款账户', '收款账户ID', '收款账户', '交易对象', '分类ID', '分类', '摘要', '备注']
-  return `\uFEFF${headers.join(',')}\r\n`
 }
 
 function detectDelimiter(text) {

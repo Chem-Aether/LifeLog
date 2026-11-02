@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
@@ -86,6 +87,12 @@ public class BillRecordController {
     public Result update(@PathVariable long id, @RequestBody BillTransactionRequest request) {
         recordService.update(id, request);
         return Result.success();
+    }
+
+    /** 批量删除当前页选中的账单记录。 */
+    @DeleteMapping("/batch")
+    public Result deleteBatch(@RequestBody List<Long> ids) {
+        return Result.success(recordService.deleteBatch(ids));
     }
 
     /**

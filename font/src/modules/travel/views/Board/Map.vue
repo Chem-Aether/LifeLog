@@ -34,6 +34,7 @@ import { getAllFlights } from '@/modules/travel/apis/flightTickets.js'
 import { getAllTrains } from '@/modules/travel/apis/trainTickets.js'
 import { toFlightTrip, toTrainTrip } from '@/modules/travel/utils/tripView.js'
 import { getFootprintRegion } from '@/modules/travel/utils/footprintRegion.js'
+import { smoothTrajectoryGeometry } from '@/modules/travel/utils/trajectorySmoothing.js'
 import { useTravleStore } from '@/modules/travel/stores/TravelStore.js'
 import { footprintCategoryOptions, getFootprintCategoryIcon } from '@/modules/travel/stores/footprintCategories.js'
 import { MAP_BASE_URL } from '@/utils/request.js'
@@ -305,7 +306,7 @@ async function buildTravelLayers() {
   map.addLayer({ id: 'explored-outline', type: 'line', source: 'explored-cities', paint: { 'line-color': ['match', ['get', 'visitType'], 'transit', '#a7dcff', '#7effcf'], 'line-width': 1.5, 'line-opacity': 0.9 } })
   map.addLayer({ id: 'flight-route-glow', type: 'line', source: 'travel-lines', filter: ['==', ['get', 'kind'], 'flight'], paint: { 'line-color': '#ffbd59', 'line-width': 7, 'line-opacity': 0.18, 'line-blur': 4 } })
   map.addLayer({ id: 'travel-routes', type: 'line', source: 'travel-lines', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': ['match', ['get', 'kind'], 'flight', '#ffbd59', '#59d8ff'], 'line-width': 2.4, 'line-opacity': 0.92, 'line-dasharray': [2, 1.2] } })
-  map.addLayer({ id: 'trajectory-routes', type: 'line', source: 'trajectory-lines', minzoom: TRAJECTORY_MIN_ZOOM, paint: { 'line-color': ['match', ['get', 'activityType'], 'walk', '#48d6a3', 'bike', '#f4c95d', 'drive', '#61a7ff', 'transit', '#b58cff', 'train', '#ff8f5a', 'plane', '#8aa5ff', 'ship', '#57c7c2', '#a7b0c0'], 'line-width': ['interpolate', ['linear'], ['zoom'], 8.5, 1.8, 12, 2.3, 15, 3.2], 'line-opacity': 0.96 } })
+  map.addLayer({ id: 'trajectory-routes', type: 'line', source: 'trajectory-lines', minzoom: TRAJECTORY_MIN_ZOOM, layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['match', ['get', 'activityType'], 'walk', '#48d6a3', 'bike', '#f4c95d', 'drive', '#61a7ff', 'transit', '#b58cff', 'train', '#ff8f5a', 'plane', '#8aa5ff', 'ship', '#57c7c2', '#a7b0c0'], 'line-width': ['interpolate', ['linear'], ['zoom'], 8.5, 1.8, 12, 2.3, 15, 3.2], 'line-opacity': 0.96 } })
   map.addLayer({ id: 'travel-points', type: 'circle', source: 'travel-lines', filter: ['in', ['get', 'kind'], ['literal', ['flight-point', 'train-point', 'train-waypoint']]], paint: { 'circle-radius': ['match', ['get', 'kind'], 'train-waypoint', 4, 6], 'circle-color': ['match', ['get', 'kind'], 'flight-point', '#ffbd59', 'train-waypoint', '#b7f4ff', '#59d8ff'], 'circle-stroke-color': '#06101a', 'circle-stroke-width': ['match', ['get', 'kind'], 'train-waypoint', 1.4, 2] } })
   map.addLayer({ id: 'train-station-labels', type: 'symbol', source: 'travel-lines', minzoom: 5.5, filter: ['in', ['get', 'kind'], ['literal', ['train-point', 'train-waypoint']]], layout: { 'text-field': ['get', 'title'], 'text-size': ['match', ['get', 'kind'], 'train-waypoint', 10, 11], 'text-offset': [0, 1.15], 'text-anchor': 'top', 'text-optional': true }, paint: { 'text-color': '#d8f7ff', 'text-halo-color': '#07101d', 'text-halo-width': 1.5 } })
   map.addLayer({ id: 'flight-plane-glow', type: 'circle', source: 'animated-planes', paint: { 'circle-radius': 11, 'circle-color': '#ffbd59', 'circle-opacity': 0.22, 'circle-blur': 0.75 } })
@@ -437,7 +438,7 @@ async function refreshTrajectoryRoutes() {
           return [{
             type: 'Feature',
             properties: { trajectoryId: record.trajectoryId, name: record.name, activityType: record.activityType },
-            geometry
+            geometry: smoothTrajectoryGeometry(geometry)
           }]
         } catch { return [] }
       })

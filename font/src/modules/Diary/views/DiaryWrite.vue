@@ -14,7 +14,7 @@
         <el-input v-model="form.content" class="content-input" type="textarea" :autosize="{ minRows: 16, maxRows: 36 }" maxlength="20000" show-word-limit placeholder="今天发生了什么？写下你的所见、所闻与感受……" />
         <div class="photo-section">
           <div class="section-title"><el-icon><Picture /></el-icon><span>照片和视频</span></div>
-          <MediaUploadEditor v-model="mediaItems" :upload="uploadDiaryAsset" allow-video :disabled="saving" @busy-change="uploadingImages = $event" />
+          <MediaUploadEditor v-model="mediaItems" :upload="uploadDiaryAsset" :before-remove="beforeRemoveDiaryAsset" allow-video :disabled="saving" @busy-change="uploadingImages = $event" />
         </div>
       </section>
 
@@ -40,7 +40,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Check, LocationInformation, Notebook, Picture, Plus } from '@element-plus/icons-vue'
-import { createDiaryEntry, getDiaryEntry, updateDiaryEntry, uploadDiaryMedia, uploadDiaryVideo } from '../apis/diary.js'
+import { createDiaryEntry, deleteDiaryMedia, getDiaryEntry, updateDiaryEntry, uploadDiaryMedia, uploadDiaryVideo } from '../apis/diary.js'
 import { diaryFeedState } from '../utils/feedState.js'
 import { weatherGroups, weatherIconUrl, weatherOption } from '../utils/weather.js'
 import MediaUploadEditor from '@/components/MediaUploadEditor.vue'
@@ -61,6 +61,8 @@ const uploadingImages = ref(false)
 const ready = ref(false)
 const saved = ref(false)
 const original = ref('')
+const originalMediaUrls = ref([])
+const pendingMediaDeletion = new Set()
 const isDirty = computed(() => ready.value && JSON.stringify({ ...form, tags: [...form.tags], mediaUrls: [...form.mediaUrls] }) !== original.value)
 
 watch(mediaItems, items => {
@@ -98,6 +100,9 @@ function addTag() {
 }
 function removeTag(tag) { form.tags = form.tags.filter(value => value !== tag) }
 function uploadDiaryAsset(file, mediaType) { return mediaType === 'video' ? uploadDiaryVideo(file) : uploadDiaryMedia(file) }
+function beforeRemoveDiaryAsset(url) {
+  return originalMediaUrls.value.includes(url) ? Promise.resolve() : deleteDiaryMedia(url)
+}
 async function loadEntry() {
   if (entryId.value) {
     try {
@@ -107,6 +112,7 @@ async function loadEntry() {
         mood: entry.mood || '', weatherCode: entry.weatherCode ?? null, location: entry.location || '', tags: [...(entry.tags || [])], mediaUrls: [...(entry.mediaUrls || [])], mediaTypes: { ...(entry.mediaTypes || {}) },
       })
       mediaItems.value = form.mediaUrls.map(url => ({ url, contentType: form.mediaTypes[url] || 'image/jpeg', name: url.split('/').pop() }))
+      originalMediaUrls.value = [...form.mediaUrls]
     } catch { router.replace(backPath()); return }
   }
   snapshot()
@@ -122,12 +128,24 @@ async function saveEntry() {
     const payload = { title: form.title, content: form.content, entryDate: form.entryDate, mood: form.mood, weatherCode: form.weatherCode, location: form.location, tags: [...form.tags], mediaUrls: [...new Set(form.mediaUrls)] }
     if (entryId.value) {
       await updateDiaryEntry(entryId.value, payload)
+      for (const url of originalMediaUrls.value) {
+        if (!payload.mediaUrls.includes(url)) pendingMediaDeletion.add(url)
+      }
+      originalMediaUrls.value = [...payload.mediaUrls]
       diaryFeedState.entries = diaryFeedState.entries.map(entry => String(entry.id) === String(entryId.value)
         ? { ...entry, ...payload, mediaTypes: { ...entry.mediaTypes, ...form.mediaTypes } }
         : entry)
     } else {
       await createDiaryEntry(payload)
       diaryFeedState.savedAt = 0
+    }
+    for (const url of pendingMediaDeletion) {
+      try { await deleteDiaryMedia(url); pendingMediaDeletion.delete(url) } catch { /* Keep it for a later save retry. */ }
+    }
+    if (pendingMediaDeletion.size) {
+      snapshot()
+      ElMessage.warning('日记已保存，但部分图片文件清理失败；再次保存可重试')
+      return
     }
     saved.value = true
     ElMessage.success(entryId.value ? '日记已更新' : '日记已保存')

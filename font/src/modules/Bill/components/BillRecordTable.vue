@@ -1,13 +1,17 @@
 <template>
   <el-table
+    ref="tableRef"
     :data="rows"
     :max-height="maxHeight || undefined"
+    :default-sort="defaultSort"
     stripe
     row-key="id"
     empty-text="暂无账单记录"
     class="bill-record-table"
     @sort-change="$emit('sort-change', $event)"
+    @selection-change="$emit('selection-change', $event)"
   >
+    <el-table-column v-if="showSelection" type="selection" width="48" />
     <el-table-column prop="amount" label="金额" width="130" align="right" sortable="custom">
       <template #default="{ row }">
         <strong :class="row.direction">{{ amountSign(row.direction) }}{{ money(row.amount) }}</strong>
@@ -51,16 +55,21 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import CategoryIcon from './CategoryIcon.vue'
 
+const tableRef = ref(null)
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   accounts: { type: Array, default: () => [] },
   showActions: { type: Boolean, default: false },
+  showSelection: { type: Boolean, default: false },
+  defaultSort: { type: Object, default: () => ({}) },
   maxHeight: { type: String, default: null },
 })
 
-defineEmits(['edit', 'delete', 'sort-change'])
+defineEmits(['edit', 'delete', 'sort-change', 'selection-change'])
+defineExpose({ clearSelection: () => tableRef.value?.clearSelection() })
 
 const money = value => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const amountSign = direction => direction === 'income' ? '+' : direction === 'expense' ? '-' : ''

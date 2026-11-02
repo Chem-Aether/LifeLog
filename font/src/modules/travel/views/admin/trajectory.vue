@@ -184,7 +184,7 @@ function initializeMap() {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
   map.on('load', () => {
     map.addSource('trajectory-edit', { type: 'geojson', data: routeFeatureCollection() })
-    map.addLayer({ id: 'trajectory-edit-line', type: 'line', source: 'trajectory-edit', paint: { 'line-color': '#ff5b7d', 'line-width': 2.8, 'line-opacity': 0.98 } })
+    map.addLayer({ id: 'trajectory-edit-line', type: 'line', source: 'trajectory-edit', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ff5b7d', 'line-width': 2.8, 'line-opacity': 0.98 } })
     map.addLayer({ id: 'trajectory-edit-points', type: 'circle', source: 'trajectory-edit', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': ['case', ['==', ['get', 'sequence'], selectedPointSequence.value ?? -1], 7, 3.5], 'circle-color': ['case', ['==', ['get', 'sequence'], selectedPointSequence.value ?? -1], '#ff5b7d', '#f29a78'], 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } })
     drawRoute(); fitRoute()
   })
